@@ -119,7 +119,7 @@ Also make the resulting HOME `CLAUDE.md` aware that `quality_of_life/` exists an
 
 ## Phase 5: The first hello
 
-The finale. From the home folder, run `./fullstack-agent/start.sh` (Windows: `fullstack-agent\\start.bat`). What should happen, and what you verify:
+The finale. From the home folder, run `./fullstack-agent/start.sh` (Windows: `fullstack-agent\start.bat`). What should happen, and what you verify:
 
 1. The face's server starts and the browser opens on their chosen face, with the agent's name on it.
 2. The voice line warms up and then SPEAKS: `Hello [their name], what are we working on today?` while the face pulses with the words.
@@ -146,10 +146,10 @@ Then, **before you build anything else, make one offer.** Ask it once, plainly, 
 
 Then **make the launchers**, so they never have to remember any of this. Shortcuts on their Desktop, named with THEIR agent's name (skip any mode whose pieces they did not install):
 
-1. **`Chat with <name>`** opens a typed Claude Code session in the home folder, terminal only. (macOS: a `.command` file containing `#!/bin/bash`, then the PATH export below, then `cd \"<home folder>\" && claude`. Windows: a `.bat` with `cd /d \"<home folder>\"` then `claude`.)
+1. **`Chat with <name>`** opens a typed Claude Code session in the home folder, terminal only. (macOS: a `.command` file containing `#!/bin/bash`, then the PATH export below, then `cd "<home folder>" && claude`. Windows: a `.bat` with `cd /d "<home folder>"` then `claude`.)
 2. **`Talk to <name>`** starts the voice and the face. (Runs `fullstack-agent/start.sh voice`, or `start.bat voice` on Windows.)
 3. **`<name> barehands`** starts the voice and the hands board, no face; the board IS the screen in this mode. (Runs `fullstack-agent/start.sh hands`, or `start.bat hands`.)
-4. **`Update <name>`** (macOS only) pulls the newest version of every installed piece, showing what changed before applying it. (A `.command` with the PATH export, then `cd \"<home folder>/fullstack-agent\" && ./update.sh`.) On Windows, skip the Update shortcut; tell them to open a chat and say "update everything and tell me what changed" instead.
+4. **`Update <name>`** (macOS only) pulls the newest version of every installed piece, showing what changed before applying it. (A `.command` with the PATH export, then `cd "<home folder>/fullstack-agent" && ./update.sh`.) On Windows, skip the Update shortcut; tell them to open a chat and say "update everything and tell me what changed" instead.
 
 **Every macOS `.command` MUST carry this line right after the shebang, before anything else runs:**
 
