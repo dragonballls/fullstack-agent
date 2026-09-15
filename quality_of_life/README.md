@@ -5,6 +5,7 @@ This subsystem is a real capability layer for fullstack-agent. It adds computer 
 ## Shipped capabilities
 
 - **Windows computer control:** mouse movement/click/scroll, bounded text entry/hotkeys, and explicit application launch.
+- **Webcam hand control:** optional local hand tracking that maps a pointing hand to the pointer and pinch/release to a click through the existing guarded computer controller. A closed fist or explicit stop disables the bridge.
 - **Screen capture:** capability-gated full-screen capture with optional image saving.
 - **Clipboard:** bounded text read/write through the platform clipboard.
 - **Windows control:** enumerate visible windows and explicitly focus, minimize, maximize, or close a selected window.
@@ -16,6 +17,12 @@ This subsystem is a real capability layer for fullstack-agent. It adds computer 
 - **GitHub repository integration:** an authorized GitHub grant can request a repository fork through the GitHub API, with write confirmation and token checks.
 - **Windows maintenance:** guarded PC diagnostics, identification of eligible idle/high-memory user applications, verified process stopping, reversible user-startup prevention, startup restoration, system-file health scans, and explicitly confirmed repair/network-reset operations.
 - **Unified runtime:** `JarvisRuntime.dispatch(...)` is the single capability-aware execution surface for these operations.
+
+## Hand control
+
+The browser tracker uses the existing barehands/MediaPipe approach and sends only normalized coordinates and gesture state to a loopback-only bridge on `127.0.0.1:8795`. The bridge never exposes desktop-control credentials to the browser and is off unless explicitly enabled.
+
+Start the optional bridge with `python -m quality_of_life.hand_control_server --enabled`, then open `http://127.0.0.1:8795/` in a Chromium-based browser and permit camera access. The bridge is intentionally isolated: camera permission failures, tracker loading failures, or browser disconnects do not stop the rest of Jarvis.
 
 ## External account behavior
 
