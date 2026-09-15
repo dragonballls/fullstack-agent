@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from .capabilities import OPERATION_CATALOG, operation
 
@@ -69,7 +69,7 @@ def parse_plan(text: str) -> ExecutionPlan:
 
 
 def planning_prompt(user_text: str) -> str:
-    operations = "\n".join(f"- {name}: {spec.description}" for spec in OPERATION_CATALOG if spec.name in _SAFE_MODEL_OPERATIONS)
+    operations = "\n".join(f"- {spec.name}: {spec.description}" for spec in OPERATION_CATALOG if spec.name in _SAFE_MODEL_OPERATIONS)
     return (
         "Return ONLY a JSON object with a 'steps' array. Each step must contain an operation from the allowlist "
         "and an 'arguments' object. Never output shell commands, PowerShell, Python, JavaScript, registry scripts, "
