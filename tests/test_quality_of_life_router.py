@@ -1,5 +1,7 @@
+import json
 import os
 import unittest
+from unittest.mock import patch
 
 from quality_of_life.router import CloudModelRouter, ProviderTarget
 
@@ -57,12 +59,19 @@ class RouterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "model must be non-empty"):
             ProviderTarget("bad-model", "https://example.com/v1", "KEY", " ")
 
-    def test_local_omniroute_does_not_require_a_bearer_key(self):
+    def test_local_omniroute_allows_missing_key_without_sending_auth_header(self):
         router = CloudModelRouter((ProviderTarget("local", "http://127.0.0.1:20128/v1", "MISSING_KEY", "auto"),))
         old = os.environ.pop("MISSING_KEY", None)
+        response = unittest.mock.Mock()
+        response.read.return_value = json.dumps({"choices": [{"message": {"content": "pong"}}]}).encode()
+        response.__enter__ = lambda self: self
+        response.__exit__ = lambda self, exc_type, exc, tb: None
         try:
-            with self.assertRaisesRegex(RuntimeError, "All configured cloud targets failed: local: provider request failed"):
-                router.complete([{"role": "user", "content": "hi"}])
+            with patch("urllib.request.urlopen", return_value=response) as urlopen:
+                result = router.complete([{"role": "user", "content": "hi"}])
+            self.assertEqual(("pong", "local"), result)
+            request = urlopen.call_args.args[0]
+            self.assertNotIn("Authorization", request.headers)
         finally:
             if old is not None:
                 os.environ["MISSING_KEY"] = old
