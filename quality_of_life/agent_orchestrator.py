@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import base64
-import json
 from dataclasses import dataclass
 import time
 from typing import Any, Callable, Iterable, Iterator
 
 from .capabilities import operation
-from .computer_use import ComputerUseAgent, ComputerUseAction, RouterComputerUsePlanner, ScreenObserver
+from .computer_use import ComputerUseAgent, RouterComputerUsePlanner, ScreenObserver
 from .intents import parse_intent
 from .orchestration import OrchestrationPlan, RequestProfile, build_plan
 from .permissions import Capability
@@ -56,16 +54,25 @@ class AgentOrchestrator:
         normalized = " ".join(text.lower().split())
         return any(marker in normalized for marker in _MUTATING_MARKERS)
 
-    @staticmethod
-    def _looks_like_computer_goal(text: str) -> bool:
+    def _looks_like_computer_goal(self, text: str) -> bool:
         normalized = " ".join(text.casefold().split())
         markers = (
-            "computer", "desktop", "application", "app", "game", "roblox", "studio",
-            "mouse", "cursor", "click", "double click", "right click", "type into",
-            "press the", "open " , "launch ", "interact with", "on my screen", "on screen",
-            "window", "menu", "button", "play ", "navigate in", "use the ",
+            "computer", "desktop", "application", " app", "game", "roblox", "studio", "minecraft",
+            "mouse", "cursor", "click", "double click", "right click", "type into", "press the",
+            "launch ", "interact with", "on my screen", "on screen", "window", "menu", "button",
+            "play ", "navigate in", "use the ",
         )
-        return any(marker in normalized for marker in markers)
+        if any(marker.strip() in normalized for marker in markers):
+            return True
+        if normalized.startswith("open "):
+            candidate = normalized[5:].split(" and ", 1)[0].strip()
+            if candidate:
+                try:
+                    apps = self.runtime._tool("applications").list()
+                    return any(getattr(app, "name", "").casefold() == candidate for app in apps)
+                except Exception:
+                    return False
+        return False
 
     @staticmethod
     def _messages(prompt: str) -> list[dict[str, str]]:
@@ -227,7 +234,6 @@ class AgentOrchestrator:
         providers: list[str] = []
         deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
         errors.extend(deterministic_errors)
-
         if not deterministic_context and not needs_confirmation and self._looks_like_computer_goal(text) and not plan.parallel_tasks:
             computer_context, computer_verified, computer_confirmation, computer_errors, computer_provider = self._computer_goal_context(text, confirmed)
             if computer_context:
@@ -237,7 +243,6 @@ class AgentOrchestrator:
                 errors.extend(computer_errors)
                 if computer_provider:
                     providers.append(computer_provider)
-
         if not deterministic_context and not needs_confirmation and not plan.parallel_tasks and plan.primary.profile is not RequestProfile.CODING:
             typed_context, typed_verified, typed_confirmation, typed_errors = self._execute_typed_plan(text, confirmed)
             if typed_context:
