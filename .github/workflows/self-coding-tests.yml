@@ -1,0 +1,18 @@
+name: Self-coding safety tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Compile self-coding module
+        run: python -m py_compile self_coding/*.py tests/test_self_coding.py
+      - name: Run self-coding regression tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
