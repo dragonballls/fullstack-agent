@@ -67,14 +67,13 @@ class AgentOrchestrator:
         ]
 
     def _deterministic_context(self, text: str, confirmed: bool) -> tuple[str, bool, list[str]]:
-        """Execute only supported intents through the existing policy-gated runtime."""
+        """Execute only explicitly supported intents through the existing policy-gated runtime."""
         intent = parse_intent(text)
-        needs_confirmation = self._needs_confirmation(text) and not confirmed
         if intent.kind == "windows_maintenance":
             request = str(intent.arguments["request"])
             lowered = request.casefold()
             if "diagnos" in lowered and not any(word in lowered for word in ("fix", "repair", "clean")):
-                result = self.runtime.dispatch(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.diagnose")
+                result = self.runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose")
                 return str(getattr(result, "message", result)), True, []
             if confirmed:
                 result = self.runtime.dispatch(
@@ -116,14 +115,19 @@ class AgentOrchestrator:
             return str(result), True, []
         return "", False, []
 
+    def _coding_context(self, text: str, confirmed: bool) -> tuple[str, bool]:
+        """Use the existing self-coding engine only after explicit confirmation."""
+        if not confirmed:
+            return "A repository-changing coding request requires confirmation before self-coding can run.", False
+        result = self.runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal=text)
+        branch = str(result)
+        return f"Self-coding completed on verified branch: {branch}", bool(branch)
+
     @staticmethod
     def _synthesis_prompt(plan: OrchestrationPlan, results: Iterable[ProviderResult], deterministic_context: str = "") -> str:
         findings: list[str] = []
         if deterministic_context:
-            findings.append(
-                "Deterministic tool result (authoritative; report this faithfully): "
-                + deterministic_context
-            )
+            findings.append("Deterministic result (authoritative; report faithfully): " + deterministic_context)
         for index, result in enumerate(results, start=1):
             if result.ok and result.text:
                 findings.append(f"Specialist {index}: {result.text}")
@@ -131,12 +135,10 @@ class AgentOrchestrator:
                 findings.append(f"Specialist {index}: unavailable ({result.error})")
         context = "\n\n".join(findings) or "No specialist findings were available."
         return (
-            "Act as the primary Jarvis response model. Synthesize the specialist findings below "
-            "into one accurate, concise response to the user. Do not claim an action was performed "
-            "unless a deterministic tool result is supplied. Preserve safety boundaries and state "
-            "when confirmation is required.\n\n"
-            f"User request:\n{plan.primary.prompt}\n\n"
-            f"Specialist findings:\n{context}"
+            "Act as the primary Jarvis response model. Synthesize the findings below into one "
+            "accurate, concise response. Do not claim an action was performed unless a deterministic "
+            "tool result is supplied. Preserve safety boundaries and state when confirmation is required.\n\n"
+            f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
         )
 
     def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
@@ -147,6 +149,10 @@ class AgentOrchestrator:
         deterministic_context, deterministic_verified, deterministic_errors = self._deterministic_context(text, confirmed)
         errors.extend(deterministic_errors)
         parallel_completed = 0
+        if plan.primary.profile is RequestProfile.CODING and any(word in text.casefold() for word in ("implement", "fix", "modify", "code")):
+            coding_context, coding_verified = self._coding_context(text, confirmed)
+            deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
+            deterministic_verified = coding_verified
         if plan.parallel_tasks:
             specialist_results = self.router.complete_many(self._specialist_requests(plan), max_parallel=self.max_parallel)
             parallel_completed = sum(1 for result in specialist_results if result.ok and result.text)
@@ -175,21 +181,13 @@ class AgentOrchestrator:
             tuple(errors),
         )
 
-    def execute_stream(
-        self,
-        text: str,
-        confirmed: bool = False,
-        on_event: Callable[[OrchestrationEvent], None] | None = None,
-    ) -> Iterator[OrchestrationEvent]:
+    def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:
         ack = OrchestrationEvent("ack", "Certainly. I'm working on that now.")
         if on_event:
             on_event(ack)
         yield ack
         plan = build_plan(text)
-        progress = OrchestrationEvent(
-            "progress",
-            f"Running {len(plan.parallel_tasks)} specialist checks in parallel." if plan.parallel_tasks else "Using the fastest suitable cloud model.",
-        )
+        progress = OrchestrationEvent("progress", f"Running {len(plan.parallel_tasks)} specialist checks in parallel." if plan.parallel_tasks else "Using the fastest suitable cloud model.")
         if on_event:
             on_event(progress)
         yield progress
@@ -201,19 +199,7 @@ class AgentOrchestrator:
                 on_event(event)
             yield event
             return
-        event = OrchestrationEvent(
-            "result",
-            result.text,
-            {
-                "profile": result.profile,
-                "verified": result.verified,
-                "needs_confirmation": result.needs_confirmation,
-                "parallel_tasks_completed": result.parallel_tasks_completed,
-                "providers": result.providers,
-                "latency_ms": result.latency_ms,
-                "errors": result.errors,
-            },
-        )
+        event = OrchestrationEvent("result", result.text, {"profile": result.profile, "verified": result.verified, "needs_confirmation": result.needs_confirmation, "parallel_tasks_completed": result.parallel_tasks_completed, "providers": result.providers, "latency_ms": result.latency_ms, "errors": result.errors})
         if on_event:
             on_event(event)
         yield event
