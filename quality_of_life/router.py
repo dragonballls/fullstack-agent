@@ -88,6 +88,10 @@ class CloudModelRouter:
     }
     _failure_lock = threading.Lock()
     _failure_cooldowns: dict[tuple[str, str], float] = {}
+    _health_lock = threading.Lock()
+    _latency_ewma_ms: dict[tuple[str, str], float] = {}
+    _latency_samples: dict[tuple[str, str], int] = {}
+    _EWMA_ALPHA = 0.25
 
     def __init__(self, targets: Iterable[ProviderTarget]) -> None:
         self.targets = tuple(targets)
@@ -162,6 +166,32 @@ class CloudModelRouter:
         with cls._failure_lock:
             cls._failure_cooldowns.pop((target.base_url, target.model), None)
 
+    @classmethod
+    def _record_success(cls, target: ProviderTarget, latency_ms: int) -> None:
+        key = (target.name, target.model)
+        latency = max(0, latency_ms)
+        with cls._health_lock:
+            previous = cls._latency_ewma_ms.get(key)
+            cls._latency_ewma_ms[key] = float(latency) if previous is None else (cls._EWMA_ALPHA * latency) + ((1.0 - cls._EWMA_ALPHA) * previous)
+            cls._latency_samples[key] = cls._latency_samples.get(key, 0) + 1
+
+    @classmethod
+    def provider_latency_ms(cls, target_name: str, profile: RequestProfile | str = RequestProfile.FAST) -> int:
+        selected = RequestProfile(profile)
+        model = cls.profile_model(selected)
+        with cls._health_lock:
+            value = cls._latency_ewma_ms.get((target_name, model))
+        return int(round(value)) if value is not None else 0
+
+    @classmethod
+    def _ordered_targets(cls, targets: Sequence[ProviderTarget]) -> tuple[ProviderTarget, ...]:
+        indexed = list(enumerate(targets))
+        with cls._health_lock:
+            latency = dict(cls._latency_ewma_ms)
+            samples = dict(cls._latency_samples)
+        indexed.sort(key=lambda item: (0 if samples.get((item[1].name, item[1].model), 0) else 1, latency.get((item[1].name, item[1].model), float("inf")), item[0]))
+        return tuple(target for _, target in indexed)
+
     def try_target(self, target: ProviderTarget, messages: list[dict[str, str]]) -> ProviderResult:
         started = time.monotonic()
         if self._cooldown_active(target):
@@ -185,15 +215,18 @@ class CloudModelRouter:
             content = data["choices"][0]["message"]["content"]
             if not isinstance(content, str) or not content.strip():
                 raise ValueError("provider returned an empty response")
+            latency_ms = int((time.monotonic() - started) * 1000)
             self._clear_failure(target)
-            return ProviderResult(True, content, target.name, int((time.monotonic() - started) * 1000))
+            self._record_success(target, latency_ms)
+            return ProviderResult(True, content, target.name, latency_ms)
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            latency_ms = int((time.monotonic() - started) * 1000)
             self._record_failure(target)
-            return ProviderResult(False, None, target.name, int((time.monotonic() - started) * 1000), f"{target.name}: provider request failed ({exc})")
+            return ProviderResult(False, None, target.name, latency_ms, f"{target.name}: provider request failed ({exc})")
 
     def complete(self, messages: list[dict[str, str]]) -> tuple[str, str]:
         errors: list[str] = []
-        for target in self.targets:
+        for target in self._ordered_targets(self.targets):
             result = self.try_target(target, messages)
             if result.ok and result.text is not None:
                 return result.text, result.target_name
@@ -208,7 +241,7 @@ class CloudModelRouter:
             for target in self.targets
         )
         errors: list[str] = []
-        for target in targets:
+        for target in self._ordered_targets(targets):
             result = self.try_target(target, messages)
             if result.ok and result.text is not None:
                 return result.text, result.target_name
@@ -239,7 +272,7 @@ class CloudModelRouter:
             )
             failures: list[str] = []
             started = time.monotonic()
-            for target in targets:
+            for target in self._ordered_targets(targets):
                 result = self.try_target(target, messages)
                 if result.ok and result.text is not None:
                     return result
