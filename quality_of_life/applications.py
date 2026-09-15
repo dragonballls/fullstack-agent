@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-import re
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
@@ -27,9 +27,10 @@ class InstalledApplication:
 
 
 class ApplicationManager:
-    def __init__(self, policy: CapabilityPolicy, provider: Callable[[], Iterable[InstalledApplication]] | None = None) -> None:
+    def __init__(self, policy: CapabilityPolicy, provider: Callable[[], Iterable[InstalledApplication]] | None = None, launcher: Callable[[list[str]], Any] | None = None) -> None:
         self.policy = policy
         self.provider = provider or self._registry_inventory
+        self._launcher = launcher or (lambda command: subprocess.Popen(command, shell=False))
 
     @staticmethod
     def _registry_inventory() -> tuple[InstalledApplication, ...]:
@@ -71,10 +72,11 @@ class ApplicationManager:
         target = name_or_id.strip().casefold()
         if not target:
             raise ApplicationError("Application name or id is required")
-        exact = [app for app in self.list() if app.id.casefold() == target or app.name.casefold() == target]
+        inventory = self.list()
+        exact = [app for app in inventory if app.id.casefold() == target or app.name.casefold() == target]
         if len(exact) == 1:
             return exact[0]
-        matches = [app for app in self.list() if target in app.name.casefold()]
+        matches = [app for app in inventory if target in app.name.casefold()]
         if len(matches) != 1:
             raise ApplicationError("Application selection is ambiguous or unavailable")
         return matches[0]
@@ -94,8 +96,7 @@ class ApplicationManager:
             raise ApplicationError("Invalid uninstall command metadata")
         executable = parts[0].strip('"')
         if not os.path.isabs(executable):
-            resolved = next((os.path.join(path, executable) for path in os.environ.get("PATH", "").split(os.pathsep) if os.path.isfile(os.path.join(path, executable))), None)
-            executable = resolved or executable
+            executable = next((os.path.join(path, executable) for path in os.environ.get("PATH", "").split(os.pathsep) if os.path.isfile(os.path.join(path, executable))), executable)
         if not os.path.isabs(executable) or not os.path.isfile(executable):
             raise ApplicationError("Registered uninstaller executable could not be verified")
         return [executable, *[part.strip('"') for part in parts[1:]]]
@@ -110,8 +111,15 @@ class ApplicationManager:
         if any(term in lowered for term in protected_terms):
             raise ApplicationError("Protected/system application cannot be uninstalled by this capability")
         command = self._safe_uninstaller(app)
-        subprocess.Popen(command, shell=False)
-        return app
+        process = self._launcher(command)
+        if hasattr(process, "poll") and process.poll() is not None and process.returncode not in (0, None):
+            raise ApplicationError("Registered uninstaller exited unsuccessfully")
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if not any(item.id == app.id or item.name.casefold() == app.name.casefold() for item in self.provider()):
+                return app
+            time.sleep(0.25)
+        raise ApplicationError("Uninstaller started but removal could not be verified within 30 seconds")
 
 
 def _value(winreg: Any, key: Any, name: str) -> Any:
