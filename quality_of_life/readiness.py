@@ -42,6 +42,7 @@ class ReadinessReport:
 
 CloudKey = tuple[str, ...]
 DEFAULT_CLOUD_KEYS: CloudKey = (
+    "OMNIROUTE_API_KEY",
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "GEMINI_API_KEY",
