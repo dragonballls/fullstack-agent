@@ -28,6 +28,8 @@ OPERATION_CATALOG: tuple[OperationSpec, ...] = (
     OperationSpec("computer.click", Capability.MOUSE_CONTROL, OperationRisk.MUTATE, "Click at the current pointer position"),
     OperationSpec("computer.type_text", Capability.KEYBOARD_CONTROL, OperationRisk.EXTERNAL, "Type text into the focused application"),
     OperationSpec("computer.open_app", Capability.APP_LAUNCH, OperationRisk.EXTERNAL, "Launch a known application"),
+    OperationSpec("hand_control.start", Capability.MOUSE_CONTROL, OperationRisk.MUTATE, "Enable webcam-driven pointer control"),
+    OperationSpec("hand_control.stop", Capability.MOUSE_CONTROL, OperationRisk.MUTATE, "Stop webcam-driven pointer control"),
     OperationSpec("screen.capture", Capability.SCREEN_READ, OperationRisk.READ, "Capture the current screen"),
     OperationSpec("browser.start", Capability.BROWSER_CONTROL, OperationRisk.EXTERNAL, "Start a selected installed browser"),
     OperationSpec("browser.open_url", Capability.BROWSER_CONTROL, OperationRisk.EXTERNAL, "Open a validated web URL"),
