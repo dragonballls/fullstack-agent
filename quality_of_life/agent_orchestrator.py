@@ -9,6 +9,7 @@ from typing import Any, Callable, Iterable, Iterator
 from .intents import parse_intent
 from .orchestration import OrchestrationPlan, RequestProfile, build_plan
 from .permissions import Capability
+from .planner import PlanError, plan_request
 from .router import CloudModelRouter, ProviderResult
 
 
@@ -66,54 +67,99 @@ class AgentOrchestrator:
             for task in plan.parallel_tasks
         ]
 
-    def _deterministic_context(self, text: str, confirmed: bool) -> tuple[str, bool, list[str]]:
-        """Execute only explicitly supported intents through the existing policy-gated runtime."""
+    def _execute_typed_plan(self, text: str, confirmed: bool) -> tuple[str, bool, bool, list[str]]:
+        try:
+            plan = plan_request(self.router, text)
+        except PlanError:
+            return "", False, False, []
+        if not plan.steps:
+            return "", False, False, []
+        needs_confirmation = self._needs_confirmation(text) and not confirmed
+        if needs_confirmation:
+            return "This request requires confirmation before I make changes or interact with external applications.", False, True, []
+        results: list[str] = []
+        errors: list[str] = []
+        verified = True
+        for step in plan.steps:
+            try:
+                spec = __import__("quality_of_life.capabilities", fromlist=["operation"]).operation(step.operation)
+                result = self.runtime.dispatch(spec.capability, step.operation, **step.arguments)
+                results.append(f"{step.operation}: {result}")
+            except Exception as exc:
+                verified = False
+                errors.append(f"{step.operation}: {exc}")
+                break
+        if not results:
+            return "", False, False, errors
+        return "\n".join(results), verified, False, errors
+
+    def _deterministic_context(self, text: str, confirmed: bool) -> tuple[str, bool, list[str], bool]:
+        """Execute explicitly supported intents through the existing policy-gated runtime."""
         intent = parse_intent(text)
+        if intent.kind == "browser_open":
+            browser = str(intent.arguments["browser"])
+            url = intent.arguments.get("url")
+            if not confirmed:
+                return f"I can open {browser}, but confirmation is required before controlling a browser.", False, [], True
+            if url:
+                result = self.runtime.dispatch(Capability.BROWSER_CONTROL, "browser.open_url", url=str(url), browser=browser)
+            else:
+                result = self.runtime.dispatch(Capability.BROWSER_CONTROL, "browser.start", browser=browser)
+            return f"Opened {browser}. {result or ''}".strip(), True, [], False
+        if intent.kind == "application_list":
+            result = self.runtime.dispatch(Capability.APP_READ, "applications.list")
+            return str(result), True, [], False
+        if intent.kind == "application_uninstall":
+            if not confirmed:
+                return "An application uninstall was requested, but confirmation is required before removing software.", False, [], True
+            result = self.runtime.dispatch(Capability.APP_WRITE, "applications.uninstall", name=str(intent.arguments["name"]), confirmed=True)
+            return f"Uninstall verified: {result}", True, [], False
+        if intent.kind == "process_list":
+            result = self.runtime.dispatch(Capability.PROCESS_READ, "processes.list")
+            return str(result), True, [], False
+        if intent.kind == "system_inspect":
+            result = self.runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "system.inspect")
+            return str(result), True, [], False
+        if intent.kind == "file_read":
+            result = self.runtime.dispatch(Capability.FILE_READ, "files.read", path=str(intent.arguments["path"]))
+            return str(result), True, [], False
+        if intent.kind == "file_delete":
+            if not confirmed:
+                return "A file deletion was requested, but confirmation is required before deleting anything.", False, [], True
+            result = self.runtime.dispatch(Capability.FILE_DELETE, "files.delete", path=str(intent.arguments["path"]))
+            return f"File deletion verified: {result}", True, [], False
         if intent.kind == "windows_maintenance":
             request = str(intent.arguments["request"])
             lowered = request.casefold()
             if "diagnos" in lowered and not any(word in lowered for word in ("fix", "repair", "clean")):
                 result = self.runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose")
-                return str(getattr(result, "message", result)), True, []
+                return str(getattr(result, "message", result)), True, [], False
             if confirmed:
-                result = self.runtime.dispatch(
-                    Capability.SYSTEM_MAINTENANCE,
-                    "windows_maintenance.handle",
-                    request=request,
-                    confirmed=True,
-                )
+                result = self.runtime.dispatch(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", request=request, confirmed=True)
                 operation_results = getattr(result, "results", ())
-                verified = bool(operation_results) and all(
-                    getattr(item, "success", False) and getattr(item, "verified", False)
-                    for item in operation_results
-                )
-                return str(getattr(result, "message", result)), verified, []
-            return "A maintenance change was requested, but confirmation is required before anything is modified.", False, []
+                verified = bool(operation_results) and all(getattr(item, "success", False) and getattr(item, "verified", False) for item in operation_results)
+                return str(getattr(result, "message", result)), verified, [], False
+            return "A maintenance change was requested, but confirmation is required before anything is modified.", False, [], True
         if intent.kind == "locate_me":
             result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.locate_me")
-            return str(result), True, []
+            return str(result), True, [], False
         if intent.kind == "screen_read":
             result = self.runtime.dispatch(Capability.SCREEN_READ, "screen.capture")
-            return str(result), True, []
+            return str(result), True, [], False
         if intent.kind == "place_search":
             query = str(intent.arguments["query"])
             result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.open_place", query=query)
-            return str(result), True, []
+            return str(result), True, [], False
         if intent.kind == "route":
             query = str(intent.arguments["query"])
             result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query=query)
-            return str(result), True, []
+            return str(result), True, [], False
         if intent.kind == "computer_action":
             if not confirmed:
-                return "A computer-control action was requested, but confirmation is required before moving the mouse.", False, []
-            result = self.runtime.dispatch(
-                Capability.MOUSE_CONTROL,
-                "computer.move",
-                x=intent.arguments["x"],
-                y=intent.arguments["y"],
-            )
-            return str(result), True, []
-        return "", False, []
+                return "A computer-control action was requested, but confirmation is required before moving the mouse.", False, [], True
+            result = self.runtime.dispatch(Capability.MOUSE_CONTROL, "computer.move", x=intent.arguments["x"], y=intent.arguments["y"])
+            return str(result), True, [], False
+        return "", False, [], False
 
     def _coding_context(self, text: str, confirmed: bool) -> tuple[str, bool]:
         """Use the existing self-coding engine only after explicit confirmation."""
@@ -135,9 +181,8 @@ class AgentOrchestrator:
                 findings.append(f"Specialist {index}: unavailable ({result.error})")
         context = "\n\n".join(findings) or "No specialist findings were available."
         return (
-            "Act as the primary Jarvis response model. Synthesize the findings below into one "
-            "accurate, concise response. Do not claim an action was performed unless a deterministic "
-            "tool result is supplied. Preserve safety boundaries and state when confirmation is required.\n\n"
+            "Act as the primary Jarvis response model. Synthesize the findings below into one accurate, concise response. "
+            "Do not claim an action was performed unless a deterministic tool result is supplied. Preserve safety boundaries.\n\n"
             f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
         )
 
@@ -146,8 +191,13 @@ class AgentOrchestrator:
         plan = build_plan(text)
         errors: list[str] = []
         providers: list[str] = []
-        deterministic_context, deterministic_verified, deterministic_errors = self._deterministic_context(text, confirmed)
+        deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
         errors.extend(deterministic_errors)
+        if not deterministic_context and not needs_confirmation:
+            typed_context, typed_verified, typed_confirmation, typed_errors = self._execute_typed_plan(text, confirmed)
+            if typed_context:
+                deterministic_context, deterministic_verified, needs_confirmation = typed_context, typed_verified, typed_confirmation
+            errors.extend(typed_errors)
         parallel_completed = 0
         if plan.primary.profile is RequestProfile.CODING and any(word in text.casefold() for word in ("implement", "fix", "modify", "code")):
             coding_context, coding_verified = self._coding_context(text, confirmed)
@@ -164,22 +214,16 @@ class AgentOrchestrator:
             synthesis_prompt = self._synthesis_prompt(plan, specialist_results, deterministic_context)
         else:
             synthesis_prompt = self._synthesis_prompt(plan, (), deterministic_context)
-        synthesis_text, provider = self.router.complete_profiled(self._messages(synthesis_prompt), plan.primary.profile)
+        if deterministic_context and (deterministic_verified or needs_confirmation):
+            synthesis_text = deterministic_context
+            provider = "deterministic"
+        else:
+            synthesis_text, provider = self.router.complete_profiled(self._messages(synthesis_prompt), plan.primary.profile)
         providers.append(provider)
-        needs_confirmation = self._needs_confirmation(text) and not confirmed
         verified = bool(synthesis_text.strip()) and (deterministic_verified or not deterministic_context)
         if needs_confirmation:
             verified = False
-        return OrchestrationResult(
-            synthesis_text,
-            plan.primary.profile.value,
-            verified,
-            needs_confirmation,
-            parallel_completed,
-            tuple(dict.fromkeys(providers)),
-            int((time.monotonic() - started) * 1000),
-            tuple(errors),
-        )
+        return OrchestrationResult(synthesis_text, plan.primary.profile.value, verified, needs_confirmation, parallel_completed, tuple(dict.fromkeys(providers)), int((time.monotonic() - started) * 1000), tuple(errors))
 
     def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:
         ack = OrchestrationEvent("ack", "Certainly. I'm working on that now.")
