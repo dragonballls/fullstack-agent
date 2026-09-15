@@ -43,6 +43,18 @@ class JarvisRuntime:
         target = spec.resolve()
         if name in {"computer", "screen", "browser", "clipboard", "windows"}:
             return lambda: target(self.policy)
+        if name == "browser_registry":
+            return lambda: target()
+        if name == "files":
+            return lambda: target(self.policy)
+        if name == "applications":
+            return lambda: target(self.policy)
+        if name == "processes":
+            return lambda: target(self.policy)
+        if name == "system":
+            return lambda: target(self.policy)
+        if name == "scheduler":
+            return lambda: target(self._tool("background"))
         if name == "gods_eye":
             return lambda: GodsEye(NominatimGeocoder(), FallbackLocationProvider(SystemLocationProvider(), IpLocationProvider()))
         if name == "background":
@@ -121,10 +133,30 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.minimize", lambda identifier: self._tool("windows").minimize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.maximize", lambda identifier: self._tool("windows").maximize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.close", lambda identifier: self._tool("windows").close_window(identifier)))
-        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.open_url", lambda url: self._tool("browser").open_url(url)))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.open_url", lambda url, browser=None: self._tool("browser").open_url(url, browser=browser)))
+        self.orchestrator.register(Action(Capability.FILE_READ, "files.info", lambda path: self._tool("files").info(path)))
+        self.orchestrator.register(Action(Capability.FILE_READ, "files.search", lambda pattern, root=None, limit=100: self._tool("files").search(pattern, root, limit)))
+        self.orchestrator.register(Action(Capability.FILE_READ, "files.read", lambda path, max_bytes=5_000_000: self._tool("files").read_text(path, max_bytes)))
+        self.orchestrator.register(Action(Capability.FILE_WRITE, "files.write", lambda path, text: self._tool("files").write_text(path, text)))
+        self.orchestrator.register(Action(Capability.FILE_WRITE, "files.copy", lambda source, destination: self._tool("files").copy(source, destination)))
+        self.orchestrator.register(Action(Capability.FILE_WRITE, "files.move", lambda source, destination: self._tool("files").move(source, destination)))
+        self.orchestrator.register(Action(Capability.FILE_DELETE, "files.delete", lambda path: self._tool("files").delete(path)))
+        self.orchestrator.register(Action(Capability.APP_READ, "applications.list", lambda: self._tool("applications").list()))
+        self.orchestrator.register(Action(Capability.APP_WRITE, "applications.uninstall", lambda name, confirmed=False: self._tool("applications").uninstall(name, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.PROCESS_READ, "processes.list", lambda: self._tool("processes").list_processes()))
+        self.orchestrator.register(Action(Capability.PROCESS_CONTROL, "processes.stop", lambda pid, confirmed=False: self._tool("processes").stop(pid, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.SERVICE_READ, "services.list", lambda: self._tool("processes").list_services()))
+        self.orchestrator.register(Action(Capability.SERVICE_CONTROL, "services.restart", lambda name, confirmed=False: self._tool("processes").restart_service(name, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "system.inspect", lambda: self._tool("system").inspect()))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "system.network", lambda: self._tool("system").network()))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "system.get_setting", lambda name: self._tool("system").get_setting(name)))
+        self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "system.change_setting", lambda name, value, confirmed=False: self._tool("system").set_setting(name, value, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.start", lambda name, task: self._tool("background").start(name, task)))
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.cancel", lambda name: self._tool("background").cancel(name)))
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.active", lambda: self._tool("background").active()))
+        self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "scheduler.schedule_once", lambda name, run_at, task: self._tool("scheduler").schedule_once(name, run_at, task)))
+        self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "scheduler.cancel", lambda name: self._tool("scheduler").cancel(name)))
+        self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "scheduler.active", lambda: self._tool("scheduler").active()))
         self.orchestrator.register(Action(Capability.CLOUD_ROUTING, "cloud_router.complete", lambda messages: self._tool("cloud_router").complete(messages)))
         self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.run", lambda goal: self._tool("self_coding").run(goal)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.search", lambda query: self._tool("gods_eye").search(query)))
@@ -164,6 +196,20 @@ class JarvisRuntime:
 
     def handle_text(self, text: str) -> Any:
         intent: Intent = parse_intent(text)
+        if intent.kind == "browser_open":
+            return {"intent": intent, "result": self.dispatch(Capability.BROWSER_CONTROL, "browser.open_url", url=str(intent.arguments.get("url") or "https://www.google.com"), browser=str(intent.arguments["browser"]))}
+        if intent.kind == "application_list":
+            return {"intent": intent, "result": self.dispatch(Capability.APP_READ, "applications.list")}
+        if intent.kind == "application_uninstall":
+            return {"intent": intent, "result": self.dispatch(Capability.APP_WRITE, "applications.uninstall", name=str(intent.arguments["name"]))}
+        if intent.kind == "process_list":
+            return {"intent": intent, "result": self.dispatch(Capability.PROCESS_READ, "processes.list")}
+        if intent.kind == "system_inspect":
+            return {"intent": intent, "result": self.dispatch(Capability.SYSTEM_DIAGNOSTICS, "system.inspect")}
+        if intent.kind == "file_read":
+            return {"intent": intent, "result": self.dispatch(Capability.FILE_READ, "files.read", path=str(intent.arguments["path"]))}
+        if intent.kind == "file_delete":
+            return {"intent": intent, "result": self.dispatch(Capability.FILE_DELETE, "files.delete", path=str(intent.arguments["path"]))}
         if intent.kind == "place_search":
             query = str(intent.arguments["query"])
             result = self.dispatch(Capability.LOCATION_READ, "gods_eye.open_place", query=query)
