@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import platform
-from typing import Any, Callable
+from typing import Any
 
 from .permissions import Capability, CapabilityPolicy
 
@@ -19,7 +19,7 @@ class WindowsController:
     WM_CLOSE = 0x0010
 
     def __init__(self, policy: CapabilityPolicy, user32: Any | None = None) -> None:
-        if platform.system() != "Windows":
+        if platform.system() != "Windows" and user32 is None:
             raise WindowsControlUnavailable("window control is supported only on Windows")
         self.policy = policy
         self.user32 = user32 or ctypes.windll.user32
@@ -27,7 +27,9 @@ class WindowsController:
     def list_windows(self) -> list[dict[str, object]]:
         self.policy.check(Capability.WINDOW_CONTROL)
         results: list[dict[str, object]] = []
-        enum_proc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+        callback_type = getattr(ctypes, "WINFUNCTYPE", lambda *_types: lambda function: function)
+        enum_proc = callback_type(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
         def callback(hwnd: int, _lparam: int) -> bool:
             if not self.user32.IsWindowVisible(hwnd):
                 return True
@@ -40,6 +42,7 @@ class WindowsController:
             if title:
                 results.append({"handle": int(hwnd), "title": title})
             return True
+
         self.user32.EnumWindows(enum_proc(callback), 0)
         return results
 
