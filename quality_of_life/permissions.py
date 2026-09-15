@@ -12,6 +12,7 @@ class CapabilityDenied(PermissionError):
 
 class Capability(str, Enum):
     SCREEN_READ = "screen.read"
+    LOCATION_READ = "location.read"
     MOUSE_CONTROL = "mouse.control"
     KEYBOARD_CONTROL = "keyboard.control"
     CLIPBOARD = "clipboard"
