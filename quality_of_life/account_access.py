@@ -67,6 +67,36 @@ class AccountAccessRegistry:
         for grant in grants:
             self.register(grant)
 
+    @classmethod
+    def from_environment(cls, variable: str = "JARVIS_ACCOUNT_GRANTS") -> "AccountAccessRegistry":
+        """Load non-secret account grants from JSON environment configuration."""
+        raw = os.getenv(variable, "").strip()
+        if not raw:
+            return cls()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise AccountAccessError("account grants configuration is invalid JSON") from exc
+        if not isinstance(payload, list):
+            raise AccountAccessError("account grants configuration must be a JSON list")
+        grants: list[AccountGrant] = []
+        for item in payload:
+            if not isinstance(item, dict):
+                raise AccountAccessError("each account grant must be an object")
+            provider = AccountProvider(str(item["provider"]))
+            account_id = str(item["account_id"])
+            scopes: list[AccountScope] = []
+            for scope in item.get("scopes", []):
+                if not isinstance(scope, dict):
+                    raise AccountAccessError("each account scope must be an object")
+                scopes.append(AccountScope(
+                    name=str(scope["name"]),
+                    description=str(scope.get("description", "")),
+                    risk=AccountRisk(str(scope.get("risk", "read"))),
+                ))
+            grants.append(AccountGrant(provider, account_id, tuple(scopes), bool(item.get("enabled", True))))
+        return cls(grants)
+
     def register(self, grant: AccountGrant) -> None:
         key = (grant.provider, grant.account_id)
         if key in self._grants:
@@ -104,11 +134,7 @@ _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 class GitHubRepositoryClient:
     """Minimal GitHub repository client using a caller-supplied credential resolver."""
 
-    def __init__(
-        self,
-        token_resolver: Callable[[], str | None] | None = None,
-        opener: Callable[..., object] = urlopen,
-    ) -> None:
+    def __init__(self, token_resolver: Callable[[], str | None] | None = None, opener: Callable[..., object] = urlopen) -> None:
         self._token_resolver = token_resolver or (lambda: os.getenv("GITHUB_TOKEN"))
         self._opener = opener
 
@@ -122,15 +148,7 @@ class GitHubRepositoryClient:
         owner, name = normalized.split("/", 1)
         return owner, name
 
-    def fork_repository(
-        self,
-        repository: str,
-        *,
-        account_id: str,
-        access: AccountAccessRegistry,
-        confirmed: bool = False,
-        organization: str | None = None,
-    ) -> dict[str, str]:
+    def fork_repository(self, repository: str, *, account_id: str, access: AccountAccessRegistry, confirmed: bool = False, organization: str | None = None) -> dict[str, str]:
         access.require(AccountProvider.GITHUB, account_id, "repo.fork", confirmed=confirmed)
         owner, name = self._validate_repo(repository)
         token = self._token_resolver()
