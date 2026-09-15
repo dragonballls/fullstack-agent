@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import os
 from collections.abc import Callable
 from typing import Any
@@ -72,6 +71,9 @@ class JarvisRuntime:
                     "cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL"
                 )
             return lambda: CloudModelRouter((target_config,))
+        if name == "windows_maintenance":
+            from windows_maintenance import MaintenanceFacade
+            return lambda: MaintenanceFacade()
         raise RuntimeError(f"No runtime factory is configured for: {name}")
 
     def _tool(self, name: str) -> Any:
@@ -105,6 +107,8 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.open_place", lambda query: self._open_place(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.route_to", lambda query: self._route_to(query)))
+        self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", lambda request, confirmed=False: self._tool("windows_maintenance").handle(request, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
         """Resolve the first God’s Eye place matching a user query."""
@@ -148,4 +152,7 @@ class JarvisRuntime:
             return {"intent": intent, "result": self.dispatch(Capability.SCREEN_READ, "screen.capture")}
         if intent.kind == "computer_action":
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "computer.move", x=intent.arguments["x"], y=intent.arguments["y"])}
+        if intent.kind == "windows_maintenance":
+            request = str(intent.arguments["request"])
+            return {"intent": intent, "result": self.dispatch(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", request=request)}
         return intent

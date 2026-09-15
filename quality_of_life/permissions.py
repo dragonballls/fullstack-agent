@@ -23,6 +23,7 @@ class Capability(str, Enum):
     REPO_WRITE = "repo.write"
     BACKGROUND_JOBS = "background.jobs"
     CLOUD_ROUTING = "cloud.routing"
+    SYSTEM_MAINTENANCE = "system.maintenance"
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class CapabilityPolicy:
         Capability.BROWSER_CONTROL,
         Capability.REPO_WRITE,
         Capability.BACKGROUND_JOBS,
+        Capability.SYSTEM_MAINTENANCE,
     })
 
     def check(self, capability: Capability) -> None:

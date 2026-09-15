@@ -17,12 +17,19 @@ class FakeEye:
         return {"surface": "gods-eye", "place": place.as_dict()}
 
 
+class FakeMaintenance:
+    def handle(self, request, confirmed=False):
+        return {"request": request, "confirmed": confirmed}
+    def diagnose(self):
+        return {"diagnose": True}
+
+
 class JarvisRuntimeTests(unittest.TestCase):
     def test_runtime_exposes_all_capability_tools_and_dispatches_gods_eye(self):
         policy = CapabilityPolicy(frozenset({Capability.LOCATION_READ}))
         runtime = JarvisRuntime(policy, factories={"gods_eye": lambda: FakeEye()})
         names = set(runtime.available_tools())
-        self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye"} <= names)
+        self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye", "windows_maintenance"} <= names)
         places = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.search", query="Tokyo")
         self.assertEqual(places[0].name, "Tokyo")
 
@@ -60,3 +67,10 @@ class JarvisRuntimeTests(unittest.TestCase):
         runtime.confirmation = lambda capability, operation: True
         runtime.dispatch(Capability.MOUSE_CONTROL, "computer.move", x=1, y=2)
         self.assertEqual(calls, [(1, 2)])
+
+    def test_maintenance_intent_is_reachable_through_runtime(self):
+        policy = CapabilityPolicy(frozenset({Capability.SYSTEM_MAINTENANCE}), require_confirmation=frozenset())
+        runtime = JarvisRuntime(policy, factories={"windows_maintenance": lambda: FakeMaintenance()})
+        result = runtime.handle_text("diagnose my PC")
+        self.assertEqual(result["intent"].kind, "windows_maintenance")
+        self.assertEqual(result["result"]["request"], "diagnose my PC")
