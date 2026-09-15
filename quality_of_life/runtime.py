@@ -198,7 +198,13 @@ class JarvisRuntime:
 
     def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> dict[str, str]:
         from .account_access import GitHubRepositoryClient
-        return GitHubRepositoryClient().fork_repository(repository, account_id=account_id, access=self._tool("account_access"), confirmed=True, organization=organization)
+        return GitHubRepositoryClient().fork_repository(
+            repository,
+            account_id=account_id,
+            access=self._tool("account_access"),
+            confirmed=True,
+            organization=organization,
+        )
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
         eye = self._tool("gods_eye")
@@ -275,23 +281,32 @@ class JarvisRuntime:
             self.gods_eye_launcher.launch_query(query)
             return {"intent": intent, "result": result, "opened": True}
         if intent.kind == "locate_me":
-            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_READ, "locations.current")}
-        if intent.kind == "save_current_location":
-            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.save_current", name=str(intent.arguments["name"]))}
-        if intent.kind == "saved_location":
-            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_READ, "locations.get", name=str(intent.arguments["name"]))}
-        if intent.kind == "delete_saved_location":
-            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.delete", name=str(intent.arguments["name"]))}
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_READ, "gods_eye.locate_me")}
         if intent.kind == "route":
             query = str(intent.arguments["query"])
             return {"intent": intent, "result": self.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query=query)}
+        if intent.kind == "save_current_location":
+            name = str(intent.arguments["name"])
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.save_current", name=name)}
         if intent.kind == "save_place":
             place_query = str(intent.arguments["place"])
             name = str(intent.arguments["name"])
             place = self._first_place(place_query)[1]
-            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.save", name=name, latitude=place.point.latitude, longitude=place.point.longitude, address=place.address)}
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.save", name=name, latitude=place.point.latitude, longitude=place.point.longitude, source=place.provider)}
+        if intent.kind == "saved_location":
+            saved = self.dispatch(Capability.LOCATION_READ, "locations.get", name=str(intent.arguments["name"]))
+            if saved is None:
+                raise LookupError(f"No saved location found for: {intent.arguments['name']}")
+            return {"intent": intent, "result": saved}
+        if intent.kind == "delete_saved_location":
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.delete", name=str(intent.arguments["name"]))}
         if intent.kind == "screen_read":
             return {"intent": intent, "result": self.dispatch(Capability.SCREEN_READ, "screen.capture")}
-        if intent.kind == "computer_action" and intent.arguments.get("operation") == "move":
-            return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "computer.move", x=int(intent.arguments["x"]), y=int(intent.arguments["y"]))}
-        return self.handle_assistant_request(text)
+        if intent.kind == "computer_action":
+            return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "computer.move", x=intent.arguments["x"], y=intent.arguments["y"])}
+        if intent.kind == "windows_maintenance":
+            request = str(intent.arguments["request"])
+            if "diagnos" in request.casefold() and not any(word in request.casefold() for word in ("fix", "repair", "clean")):
+                return {"intent": intent, "result": self.dispatch(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose")}
+            return {"intent": intent, "result": self.dispatch(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", request=request)}
+        return intent
