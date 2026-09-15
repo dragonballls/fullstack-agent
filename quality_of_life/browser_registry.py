@@ -6,7 +6,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 
 class BrowserUnavailable(RuntimeError):
@@ -34,17 +34,17 @@ _ALIASES = {
 
 
 def _windows_candidates() -> dict[str, tuple[str, str, tuple[Path, ...]]]:
-    roots = [Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")),
-             Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")),
-             Path(os.environ.get("LOCALAPPDATA", ""))]
+    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+    program_files_x86 = Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+    local_app_data = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
     return {
-        "edge": ("Microsoft Edge", "chromium", tuple(root / "Microsoft" / "Edge" / "Application" / "msedge.exe" for root in roots)),
-        "chrome": ("Google Chrome", "chromium", tuple(root / "Google" / "Chrome" / "Application" / "chrome.exe" for root in roots)),
-        "firefox": ("Firefox", "gecko", tuple(root / "Mozilla Firefox" / "firefox.exe" for root in roots)),
-        "opera": ("Opera", "chromium", tuple(root / "Opera" / "launcher.exe" for root in roots)),
-        "opera-gx": ("Opera GX", "chromium", tuple(root / "Opera Software" / "Opera GX" / "launcher.exe" for root in roots)),
-        "brave": ("Brave", "chromium", tuple(root / "BraveSoftware" / "Brave-Browser" / "Application" / "brave.exe" for root in roots)),
-        "vivaldi": ("Vivaldi", "chromium", tuple(root / "Vivaldi" / "Application" / "vivaldi.exe" for root in roots)),
+        "edge": ("Microsoft Edge", "chromium", (program_files / "Microsoft/Edge/Application/msedge.exe", program_files_x86 / "Microsoft/Edge/Application/msedge.exe", local_app_data / "Microsoft/Edge/Application/msedge.exe")),
+        "chrome": ("Google Chrome", "chromium", (program_files / "Google/Chrome/Application/chrome.exe", program_files_x86 / "Google/Chrome/Application/chrome.exe", local_app_data / "Google/Chrome/Application/chrome.exe")),
+        "firefox": ("Firefox", "gecko", (program_files / "Mozilla Firefox/firefox.exe", program_files_x86 / "Mozilla Firefox/firefox.exe", local_app_data / "Mozilla Firefox/firefox.exe")),
+        "opera": ("Opera", "chromium", (program_files / "Opera/launcher.exe", program_files_x86 / "Opera/launcher.exe", local_app_data / "Programs/Opera/launcher.exe", local_app_data / "Opera/launcher.exe")),
+        "opera-gx": ("Opera GX", "chromium", (program_files / "Opera GX/launcher.exe", program_files_x86 / "Opera GX/launcher.exe", local_app_data / "Programs/Opera GX/launcher.exe", local_app_data / "Opera Software/Opera GX/launcher.exe")),
+        "brave": ("Brave", "chromium", (program_files / "BraveSoftware/Brave-Browser/Application/brave.exe", program_files_x86 / "BraveSoftware/Brave-Browser/Application/brave.exe", local_app_data / "BraveSoftware/Brave-Browser/Application/brave.exe")),
+        "vivaldi": ("Vivaldi", "chromium", (program_files / "Vivaldi/Application/vivaldi.exe", program_files_x86 / "Vivaldi/Application/vivaldi.exe", local_app_data / "Vivaldi/Application/vivaldi.exe")),
     }
 
 
@@ -62,10 +62,11 @@ class BrowserRegistry:
         if self._cache is not None:
             return self._cache
         found: list[BrowserInstallation] = []
+        commands = {"edge": "msedge", "chrome": "chrome", "firefox": "firefox", "opera": "opera", "opera-gx": "opera-gx", "brave": "brave", "vivaldi": "vivaldi"}
         for browser_id, (name, family, candidates) in self._candidates().items():
             executable = next((path for path in candidates if path.is_file()), None)
             if executable is None:
-                command = shutil.which({"edge": "msedge", "chrome": "chrome", "firefox": "firefox", "opera": "opera", "opera-gx": "opera-gx", "brave": "brave", "vivaldi": "vivaldi"}.get(browser_id, ""))
+                command = shutil.which(commands.get(browser_id, ""))
                 if command:
                     executable = Path(command)
             if executable is not None:
