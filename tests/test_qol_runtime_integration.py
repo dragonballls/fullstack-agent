@@ -34,7 +34,13 @@ class FakeWindows:
 
 
 class FakeBrowser:
-    def open_url(self, url): return url
+    def open_url(self, url, browser=None): return url
+    def start(self, browser=None): return browser
+    def navigate(self, url): return url
+    def click(self, selector): return selector
+    def fill(self, selector, text): return (selector, text)
+    def read_text(self, selector="body"): return selector
+    def pages(self): return ()
 
 
 class FakeBackground:
