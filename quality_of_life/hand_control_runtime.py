@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from threading import Lock, Thread
 from typing import Any
+import webbrowser
 
 
 class HandControlRuntime:
@@ -41,7 +42,11 @@ class HandControlRuntime:
             self._server = server
             self._thread = thread
             self._enabled = True
-            return True
+        try:
+            webbrowser.open(self.url, new=1)
+        except Exception:
+            pass
+        return True
 
     def stop(self) -> None:
         with self._lock:
