@@ -23,6 +23,7 @@ class Capability(str, Enum):
     REPO_WRITE = "repo.write"
     BACKGROUND_JOBS = "background.jobs"
     CLOUD_ROUTING = "cloud.routing"
+    SYSTEM_DIAGNOSTICS = "system.diagnostics"
     SYSTEM_MAINTENANCE = "system.maintenance"
 
 
