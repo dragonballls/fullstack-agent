@@ -1,16 +1,21 @@
-"""Capability registry for the quality-of-life layer."""
+"""Lazy capability registry for the quality-of-life layer."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+import importlib
+from typing import Any
 
 
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
     description: str
-    factory: Callable[..., Any]
+    factory: str
+
+    def resolve(self) -> Any:
+        module_name, attribute = self.factory.rsplit(".", 1)
+        return getattr(importlib.import_module(module_name), attribute)
 
 
 class ToolRegistry:
@@ -34,9 +39,12 @@ class ToolRegistry:
 
 def default_registry() -> ToolRegistry:
     registry = ToolRegistry()
-    registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
-    registry.register(ToolSpec("screen", "Screen capture for computer-aware reasoning", "quality_of_life.screen.ScreenCapture"))
-    registry.register(ToolSpec("browser", "Optional Playwright browser automation", "quality_of_life.browser.BrowserController"))
     registry.register(ToolSpec("background", "Bounded cancellable background jobs", "quality_of_life.background.BackgroundJobs"))
+    registry.register(ToolSpec("browser", "Optional Playwright browser automation", "quality_of_life.browser.BrowserController"))
+    registry.register(ToolSpec("clipboard", "Bounded clipboard text read/write", "quality_of_life.clipboard.ClipboardController"))
     registry.register(ToolSpec("cloud_router", "Ordered cloud-provider failover", "quality_of_life.router.CloudModelRouter"))
+    registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
+    registry.register(ToolSpec("gods_eye", "Location search, current-location context, routing, and in-app map state", "quality_of_life.gods_eye.GodsEye"))
+    registry.register(ToolSpec("screen", "Screen capture for computer-aware reasoning", "quality_of_life.screen.ScreenCapture"))
+    registry.register(ToolSpec("windows", "Windows window enumeration and management", "quality_of_life.windows.WindowsController"))
     return registry
