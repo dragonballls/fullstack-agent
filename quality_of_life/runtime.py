@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 from .background import BackgroundJobs
@@ -59,6 +60,17 @@ class JarvisRuntime:
             else:
                 raise RuntimeError("cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
             return lambda: CloudModelRouter((target_config,))
+        if name == "self_coding":
+            from self_coding import SelfCodingAgent, SelfCodingConfig
+            configured_repo = os.environ.get("JARVIS_SELF_CODING_REPO")
+            if not configured_repo:
+                raise RuntimeError("self-coding is not configured; set JARVIS_SELF_CODING_REPO")
+            return lambda: SelfCodingAgent(SelfCodingConfig(
+                repo=Path(configured_repo),
+                push_branch=os.environ.get("JARVIS_SELF_CODING_PUSH", "0").strip().lower() in {"1", "true", "yes", "on"},
+                max_passes=max(1, int(os.environ.get("JARVIS_SELF_CODING_MAX_PASSES", "1"))),
+                backend=os.environ.get("JARVIS_SELF_CODING_BACKEND", "auto"),
+            ))
         if name == "windows_maintenance":
             from windows_maintenance import MaintenanceFacade
             return lambda: MaintenanceFacade()
@@ -114,6 +126,7 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.cancel", lambda name: self._tool("background").cancel(name)))
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.active", lambda: self._tool("background").active()))
         self.orchestrator.register(Action(Capability.CLOUD_ROUTING, "cloud_router.complete", lambda messages: self._tool("cloud_router").complete(messages)))
+        self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.run", lambda goal: self._tool("self_coding").run(goal)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.search", lambda query: self._tool("gods_eye").search(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.open_place", lambda query: self._open_place(query)))
