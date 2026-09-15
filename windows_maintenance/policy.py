@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from .models import MaintenanceAction, PolicyDecision, RiskClass
 
 
@@ -20,15 +21,19 @@ class MaintenancePolicy:
     allow_high_risk: bool = False
 
     def evaluate(self, action: MaintenanceAction, explicit_user_request: bool, confirmed: bool = False) -> PolicyDecision:
-        if action.risk is RiskClass.READ_ONLY:
+        try:
+            risk = RiskClass(action.risk)
+        except (TypeError, ValueError):
+            return PolicyDecision(False, "unknown maintenance risk class")
+        if risk is RiskClass.READ_ONLY:
             return PolicyDecision(True, "read-only")
         if not explicit_user_request:
             return PolicyDecision(False, "mutation requires explicit user intent")
-        if action.risk is RiskClass.REVERSIBLE_LOW_RISK and self.allow_low_risk:
+        if risk is RiskClass.REVERSIBLE_LOW_RISK and self.allow_low_risk:
             return PolicyDecision(True, "low-risk action authorized")
-        if action.risk is RiskClass.REVERSIBLE_MEDIUM_RISK and self.allow_medium_risk:
+        if risk is RiskClass.REVERSIBLE_MEDIUM_RISK and self.allow_medium_risk:
             return PolicyDecision(True, "medium-risk action authorized")
-        if action.risk is RiskClass.HIGH_RISK:
+        if risk is RiskClass.HIGH_RISK:
             if not self.allow_high_risk:
                 return PolicyDecision(False, "high-risk action is disabled by default", True)
             if not confirmed:
