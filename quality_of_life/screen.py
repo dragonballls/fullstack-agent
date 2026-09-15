@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -38,3 +39,17 @@ class ScreenCapture:
                 output.parent.mkdir(parents=True, exist_ok=True)
                 image.save(output)
             return raw
+
+    def capture_png(self) -> bytes:
+        self.policy.check(Capability.SCREEN_READ)
+        try:
+            from PIL import Image  # type: ignore
+        except ImportError as exc:
+            raise ScreenCaptureUnavailable("Pillow is required for PNG screen capture.") from exc
+        with self._mss.mss() as session:
+            monitor = session.monitors[1]
+            shot = session.grab(monitor)
+            image = Image.frombytes("RGB", shot.size, bytes(shot.rgb))
+            output = BytesIO()
+            image.save(output, format="PNG", optimize=False)
+            return output.getvalue()
