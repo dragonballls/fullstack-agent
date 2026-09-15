@@ -47,6 +47,26 @@ class RouterTests(unittest.TestCase):
             ],
         )
 
+    def test_provider_target_rejects_insecure_remote_http(self):
+        with self.assertRaisesRegex(ValueError, "HTTPS is required for non-loopback cloud targets"):
+            ProviderTarget("remote", "http://example.com/v1", "KEY", "m1")
+
+    def test_provider_target_rejects_invalid_configuration(self):
+        with self.assertRaisesRegex(ValueError, "base_url must be an absolute HTTP(S) URL"):
+            ProviderTarget("bad-url", "not-a-url", "KEY", "m1")
+        with self.assertRaisesRegex(ValueError, "model must be non-empty"):
+            ProviderTarget("bad-model", "https://example.com/v1", "KEY", " ")
+
+    def test_local_omniroute_does_not_require_a_bearer_key(self):
+        router = CloudModelRouter((ProviderTarget("local", "http://127.0.0.1:20128/v1", "MISSING_KEY", "auto"),))
+        old = os.environ.pop("MISSING_KEY", None)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "All configured cloud targets failed: local: provider request failed"):
+                router.complete([{"role": "user", "content": "hi"}])
+        finally:
+            if old is not None:
+                os.environ["MISSING_KEY"] = old
+
 
 if __name__ == "__main__":
     unittest.main()
