@@ -1,0 +1,1 @@
+Hand-control work remains on the feature branch until CI verifies the implementation. Main is unchanged.

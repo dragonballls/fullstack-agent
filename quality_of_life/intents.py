@@ -23,6 +23,8 @@ _BROWSER = re.compile(r"^(?:open|use|launch)\s+(edge|microsoft edge|ms edge|chro
 _FILE_DELETE = re.compile(r"^(?:delete\s+(?:file\s+)?|remove\s+file\s+)(.+)$", re.IGNORECASE)
 _APP_UNINSTALL = re.compile(r"^(?:uninstall|remove\s+(?:the\s+)?(?:program|application|app))\s+(.+)$", re.IGNORECASE)
 _MAINTENANCE = re.compile(r"^(?:diagnose|check|repair|fix|optimize|clean up|stop|prevent|disable).*(?:pc|computer|windows|steam|startup|background|cpu|ram|gpu|network|system files)", re.IGNORECASE)
+_HAND_START = re.compile(r"^(?:turn\s+on|enable|start)\s+(?:webcam\s+)?hand\s+control$|^(?:enable|start)\s+(?:webcam\s+)?control$", re.IGNORECASE)
+_HAND_STOP = re.compile(r"^(?:turn\s+off|disable|stop|pause)\s+(?:webcam\s+)?hand\s+control$|^(?:disable|stop)\s+(?:webcam\s+)?control$", re.IGNORECASE)
 
 
 def parse_intent(text: str) -> Intent:
@@ -30,6 +32,10 @@ def parse_intent(text: str) -> Intent:
     if not value:
         return Intent("chat", {"text": ""})
     lowered = value.casefold()
+    if _HAND_START.match(value):
+        return Intent("hand_control_start", {})
+    if _HAND_STOP.match(value):
+        return Intent("hand_control_stop", {})
     if lowered in {"where am i", "what is my location", "what's my location", "where are we"}:
         return Intent("locate_me", {})
     match = _SAVE_CURRENT.match(value)

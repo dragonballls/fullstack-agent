@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Jarvis Hand Control</title>
+  <style>
+    html,body{margin:0;height:100%;background:#05070a;color:#e8edf5;font:16px system-ui,sans-serif;overflow:hidden}
+    main{height:100%;display:grid;place-items:center}
+    #camera{display:none}
+    canvas{max-width:96vw;max-height:88vh;border-radius:18px;transform:scaleX(-1);box-shadow:0 0 40px #000}
+    .panel{position:fixed;left:16px;top:16px;padding:12px 14px;border-radius:12px;background:#10151ccc;backdrop-filter:blur(10px)}
+    .status{font-weight:700}.hint{opacity:.75;font-size:13px;margin-top:5px}
+    button{margin-top:8px;padding:7px 10px;border:0;border-radius:8px;cursor:pointer}
+  </style>
+</head>
+<body>
+<main>
+  <video id="camera" autoplay playsinline></video>
+  <canvas id="view" width="1280" height="720"></canvas>
+</main>
+<div class="panel"><div id="status" class="status">Starting camera…</div><div class="hint">Point: move · pinch/release: click · fist: pause · Esc/Stop: disable</div><button id="stop">Stop hand control</button></div>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script>
+(() => {
+  const video = document.getElementById('camera');
+  const canvas = document.getElementById('view');
+  const ctx = canvas.getContext('2d');
+  const status = document.getElementById('status');
+  let enabled = true;
+  let lastSend = 0;
+  let lastPinch = false;
+
+  function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+  function fingerExtended(lm, tip, pip){ return lm[tip].y < lm[pip].y; }
+  function countFingers(lm){
+    let n = 0;
+    n += fingerExtended(lm,8,6) ? 1 : 0;
+    n += fingerExtended(lm,12,10) ? 1 : 0;
+    n += fingerExtended(lm,16,14) ? 1 : 0;
+    n += fingerExtended(lm,20,18) ? 1 : 0;
+    return n;
+  }
+  async function send(payload){
+    if(!enabled) return;
+    try {
+      const r = await fetch('/hand/event', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!r.ok) throw new Error('bridge '+r.status);
+      const data = await r.json();
+      if(data.enabled === false) enabled = false;
+      status.textContent = enabled ? 'Hand control active' : 'Hand control paused';
+    } catch(e) {
+      enabled = false;
+      status.textContent = 'Bridge unavailable — hand control paused';
+    }
+  }
+  async function stop(){
+    enabled = false;
+    try { await fetch('/hand/stop',{method:'POST'}); } catch(e) {}
+    status.textContent = 'Hand control stopped';
+  }
+  document.getElementById('stop').addEventListener('click', stop);
+  window.addEventListener('keydown', e => { if(e.key === 'Escape') stop(); });
+
+  const hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+  hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:0.80,minTrackingConfidence:0.80});
+  hands.onResults(results => {
+    ctx.save();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(results.image) ctx.drawImage(results.image,0,0,canvas.width,canvas.height);
+    const lm = results.multiHandLandmarks && results.multiHandLandmarks[0];
+    if(!lm || !enabled){ ctx.restore(); return; }
+    const x = 1 - lm[8].x;
+    const y = lm[8].y;
+    const pinch = dist(lm[4],lm[8]) < 0.055;
+    const fingers = pinch ? Math.max(1,countFingers(lm)) : countFingers(lm);
+    const now = performance.now();
+    if(now-lastSend < 33){ ctx.restore(); return; }
+    lastSend = now;
+    send({x,y,pinch,fingers,confidence:1,timestamp:now/1000});
+    lastPinch = pinch;
+    ctx.restore();
+  });
+
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false})
+    .then(stream => { video.srcObject=stream; return new Camera(video,{onFrame:async()=>hands.send({image:video}),width:1280,height:720}).start(); })
+    .then(() => status.textContent='Hand control active')
+    .catch(() => status.textContent='Camera permission unavailable — hand control paused');
+})();
+</script>
+</body>
+</html>

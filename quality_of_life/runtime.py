@@ -57,6 +57,12 @@ class JarvisRuntime:
         if name == "locations":
             configured = os.environ.get("JARVIS_LOCATION_STORE")
             return lambda: SavedLocationStore(configured)
+        if name == "hand_control_runtime":
+            return lambda: target()
+        if name == "hand_control":
+            return lambda: target(enabled=False, controller=self._tool("computer"))
+        if name == "hand_control_server":
+            return lambda: target
         if name == "background":
             return lambda: BackgroundJobs()
         if name == "cloud_router":
@@ -117,6 +123,9 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.move", lambda x, y: self._tool("computer").move(x, y)))
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.click", lambda button="left", clicks=1: self._tool("computer").click(button, clicks)))
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.scroll", lambda amount: self._tool("computer").scroll(amount)))
+        self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "hand_control.start", self._start_hand_control))
+        self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "hand_control.stop", self._stop_hand_control))
+        self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "hand_control.status", lambda: self._tool("hand_control_runtime").status()))
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.type_text", lambda text: self._tool("computer").type_text(text)))
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.hotkey", lambda *keys: self._tool("computer").hotkey(*keys)))
         self.orchestrator.register(Action(Capability.APP_LAUNCH, "computer.open_app", lambda command, *args: self._tool("computer").open_app(command, *args)))
@@ -177,6 +186,16 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
         self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", lambda request, confirmed=False: self._tool("windows_maintenance").handle(request, confirmed=confirmed)))
 
+    def _start_hand_control(self) -> dict[str, object]:
+        runtime = self._tool("hand_control_runtime")
+        started = runtime.start()
+        return {"enabled": bool(started and runtime.enabled), "url": runtime.url, "started": bool(started)}
+
+    def _stop_hand_control(self) -> dict[str, object]:
+        runtime = self._tool("hand_control_runtime")
+        runtime.stop()
+        return {"enabled": False, "url": runtime.url, "stopped": True}
+
     def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> dict[str, str]:
         from .account_access import GitHubRepositoryClient
         return GitHubRepositoryClient().fork_repository(
@@ -234,6 +253,10 @@ class JarvisRuntime:
 
     def handle_text(self, text: str) -> Any:
         intent: Intent = parse_intent(text)
+        if intent.kind == "hand_control_start":
+            return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.start")}
+        if intent.kind == "hand_control_stop":
+            return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.stop")}
         if intent.kind == "browser_open":
             browser = str(intent.arguments["browser"])
             url = intent.arguments.get("url")

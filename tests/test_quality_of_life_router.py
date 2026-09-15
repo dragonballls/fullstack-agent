@@ -9,6 +9,15 @@ from quality_of_life.router import CloudModelRouter, ProviderTarget
 
 
 class RouterTests(unittest.TestCase):
+    def setUp(self):
+        # Router health/cooldown is shared in production for cross-instance failover;
+        # unit tests must start from a clean health state to remain order-independent.
+        with CloudModelRouter._failure_lock:
+            CloudModelRouter._failure_cooldowns.clear()
+        with CloudModelRouter._health_lock:
+            CloudModelRouter._latency_ewma_ms.clear()
+            CloudModelRouter._latency_samples.clear()
+
     def test_missing_keys_report_names_not_secret_values(self):
         router = CloudModelRouter((ProviderTarget("one", "https://one.invalid", "ONE_KEY", "m1"),))
         old = os.environ.pop("ONE_KEY", None)
