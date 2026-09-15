@@ -35,6 +35,7 @@ class JarvisRuntime:
         self.gods_eye_launcher = gods_eye_launcher or GodsEyeLauncher()
         self.orchestrator = QoLOrchestrator(policy)
         self._agent_orchestrator: Any | None = None
+        self._health_monitor: Any | None = None
         self._register_actions()
 
     def available_tools(self) -> tuple[str, ...]:
@@ -88,6 +89,29 @@ class JarvisRuntime:
             from .agent_orchestrator import AgentOrchestrator
             self._agent_orchestrator = AgentOrchestrator(self._tool("cloud_router"), self)
         return self._agent_orchestrator
+
+    def _maintenance_facade(self) -> Any:
+        return self._tool("windows_maintenance")
+
+    def health_monitor(self) -> Any:
+        """Return the lazy opt-in health monitor without starting it."""
+        if self._health_monitor is None:
+            from .health_monitor import HealthMonitor
+            self._health_monitor = HealthMonitor.from_environment(self._maintenance_facade())
+        return self._health_monitor
+
+    def start_health_monitor(self) -> bool:
+        """Start read-only background monitoring only when explicitly enabled by configuration."""
+        return self.health_monitor().start()
+
+    def stop_health_monitor(self) -> None:
+        """Stop the background health monitor if it is running."""
+        if self._health_monitor is not None:
+            self._health_monitor.stop()
+
+    def health_snapshot(self) -> dict[str, Any]:
+        """Collect a read-only maintenance snapshot on demand."""
+        return self.health_monitor().snapshot()
 
     def _register_actions(self) -> None:
         """Register all capability-gated runtime operations with the orchestrator."""
