@@ -1,15 +1,35 @@
-# Jarvis Readiness
+# Jarvis readiness
 
-Run `python readiness.py` from the repository root to inspect whether the required runtime pieces for the Jarvis extensions are configured.
+Jarvis readiness is evaluated without Claude Code and without a Claude subscription.
 
-The readiness gate is intentionally diagnostic rather than invasive. It checks the Python runtime, Git, supported cloud-provider key presence, optional God’s Eye and browser dependencies, ElevenLabs configuration, the cloud coding CLI, and the Jarvis multi-AI orchestration contract.
+## Required brain
 
-The orchestration layer uses OmniRoute for cloud model routing, selects fast/smart/coding/vision/maintenance profiles, and can parallelize independent read-only specialist requests within a bounded worker pool. Repeated provider failures are cooled down and missing credentials produce redacted diagnostics.
+- **OmniRoute:** required for Jarvis conversational/agent requests.
+- **Claude/Claude Code:** not a Jarvis dependency and not a fallback.
+- **Local LLM:** not a Jarvis fallback.
 
-Readiness never prints secret values, changes environment variables, grants permissions, installs software, performs Windows mutations, or changes the existing deny-by-default capability policy.
+The default voice policy is:
 
-Windows system diagnosis and repair are separate readiness concerns: diagnosis is read-only; repair remains confirmation-gated and is verified after execution where deterministic verification exists.
+```text
+JARVIS_VOICE_MODE=open
+JARVIS_WAKE_WORD=jarvis
+JARVIS_WAKE_CONFIDENCE=0.70
+JARVIS_WAKE_POST_WINDOW_SECONDS=6
+JARVIS_VOICE_BRAIN=omniroute
+JARVIS_REQUIRE_OMNIROUTE=true
+JARVIS_ALLOW_CLAUDE=false
+```
 
-`READY` means the required runtime checks pass. Optional integrations may still show `WARN`; those warnings identify features that need local setup, permissions, credentials, or optional dependencies before they can be exercised on a particular machine.
+## Voice readiness
 
-Hosted CI verifies imports, routing, concurrency, policy boundaries, and deterministic dispatch contracts. It cannot certify actual microphone/speaker playback, ElevenLabs voice quality, mouse movement, browser interaction, camera permission, or the effect of Windows repairs on a particular PC.
+A ready voice path must have microphone access available, local wake-word gating configured, and the OmniRoute brain policy selected. Voice activation must fail closed when those requirements are not satisfied.
+
+Always-listening means the local listener may remain active, but it must not send ambient/non-addressed speech to the cloud. A request begins only after the wake word `Jarvis` is accepted.
+
+## Speech output
+
+ElevenLabs may provide the preferred cloud speech output when configured, with Kokoro as fallback. Speech synthesis is not a brain provider and does not change the OmniRoute requirement.
+
+## Existing safeguards
+
+Capability permissions, mutating-action confirmation, cancellation, emergency stop, duplicate-session protection, and the existing quality-of-life/self-coding readiness checks remain required.
