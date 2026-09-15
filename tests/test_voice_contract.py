@@ -15,7 +15,7 @@ class VoiceContractTests(unittest.TestCase):
     def test_installer_requires_voice_contract(self):
         installer = (ROOT / "fullstack-agent.md").read_text(encoding="utf-8")
         self.assertIn("JARVIS_VOICE.md", installer)
-        self.assertIn("real speech test", installer)
+        self.assertIn("actual speech test", installer)
 
     def test_readme_discloses_cloud_voice_choice(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
