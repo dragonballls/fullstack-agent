@@ -5,10 +5,9 @@ import time
 import unittest
 from threading import Event
 
+from quality_of_life import Action, Capability, CapabilityDenied, CapabilityPolicy, QoLOrchestrator, default_registry
 from quality_of_life.background import BackgroundJobs
 from quality_of_life.computer import ComputerController
-from quality_of_life.orchestrator import Action, QoLOrchestrator
-from quality_of_life.permissions import Capability, CapabilityDenied, CapabilityPolicy
 from quality_of_life.router import CloudModelRouter, ProviderTarget
 
 
@@ -31,11 +30,62 @@ class QualityOfLifeTests(unittest.TestCase):
         with self.assertRaises(CapabilityDenied):
             CapabilityPolicy().check(Capability.MOUSE_CONTROL)
 
+    def test_default_registry_names_are_stable(self) -> None:
+        self.assertEqual(
+            default_registry().names(),
+            ("background", "browser", "cloud_router", "computer", "screen"),
+        )
+
     def test_orchestrator_checks_policy(self) -> None:
         policy = CapabilityPolicy(allowed=frozenset({Capability.CLIPBOARD}))
         orchestrator = QoLOrchestrator(policy)
         orchestrator.register(Action(Capability.CLIPBOARD, "echo", lambda value: value))
         self.assertEqual(orchestrator.run(Capability.CLIPBOARD, "echo", "ok"), "ok")
+
+    def test_disabled_mutation_is_rejected_before_execution(self) -> None:
+        called = False
+
+        def action() -> None:
+            nonlocal called
+            called = True
+
+        orchestrator = QoLOrchestrator(CapabilityPolicy())
+        orchestrator.register(Action(Capability.MOUSE_CONTROL, "click", action))
+        with self.assertRaises(CapabilityDenied):
+            orchestrator.run(Capability.MOUSE_CONTROL, "click")
+        self.assertFalse(called)
+
+    def test_mutation_requires_confirmation_and_executes_after_approval(self) -> None:
+        called = []
+
+        orchestrator = QoLOrchestrator(
+            CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL}))
+        )
+        orchestrator.register(Action(Capability.MOUSE_CONTROL, "click", lambda: called.append(True)))
+
+        with self.assertRaises(PermissionError):
+            orchestrator.run(Capability.MOUSE_CONTROL, "click")
+        self.assertEqual(called, [])
+
+        self.assertTrue(
+            orchestrator.run(
+                Capability.MOUSE_CONTROL,
+                "click",
+                confirmation=lambda capability, operation: capability == Capability.MOUSE_CONTROL and operation == "click",
+            )
+            is None
+        )
+        self.assertEqual(called, [True])
+
+    def test_confirmation_denial_prevents_execution(self) -> None:
+        called = []
+        orchestrator = QoLOrchestrator(
+            CapabilityPolicy(allowed=frozenset({Capability.APP_LAUNCH}))
+        )
+        orchestrator.register(Action(Capability.APP_LAUNCH, "launch", lambda: called.append(True)))
+        with self.assertRaises(PermissionError):
+            orchestrator.run(Capability.APP_LAUNCH, "launch", confirmation=lambda *_: False)
+        self.assertEqual(called, [])
 
     def test_fake_desktop_adapter_calls_pyautogui(self) -> None:
         policy = CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL, Capability.KEYBOARD_CONTROL, Capability.APP_LAUNCH}))

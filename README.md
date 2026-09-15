@@ -25,6 +25,17 @@ Four pieces, each its own open repo, each excellent alone, assembled here into o
 
 Every piece is optional. The wizard asks which ones you want and explains each in plain English before you decide.
 
+## Jarvis integration
+
+This fork also ships two independent extensions for a stronger Jarvis-style setup without replacing the base stack:
+
+- **`self_coding/`** is a guarded cloud coding engine. It requires a clean Git tree, uses an isolated branch, verifies changes before committing, and rolls failed passes back to the exact starting point.
+- **`quality_of_life/`** is an optional capability layer for Windows computer control, screen capture, browser automation, cancellable background jobs, and cloud-model failover. Capabilities are deny-by-default, mutating operations pass a shared policy, and missing optional dependencies do not break the base stack.
+
+The preferred high-quality cloud voice is **ElevenLabs**. The repository includes `JARVIS_VOICE.md` with the secure setup contract: API keys stay outside Git, the requested voice is looked up rather than guessed, and a real speech test is required before setup is called successful. The built-in **Kokoro** voice remains the fallback.
+
+These extensions are deliberately separate so one optional feature can fail without taking down memory, voice, face, hands, or self-coding.
+
 ## Install
 
 You need [Claude Code](https://jaredrhod.com/start) with a Claude subscription. Mac and Linux also use git (macOS offers to install it the first time you use it). Windows needs nothing else: the installer sets up git for you during setup. Then one paste into your terminal.

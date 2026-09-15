@@ -39,7 +39,7 @@ Also ask, in plain words: "Before this repo existed, did you ever set up a voice
 Offer the Jarvis stack, each piece in one plain sentence. **Lead with the easy answer: "the stack" (all three) is the first option and the default.**
 
 1. **The memory**: a filing cabinet of plain text files your AI actually reads and writes, so it remembers you, your work, and every lesson across every session.
-2. **The voice**: hold a key, say the thing out loud, and your agent answers through your speakers about a second later.
+2. **The voice**: hold a key, talk out loud, and your agent answers through your speakers about a second later.
 3. **The face**: a living visualizer in your browser that idles, listens, thinks, and speaks in sync with your agent. Four faces ship; you pick your favorite.
 
 Then mention the optional add-on, once, without pushing it:
@@ -97,13 +97,36 @@ Last wire: **make the agent the mechanic.** Append a short section to the CLAUDE
 > ## You are the mechanic
 > This agent runs on open tools that live in this folder (the memory vault, backtalk, ai-visualizer, barehands). When anything breaks, acts strange, or needs changing, fixing it is YOUR job, not the person's: read the relevant tool's TROUBLESHOOTING.md and README, diagnose, and repair it yourself. Never send the person off to search the internet. If they ask how something works, explain it in plain English.
 
+## Phase 4A: Jarvis reliability and computer awareness
+
+Before the first hello, read `JARVIS_VOICE.md` and `quality_of_life/README.md`. These are integration contracts, not optional reading.
+
+For the voice, keep the person's engine choice. When ElevenLabs is selected, follow `JARVIS_VOICE.md`: use the supported credential mechanism, never print or commit the API key, look up the requested voice rather than guessing an ID, and require an actual speech test before declaring the voice successful. If the cloud voice fails temporarily, keep the documented fallback available rather than leaving the agent silent.
+
+For quality-of-life tools, read `quality_of_life/manifest.py` and expose the registered tools by name. The subsystem is optional and must remain isolated from the base stack. Start with `CapabilityPolicy()` defaults and explicitly enable capabilities only when the person has chosen them. The policy is **deny-by-default**, and before any mutating action, call the policy/permission/confirmation path; never bypass the check just because the action originated from an AI request.
+
+The available tools are:
+
+- `computer`: Windows mouse, keyboard, scrolling, and app launch. Keep the built-in PyAutoGUI failsafe enabled and keep app launches on `shell=False`.
+- `screen`: screen capture for computer-aware reasoning. Do not save a capture unless the caller supplies an allowed output path.
+- `browser`: optional Playwright automation. Only HTTP(S) URLs are accepted, and the browser uses its own automation context rather than silently attaching to an unrelated personal browser profile.
+- `background`: bounded cancellable jobs. Give each job a stable name and expose cancellation/status to the caller.
+- `cloud_router`: ordered cloud-provider failover. Missing keys or failed providers must produce a clear provider-specific error; never add a local LLM fallback.
+
+When connecting these tools to an agent action, use `QoLOrchestrator` so the capability check happens before the registered operation executes. Missing optional dependencies must produce an unavailable capability, not a crash of the whole installation.
+
+Before using autonomous coding, read `self_coding/README.md`. Only the guarded self-coding runner may perform an autonomous coding pass; it must retain clean-tree, isolated-branch, verification, commit-after-success, and rollback behavior. Do not grant a self-coding pass unrestricted computer-control capability merely because both features are installed.
+
+Also make the resulting HOME `CLAUDE.md` aware that `quality_of_life/` exists and that self-coding and computer-control are separate systems.
+
 ## Phase 5: The first hello
 
 The finale. From the home folder, run `./fullstack-agent/start.sh` (Windows: `fullstack-agent\start.bat`). What should happen, and what you verify:
 
 1. The face's server starts and the browser opens on their chosen face, with the agent's name on it.
-2. The voice line warms up and then SPEAKS: "Hello [their name], what are we working on today?" while the face pulses with the words.
+2. The voice line warms up and then SPEAKS: `Hello [their name], what are we working on today?` while the face pulses with the words.
 3. Have them hold the talk key and ask their agent anything. Watch the face walk listening, thinking, speaking. First reply lands in a couple of seconds.
+4. Confirm the QOL layer is optional at startup: if an optional dependency is unavailable, the base voice/face/memory session still starts and reports the unavailable capability clearly.
 
 If they skipped the voice: the face still opens, and you deliver the greeting yourself, in text, word for word. Nobody's first hello is silent.
 
