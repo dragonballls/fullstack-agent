@@ -1,0 +1,1 @@
+Implementation is being executed with GitHub-backed edits because this environment cannot resolve github.com from the container. Local runtime verification must be completed by GitHub Actions before merge.
