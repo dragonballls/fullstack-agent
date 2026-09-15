@@ -2,6 +2,7 @@
 
 from .agent_orchestrator import AgentOrchestrator, OrchestrationEvent, OrchestrationResult
 from .capabilities import OPERATION_CATALOG, OperationRisk, OperationSpec, operation, operations_for
+from .computer_use import ComputerUseAction, ComputerUseAgent, ComputerUseResult, RouterComputerUsePlanner, ScreenObserver
 from .gods_eye import GeoPoint, GodsEye, LocationSnapshot, Place
 from .health_monitor import HealthMonitor, HealthSnapshot
 from .intents import Intent, parse_intent
@@ -21,6 +22,9 @@ __all__ = [
     "CapabilityPolicy",
     "CheckStatus",
     "CloudModelRouter",
+    "ComputerUseAction",
+    "ComputerUseAgent",
+    "ComputerUseResult",
     "ConfirmationHook",
     "GeoPoint",
     "GodsEye",
@@ -42,6 +46,8 @@ __all__ = [
     "ReadinessCheck",
     "ReadinessReport",
     "RequestProfile",
+    "RouterComputerUsePlanner",
+    "ScreenObserver",
     "SpecialistTask",
     "ToolRegistry",
     "ToolSpec",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import platform
 import subprocess
 from dataclasses import dataclass
@@ -67,6 +68,33 @@ class ComputerController:
         if not command.strip() or any("\x00" in part for part in (command, *args)):
             raise ValueError("invalid application command")
         subprocess.Popen([command, *args], shell=False)
+
+    def open_known_app(self, name: str) -> None:
+        """Open an exact-match Windows Start Menu shortcut without shell parsing."""
+        self.policy.check(Capability.APP_LAUNCH)
+        normalized = " ".join(name.split()).casefold()
+        if not normalized or any(ch in name for ch in "\\/:*?\"<>|"):
+            raise ValueError("invalid application name")
+        roots = (
+            Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+            Path(os.environ.get("ProgramData", "")) / "Microsoft/Windows/Start Menu/Programs",
+            Path(os.environ.get("USERPROFILE", "")) / "Desktop",
+        )
+        matches: list[Path] = []
+        for root in roots:
+            if not root.is_dir():
+                continue
+            try:
+                for path in root.rglob("*.lnk"):
+                    if path.stem.strip().casefold() == normalized:
+                        matches.append(path)
+                        if len(matches) > 2:
+                            raise ValueError("application name is ambiguous")
+            except OSError:
+                continue
+        if len(matches) != 1:
+            raise FileNotFoundError(f"No unique Start Menu shortcut found for: {name}")
+        os.startfile(str(matches[0]))  # type: ignore[attr-defined]
 
     @staticmethod
     def is_supported() -> bool:
