@@ -55,6 +55,12 @@ Your agent's identity lives in the `CLAUDE.md` in your HOME folder (the folder c
 
 Everything is wired with paths, so a move breaks the wires. Open Claude Code in the new location and say: "read fullstack-agent/fullstack-agent.md and re-run the wiring phase." Rewiring takes a minute and touches only the config paths.
 
+## Readiness check says NOT READY
+
+Run `python readiness.py` from the repository root. The command reports only capability names, statuses, and remediation text; it never prints API-key values. `Cloud LLM` is the only integration treated as required by the gate, because the Jarvis extensions are cloud-routed. God’s Eye desktop support, browser automation, ElevenLabs, and the cloud coding CLI are reported as optional warnings when their local dependency, credential, permission, or executable is absent.
+
+A warning is not a hidden failure: it means that feature is intentionally available for setup but is not currently configured. The readiness gate also does not grant permissions, install software, or change the capability policy for you.
+
 ## Updates
 
 `./fullstack-agent/update.sh` pulls every piece. Your files (your CLAUDE.md, your vault, your notes) are never inside the repos' tracked files, so updates cannot touch them. If git complains about a config file you edited (backtalk.json, ai-visualizer.json), your edit wins; keep your version.
