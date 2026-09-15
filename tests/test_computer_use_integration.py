@@ -17,7 +17,6 @@ class _Runtime:
     def __init__(self):
         self.confirmation = None
         self.policy = Mock()
-        self.policy.needs_confirmation.return_value = False
         self._computer = Mock()
         self._screen = Mock()
         self._screen.capture_png.return_value = b"png"
@@ -33,7 +32,7 @@ class ComputerUseIntegrationTests(unittest.TestCase):
     def test_general_desktop_goal_uses_goal_agent(self):
         runtime = _Runtime()
         orchestrator = AgentOrchestrator(_Router(), runtime)
-        result = orchestrator.execute("play a game using the desktop")
+        result = orchestrator.execute("play a game using the desktop", confirmed=True)
         self.assertTrue(result.verified)
         self.assertIn("computer-use", result.providers)
 
