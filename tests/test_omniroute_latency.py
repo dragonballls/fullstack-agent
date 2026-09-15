@@ -6,8 +6,8 @@ from quality_of_life.router import CloudModelRouter, ProviderResult, ProviderTar
 
 
 class _MockRouter(CloudModelRouter):
-    def __init__(self):
-        super().__init__([ProviderTarget("mock", "https://example.com/v1", "MOCK_KEY", "auto")])
+    def __init__(self, targets=None):
+        super().__init__(targets or [ProviderTarget("mock", "https://example.com/v1", "MOCK_KEY", "auto")])
         self.calls = []
 
     def try_target(self, target, messages):
@@ -38,6 +38,15 @@ class OmniRouteLatencyTests(unittest.TestCase):
         )
         self.assertEqual((text, provider), ("ok", "mock"))
         self.assertGreaterEqual(router.provider_latency_ms("mock", RequestProfile.FAST), 0)
+
+    def test_ordered_targets_prefers_faster_warmed_target(self):
+        fast = ProviderTarget("fast", "https://fast.example/v1", "FAST_KEY", "auto/fast")
+        slow = ProviderTarget("slow", "https://slow.example/v1", "SLOW_KEY", "auto/fast")
+        router = _MockRouter([slow, fast])
+        router._record_success(slow, 500)
+        router._record_success(fast, 50)
+        ordered = router._ordered_targets((slow, fast))
+        self.assertEqual(tuple(target.name for target in ordered), ("fast", "slow"))
 
 
 if __name__ == "__main__":
