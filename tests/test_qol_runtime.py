@@ -1,3 +1,4 @@
+import os
 import unittest
 
 from quality_of_life.gods_eye import GeoPoint, LocationSnapshot, Place
@@ -24,6 +25,25 @@ class JarvisRuntimeTests(unittest.TestCase):
         self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye"} <= names)
         places = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.search", query="Tokyo")
         self.assertEqual(places[0].name, "Tokyo")
+
+    def test_runtime_defaults_cloud_router_to_omniroute(self):
+        old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED")}
+        try:
+            for name in old:
+                os.environ.pop(name, None)
+            runtime = JarvisRuntime(CapabilityPolicy())
+            router = runtime._tool("cloud_router")
+            self.assertEqual(len(router.targets), 1)
+            self.assertEqual(router.targets[0].name, "omniroute")
+            self.assertEqual(router.targets[0].base_url, "http://127.0.0.1:20128/v1")
+            self.assertEqual(router.targets[0].model, "auto")
+            self.assertEqual(router.targets[0].api_key_env, "OMNIROUTE_API_KEY")
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
 
     def test_runtime_preserves_deny_by_default(self):
         runtime = JarvisRuntime(CapabilityPolicy(), factories={"gods_eye": FakeEye})
