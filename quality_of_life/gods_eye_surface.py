@@ -1,4 +1,4 @@
-"""Embedded God’s Eye desktop surface using optional pywebview."""
+"""Embedded God’s Eye map surface using optional pywebview."""
 
 from __future__ import annotations
 
@@ -21,7 +21,8 @@ class GodsEyeSurface:
 
     @staticmethod
     def html_for(view: MapView) -> str:
-        payload = json.dumps(view.as_dict(), separators=(",", ":"), ensure_ascii=True)
+        raw_payload = json.dumps(view.as_dict(), separators=(",", ":"), ensure_ascii=True)
+        payload = raw_payload.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
         center = view.center
         markers = []
         for place in view.markers:
@@ -39,17 +40,31 @@ class GodsEyeSurface:
 <title>God's Eye</title>
 <link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>
 <style>
-html,body,#map{{height:100%;margin:0;background:#070b12}}#status{{position:fixed;z-index:1000;top:12px;left:12px;padding:8px 12px;border-radius:8px;background:rgba(7,11,18,.88);color:#fff;font:14px system-ui,sans-serif}}
+html,body,#map{{height:100%;margin:0;background:#070b12}}#status{{position:fixed;z-index:1000;top:12px;left:12px;padding:8px 12px;border-radius:8px;background:rgba(7,11,18,.88);color:#fff;font:14px system-ui,sans-serif}}#locate{{position:fixed;z-index:1000;top:58px;left:12px;padding:9px 12px;border:0;border-radius:8px;background:#fff;color:#111;font:14px system-ui,sans-serif;cursor:pointer}}
 </style>
 </head>
 <body>
-<div id='status'>God’s Eye</div><div id='map'></div>
+<div id='status'>God’s Eye</div><button id='locate'>Locate me</button><div id='map'></div>
 <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
 <script>
 const state = {payload};
 const map = L.map('map').setView([{center.latitude},{center.longitude}], {view.zoom});
 L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'}}).addTo(map);
 {markers_js}
+let myMarker = null;
+document.getElementById('locate').addEventListener('click', () => {{
+  const status = document.getElementById('status');
+  if (!navigator.geolocation) {{ status.textContent = 'Location is not available in this webview'; return; }}
+  status.textContent = 'Requesting location permission…';
+  navigator.geolocation.getCurrentPosition((position) => {{
+    const point = [position.coords.latitude, position.coords.longitude];
+    if (myMarker) myMarker.remove();
+    myMarker = L.marker(point).addTo(map).bindPopup('Your current location').openPopup();
+    map.setView(point, 15);
+    status.textContent = 'Current location';
+    window.GODS_EYE_STATE.location = {{latitude: point[0], longitude: point[1], accuracy_m: position.coords.accuracy, source: 'device-geolocation'}};
+  }}, () => {{ status.textContent = 'Location permission was denied or unavailable'; }}, {{enableHighAccuracy: true, timeout: 10000, maximumAge: 30000}});
+}});
 window.GODS_EYE_STATE = state;
 </script>
 </body>
