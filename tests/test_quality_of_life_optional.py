@@ -1,6 +1,5 @@
 import unittest
-from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 from quality_of_life.browser import BrowserController
 from quality_of_life.computer import ComputerController
@@ -38,7 +37,7 @@ class OptionalAdapterTests(unittest.TestCase):
         shot = Mock()
         shot.rgb = b"rgb"
         shot.size = (1, 1)
-        session = Mock()
+        session = MagicMock()
         session.__enter__.return_value = session
         session.__exit__.return_value = False
         session.monitors = [None, {"left": 0, "top": 0, "width": 1, "height": 1}]
