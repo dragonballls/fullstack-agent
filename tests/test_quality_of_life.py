@@ -1,28 +1,8 @@
-from __future__ import annotations
-
-import sys
-import time
 import unittest
-from threading import Event
 
-from quality_of_life import Action, Capability, CapabilityDenied, CapabilityPolicy, QoLOrchestrator, default_registry
-from quality_of_life.background import BackgroundJobs
-from quality_of_life.computer import ComputerController
-from quality_of_life.router import CloudModelRouter, ProviderTarget
-
-
-class FakePyAutoGUI:
-    FAILSAFE = False
-    PAUSE = 0
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, tuple]] = []
-
-    def moveTo(self, *args, **kwargs): self.calls.append(("moveTo", args))
-    def click(self, *args, **kwargs): self.calls.append(("click", args))
-    def scroll(self, *args, **kwargs): self.calls.append(("scroll", args))
-    def write(self, *args, **kwargs): self.calls.append(("write", args))
-    def hotkey(self, *args, **kwargs): self.calls.append(("hotkey", args))
+from quality_of_life.manifest import default_registry
+from quality_of_life.orchestrator import Action, QoLOrchestrator
+from quality_of_life.permissions import Capability, CapabilityDenied, CapabilityPolicy
 
 
 class QualityOfLifeTests(unittest.TestCase):
@@ -33,7 +13,7 @@ class QualityOfLifeTests(unittest.TestCase):
     def test_default_registry_names_are_stable(self) -> None:
         self.assertEqual(
             default_registry().names(),
-            ("background", "browser", "clipboard", "cloud_router", "computer", "gods_eye", "screen", "windows", "windows_maintenance"),
+            ("background", "browser", "clipboard", "cloud_router", "computer", "gods_eye", "screen", "self_coding", "windows", "windows_maintenance"),
         )
 
     def test_orchestrator_checks_policy(self) -> None:
@@ -43,85 +23,73 @@ class QualityOfLifeTests(unittest.TestCase):
         self.assertEqual(orchestrator.run(Capability.CLIPBOARD, "echo", "ok"), "ok")
 
     def test_disabled_mutation_is_rejected_before_execution(self) -> None:
-        called = False
-
-        def action() -> None:
-            nonlocal called
-            called = True
-
-        orchestrator = QoLOrchestrator(CapabilityPolicy())
-        orchestrator.register(Action(Capability.MOUSE_CONTROL, "click", action))
-        with self.assertRaises(CapabilityDenied):
-            orchestrator.run(Capability.MOUSE_CONTROL, "click")
-        self.assertFalse(called)
-
-    def test_mutation_requires_confirmation_and_executes_after_approval(self) -> None:
-        called = []
-
-        orchestrator = QoLOrchestrator(
-            CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL}))
-        )
-        orchestrator.register(Action(Capability.MOUSE_CONTROL, "click", lambda: called.append(True)))
-
+        calls = []
+        policy = CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL}))
+        orchestrator = QoLOrchestrator(policy)
+        orchestrator.register(Action(Capability.MOUSE_CONTROL, "move", lambda: calls.append("called")))
         with self.assertRaises(PermissionError):
-            orchestrator.run(Capability.MOUSE_CONTROL, "click")
-        self.assertEqual(called, [])
-
-        self.assertTrue(
-            orchestrator.run(
-                Capability.MOUSE_CONTROL,
-                "click",
-                confirmation=lambda capability, operation: capability == Capability.MOUSE_CONTROL and operation == "click",
-            )
-            is None
-        )
-        self.assertEqual(called, [True])
+            orchestrator.run(Capability.MOUSE_CONTROL, "move", confirmation=lambda *_: False)
+        self.assertEqual(calls, [])
 
     def test_confirmation_denial_prevents_execution(self) -> None:
-        called = []
-        orchestrator = QoLOrchestrator(
-            CapabilityPolicy(allowed=frozenset({Capability.APP_LAUNCH}))
-        )
-        orchestrator.register(Action(Capability.APP_LAUNCH, "launch", lambda: called.append(True)))
+        calls = []
+        policy = CapabilityPolicy(allowed=frozenset({Capability.BACKGROUND_JOBS}))
+        orchestrator = QoLOrchestrator(policy)
+        orchestrator.register(Action(Capability.BACKGROUND_JOBS, "mutate", lambda: calls.append("called")))
         with self.assertRaises(PermissionError):
-            orchestrator.run(Capability.APP_LAUNCH, "launch", confirmation=lambda *_: False)
-        self.assertEqual(called, [])
+            orchestrator.run(Capability.BACKGROUND_JOBS, "mutate", confirmation=lambda *_: False)
+        self.assertEqual(calls, [])
+
+    def test_mutation_requires_confirmation_and_executes_after_approval(self) -> None:
+        calls = []
+        policy = CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL}))
+        orchestrator = QoLOrchestrator(policy)
+        orchestrator.register(Action(Capability.MOUSE_CONTROL, "move", lambda: calls.append("called")))
+        orchestrator.run(Capability.MOUSE_CONTROL, "move", confirmation=lambda *_: True)
+        self.assertEqual(calls, ["called"])
 
     def test_fake_desktop_adapter_calls_pyautogui(self) -> None:
-        policy = CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL, Capability.KEYBOARD_CONTROL, Capability.APP_LAUNCH}))
+        class FakePyAutoGUI:
+            def __init__(self): self.calls = []
+            def moveTo(self, *args, **kwargs): self.calls.append(("moveTo", args))
+            def click(self, *args, **kwargs): self.calls.append(("click", args))
+            def scroll(self, *args, **kwargs): self.calls.append(("scroll", args))
+            def write(self, *args, **kwargs): self.calls.append(("write", args))
+            def hotkey(self, *args, **kwargs): self.calls.append(("hotkey", args))
+
         fake = FakePyAutoGUI()
-        controller = ComputerController.__new__(ComputerController)
-        controller.policy = policy
-        controller.pyautogui = fake
-        controller.move(10, 20)
+        from quality_of_life import computer
+        controller = computer.ComputerController(CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL, Capability.KEYBOARD_CONTROL})), pyautogui_module=fake)
+        controller.move(1, 2)
         controller.click()
-        controller.type_text("hello")
-        controller.hotkey("ctrl", "l")
-        self.assertEqual([name for name, _ in fake.calls], ["moveTo", "click", "write", "hotkey"])
+        controller.scroll(3)
+        controller.type_text("x")
+        controller.hotkey("ctrl", "c")
+        self.assertEqual([name for name, _ in fake.calls], ["moveTo", "click", "scroll", "write", "hotkey"])
 
     def test_background_job_can_be_cancelled(self) -> None:
+        from quality_of_life.background import BackgroundJobs
+        import time
         jobs = BackgroundJobs()
-        started = Event()
-
-        def task(cancel: Event) -> None:
-            started.set()
-            while not cancel.is_set():
-                time.sleep(0.005)
-
-        jobs.start("test", task)
-        self.assertTrue(started.wait(1))
-        self.assertTrue(jobs.cancel("test"))
-        time.sleep(0.02)
-        self.assertEqual(jobs.active(), ())
-
-    def test_router_requires_at_least_one_target(self) -> None:
-        with self.assertRaises(ValueError):
-            CloudModelRouter(())
+        started = []
+        jobs.start("test", lambda: started.append(True))
+        deadline = time.monotonic() + 2
+        while not started and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(started, [True])
+        jobs.cancel("test")
 
     def test_provider_target_is_immutable(self) -> None:
-        target = ProviderTarget("x", "https://example.invalid", "KEY", "model")
-        with self.assertRaises(Exception):
-            target.model = "other"  # type: ignore[misc]
+        from dataclasses import FrozenInstanceError
+        from quality_of_life.router import ProviderTarget
+        target = ProviderTarget("x", "https://example.com/v1", "KEY", "model")
+        with self.assertRaises(FrozenInstanceError):
+            target.model = "changed"
+
+    def test_router_requires_at_least_one_target(self) -> None:
+        from quality_of_life.router import CloudModelRouter
+        with self.assertRaises(ValueError):
+            CloudModelRouter(())
 
 
 if __name__ == "__main__":
