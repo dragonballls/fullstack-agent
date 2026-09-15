@@ -164,8 +164,38 @@ class AgentOrchestrator:
                 return str(getattr(result, "message", result)), verified, [], False
             return "A maintenance change was requested, but confirmation is required before anything is modified.", False, [], True
         if intent.kind == "locate_me":
-            result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.locate_me")
+            result = self.runtime.dispatch(Capability.LOCATION_READ, "locations.current")
             return str(result), True, [], False
+        if intent.kind == "save_current_location":
+            name = str(intent.arguments["name"])
+            if not confirmed:
+                return f"I can save your current location as \"{name}\", but I need confirmation first.", False, [], True
+            result = self.runtime.dispatch(Capability.LOCATION_WRITE, "locations.save_current", name=name, confirmed=True)
+            return f"Saved {name}: {result}", True, [], False
+        if intent.kind == "save_place":
+            place_query = str(intent.arguments["place"])
+            name = str(intent.arguments["name"])
+            if not confirmed:
+                return f"I can save {place_query} as \"{name}\", but I need confirmation first.", False, [], True
+            eye = self.runtime._tool("gods_eye")
+            places = eye.search(place_query)
+            if not places:
+                return "", False, [f"No location found for: {place_query}"], False
+            place = places[0]
+            result = self.runtime.dispatch(Capability.LOCATION_WRITE, "locations.save", name=name, latitude=place.point.latitude, longitude=place.point.longitude, source=place.provider, confirmed=True)
+            return f"Saved {name}: {result}", True, [], False
+        if intent.kind == "saved_location":
+            name = str(intent.arguments["name"])
+            result = self.runtime.dispatch(Capability.LOCATION_READ, "locations.get", name=name)
+            if result is None:
+                return "", False, [f"No saved location found for: {name}"], False
+            return str(result), True, [], False
+        if intent.kind == "delete_saved_location":
+            name = str(intent.arguments["name"])
+            if not confirmed:
+                return f"I can delete the saved location \"{name}\", but I need confirmation first.", False, [], True
+            result = self.runtime.dispatch(Capability.LOCATION_WRITE, "locations.delete", name=name, confirmed=True)
+            return f"Deleted {name}: {result}", True, [], False
         if intent.kind == "screen_read":
             result = self.runtime.dispatch(Capability.SCREEN_READ, "screen.capture")
             return str(result), True, [], False
@@ -183,6 +213,15 @@ class AgentOrchestrator:
             return str(result), True, [], False
         if intent.kind == "route":
             query = str(intent.arguments["query"])
+            if query.casefold().startswith("my "):
+                name = query[3:].strip()
+                saved = self.runtime.dispatch(Capability.LOCATION_READ, "locations.get", name=name)
+                if saved is not None:
+                    snapshot = self.runtime.dispatch(Capability.LOCATION_READ, "locations.current")
+                    if not snapshot.permitted or snapshot.point is None:
+                        return "Current location is unavailable; enable location access before routing.", False, [], False
+                    eye = self.runtime._tool("gods_eye")
+                    return str(eye.route(snapshot.point, saved)), True, [], False
             result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query=query)
             return str(result), True, [], False
         if intent.kind == "computer_action":
