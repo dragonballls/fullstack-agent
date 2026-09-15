@@ -10,8 +10,8 @@ class _FakeComputer:
     def click(self, button="left", clicks=1):
         self.actions.append(ComputerUseAction("click", {"button": button, "clicks": clicks}))
 
-    def wait(self, seconds):
-        self.actions.append(ComputerUseAction("wait", {"seconds": seconds}))
+    def scroll(self, amount):
+        self.actions.append(ComputerUseAction("scroll", {"amount": amount}))
 
 
 class _FakeObserver:
@@ -53,7 +53,7 @@ class ComputerUseGoalTests(unittest.TestCase):
 
     def test_goal_agent_bounds_steps(self):
         agent = ComputerUseAgent(
-            planner=lambda goal, observation: [ComputerUseAction("wait", {"seconds": 0})],
+            planner=lambda goal, observation: [ComputerUseAction("scroll", {"amount": 1})],
             computer=_FakeComputer(),
             observer=_FakeObserver(),
             max_steps=2,
