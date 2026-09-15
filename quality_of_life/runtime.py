@@ -45,13 +45,7 @@ class JarvisRuntime:
             return lambda: target(self.policy)
         if name == "browser_registry":
             return lambda: target()
-        if name == "files":
-            return lambda: target(self.policy)
-        if name == "applications":
-            return lambda: target(self.policy)
-        if name == "processes":
-            return lambda: target(self.policy)
-        if name == "system":
+        if name in {"files", "applications", "processes", "system"}:
             return lambda: target(self.policy)
         if name == "scheduler":
             return lambda: target(self._tool("background"))
@@ -143,6 +137,8 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.FILE_WRITE, "files.move", lambda source, destination: self._tool("files").move(source, destination)))
         self.orchestrator.register(Action(Capability.FILE_DELETE, "files.delete", lambda path: self._tool("files").delete(path)))
         self.orchestrator.register(Action(Capability.APP_READ, "applications.list", lambda: self._tool("applications").list()))
+        self.orchestrator.register(Action(Capability.APP_WRITE, "applications.install", lambda package_id, confirmed=False: self._tool("applications").install(package_id, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.APP_WRITE, "applications.update", lambda package_id, confirmed=False: self._tool("applications").update(package_id, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.APP_WRITE, "applications.uninstall", lambda name, confirmed=False: self._tool("applications").uninstall(name, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.PROCESS_READ, "processes.list", lambda: self._tool("processes").list_processes()))
         self.orchestrator.register(Action(Capability.PROCESS_CONTROL, "processes.stop", lambda pid, confirmed=False: self._tool("processes").stop(pid, confirmed=confirmed)))
