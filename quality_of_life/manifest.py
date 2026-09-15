@@ -49,6 +49,7 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
     registry.register(ToolSpec("files", "Guarded filesystem read and mutation operations", "quality_of_life.files.FileController"))
     registry.register(ToolSpec("gods_eye", "Location search, current-location context, routing, and in-app map state", "quality_of_life.gods_eye.GodsEye"))
+    registry.register(ToolSpec("locations", "Persistent user-named locations backed by a local JSON store", "quality_of_life.location_memory.SavedLocationStore"))
     registry.register(ToolSpec("processes", "Guarded process and service inspection/control", "quality_of_life.processes.ProcessManager"))
     registry.register(ToolSpec("scheduler", "Bounded delayed background jobs", "quality_of_life.scheduler.Scheduler"))
     registry.register(ToolSpec("screen", "Screen capture for computer-aware reasoning", "quality_of_life.screen.ScreenCapture"))
