@@ -8,7 +8,7 @@ Not an agent that writes full-stack code. **An agent that HAS a full stack: memo
 
 > "Hello [you], what are we working on today?"
 
-[![Watch the tour: My Jarvis AI Assistant, free on GitHub](https://img.youtube.com/vi/FiOTrxq9ckM/maxresdefault.jpg)](https://www.youtube.com/watch?v=FiOTrxq9ckM)
+[![Watch the tour: My Jarvis AI Assistant, free on GitHub](https://img.youtube.com/vi/FiOTrxq9ckM/maxresdefault.jpg)](https://www.youtube.com/watch?v=FiOTrxq9ckE)
 
 **Nine minutes shows you everything you're about to get** (the voice, the face, the memory, and the hands): the tour video above, straight from my own desk.
 
@@ -24,6 +24,17 @@ Four pieces, each its own open repo, each excellent alone, assembled here into o
 - **The hands, the optional extra: [barehands](https://github.com/jaredrhod/barehands).** Move notes and images around your screen with your bare hands through your webcam. No headset, no controllers. Opens in its own window instead of the face. Take it now or add it later by running the same install again.
 
 Every piece is optional. The wizard asks which ones you want and explains each in plain English before you decide.
+
+## Jarvis integration
+
+This fork also ships two independent extensions for a stronger Jarvis-style setup without replacing the base stack:
+
+- **`self_coding/`** is a guarded cloud coding engine. It requires a clean Git tree, uses an isolated branch, verifies changes before committing, and rolls failed passes back to the exact starting point.
+- **`quality_of_life/`** is an optional capability layer for Windows computer control, screen capture, browser automation, cancellable background jobs, and cloud-model failover. Capabilities are deny-by-default, mutating operations pass a shared policy, and missing optional dependencies do not break the base stack.
+
+The preferred high-quality cloud voice is **ElevenLabs**. The repository includes `JARVIS_VOICE.md` with the secure setup contract: API keys stay outside Git, the requested voice is looked up rather than guessed, and a real speech test is required before setup is called successful. The built-in voice remains a fallback.
+
+These extensions are deliberately separate so one optional feature can fail without taking down memory, voice, face, hands, or self-coding.
 
 ## Install
 
@@ -85,4 +96,4 @@ Free to use, and always will be. If this helped you out, you can buy me a coffee
 
 Copyright (c) 2026 Jared Rhodenizer.
 
-Licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). **Use it in your business, commercially, for free.** Run it, change it, build your workflow on top of it, and charge for the work you do with it. The one rule is that it stays open: if you hand it to someone else, or run a modified version as a service other people use, your version ships under this same license with its source available. Credit me when you build on it. Want it inside a closed-source commercial product? Email license@jaredrhod.com. Full terms are in the LICENSE file and at https://www.gnu.org/licenses/agpl-3.0.html
+Licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). **Use it in your business, commercially, for free.** Run it, change it, build your workflow on it, and charge for the work you do with it. The one rule is that it stays open: if you hand it to someone else, or run a modified version as a service other people use, your version ships under this same license with its source available. Credit me when you build on it. Want it inside a closed-source commercial product? Email license@jaredrhod.com. Full terms are in the LICENSE file and at https://www.gnu.org/licenses/agpl-3.0.html
