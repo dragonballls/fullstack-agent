@@ -9,7 +9,7 @@ from typing import Any
 
 from .background import BackgroundJobs
 from .gods_eye import GodsEye, Place
-from .location import NominatimGeocoder, SystemLocationProvider
+from .location import FallbackLocationProvider, IpLocationProvider, NominatimGeocoder, SystemLocationProvider
 from .manifest import default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
 from .permissions import Capability, CapabilityPolicy
@@ -44,7 +44,10 @@ class JarvisRuntime:
         if name in {"computer", "screen", "browser", "clipboard", "windows"}:
             return lambda: target(self.policy)
         if name == "gods_eye":
-            return lambda: GodsEye(NominatimGeocoder(), SystemLocationProvider())
+            return lambda: GodsEye(
+                NominatimGeocoder(),
+                FallbackLocationProvider(SystemLocationProvider(), IpLocationProvider()),
+            )
         if name == "background":
             return lambda: BackgroundJobs()
         if name == "cloud_router":
