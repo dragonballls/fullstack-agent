@@ -33,9 +33,9 @@ class ComputerUseIntegrationTests(unittest.TestCase):
     def test_general_desktop_goal_uses_goal_agent(self):
         runtime = _Runtime()
         orchestrator = AgentOrchestrator(_Router(), runtime)
-        result = orchestrator.execute("open an application and interact with its user interface")
-        self.assertEqual(result.profile, RequestProfile.FAST.value)
+        result = orchestrator.execute("play a game using the desktop")
         self.assertTrue(result.verified)
+        self.assertIn("computer-use", result.providers)
 
 
 if __name__ == "__main__":
