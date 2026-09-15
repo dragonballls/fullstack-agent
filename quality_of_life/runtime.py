@@ -20,13 +20,7 @@ from .router import CloudModelRouter, ProviderTarget
 class JarvisRuntime:
     """Lazy tool host that keeps capability and confirmation checks centralized."""
 
-    def __init__(
-        self,
-        policy: CapabilityPolicy,
-        confirmation: ConfirmationHook | None = None,
-        factories: dict[str, Callable[[], Any]] | None = None,
-        gods_eye_launcher: GodsEyeLauncher | None = None,
-    ) -> None:
+    def __init__(self, policy: CapabilityPolicy, confirmation: ConfirmationHook | None = None, factories: dict[str, Callable[[], Any]] | None = None, gods_eye_launcher: GodsEyeLauncher | None = None) -> None:
         self.policy = policy
         self.confirmation = confirmation
         self.registry = default_registry()
@@ -39,11 +33,9 @@ class JarvisRuntime:
         self._register_actions()
 
     def available_tools(self) -> tuple[str, ...]:
-        """Return the names of tools exposed by the runtime registry."""
         return self.registry.names()
 
     def _factory_from_spec(self, name: str) -> Callable[[], Any]:
-        """Resolve a tool name into a lazy factory while preserving security policy boundaries."""
         if name in self._factories:
             return self._factories[name]
         spec = self.registry.get(name)
@@ -51,10 +43,7 @@ class JarvisRuntime:
         if name in {"computer", "screen", "browser", "clipboard", "windows"}:
             return lambda: target(self.policy)
         if name == "gods_eye":
-            return lambda: GodsEye(
-                NominatimGeocoder(),
-                FallbackLocationProvider(SystemLocationProvider(), IpLocationProvider()),
-            )
+            return lambda: GodsEye(NominatimGeocoder(), FallbackLocationProvider(SystemLocationProvider(), IpLocationProvider()))
         if name == "background":
             return lambda: BackgroundJobs()
         if name == "cloud_router":
@@ -68,9 +57,7 @@ class JarvisRuntime:
             elif os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}:
                 target_config = CloudModelRouter.omniroute_target()
             else:
-                raise RuntimeError(
-                    "cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL"
-                )
+                raise RuntimeError("cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
             return lambda: CloudModelRouter((target_config,))
         if name == "windows_maintenance":
             from windows_maintenance import MaintenanceFacade
@@ -78,13 +65,11 @@ class JarvisRuntime:
         raise RuntimeError(f"No runtime factory is configured for: {name}")
 
     def _tool(self, name: str) -> Any:
-        """Return a cached tool instance, constructing it lazily on first use."""
         if name not in self._instances:
             self._instances[name] = self._factory_from_spec(name)()
         return self._instances[name]
 
     def _assistant_orchestrator(self) -> Any:
-        """Construct the multi-model assistant orchestrator lazily."""
         if self._agent_orchestrator is None:
             from .agent_orchestrator import AgentOrchestrator
             self._agent_orchestrator = AgentOrchestrator(self._tool("cloud_router"), self)
@@ -94,27 +79,22 @@ class JarvisRuntime:
         return self._tool("windows_maintenance")
 
     def health_monitor(self) -> Any:
-        """Return the lazy opt-in health monitor without starting it."""
         if self._health_monitor is None:
             from .health_monitor import HealthMonitor
             self._health_monitor = HealthMonitor.from_environment(self._maintenance_facade())
         return self._health_monitor
 
     def start_health_monitor(self) -> bool:
-        """Start read-only background monitoring only when explicitly enabled by configuration."""
         return self.health_monitor().start()
 
     def stop_health_monitor(self) -> None:
-        """Stop the background health monitor if it is running."""
         if self._health_monitor is not None:
             self._health_monitor.stop()
 
     def health_snapshot(self) -> dict[str, Any]:
-        """Collect a read-only maintenance snapshot on demand."""
         return self.health_monitor().snapshot()
 
     def _register_actions(self) -> None:
-        """Register all capability-gated runtime operations with the orchestrator."""
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.move", lambda x, y: self._tool("computer").move(x, y)))
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.click", lambda button="left", clicks=1: self._tool("computer").click(button, clicks)))
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.scroll", lambda amount: self._tool("computer").scroll(amount)))
@@ -138,8 +118,8 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.open_place", lambda query: self._open_place(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.route_to", lambda query: self._route_to(query)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
         self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", lambda request, confirmed=False: self._tool("windows_maintenance").handle(request, confirmed=confirmed)))
-        self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
         eye = self._tool("gods_eye")
@@ -160,29 +140,16 @@ class JarvisRuntime:
         return eye.route(snapshot.point, place)
 
     def dispatch(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
-        """Run one registered operation through capability and confirmation checks."""
         return self.orchestrator.run(capability, operation, *args, confirmation=self.confirmation, **kwargs)
 
     def handle_assistant_request(self, text: str, confirmed: bool = False) -> dict[str, Any]:
-        """Run a user request through the multi-model planner while preserving deterministic tools."""
         result = self._assistant_orchestrator().execute(text, confirmed=confirmed)
-        return {
-            "text": result.text,
-            "profile": result.profile,
-            "verified": result.verified,
-            "needs_confirmation": result.needs_confirmation,
-            "parallel_tasks_completed": result.parallel_tasks_completed,
-            "providers": result.providers,
-            "latency_ms": result.latency_ms,
-            "errors": result.errors,
-        }
+        return {"text": result.text, "profile": result.profile, "verified": result.verified, "needs_confirmation": result.needs_confirmation, "parallel_tasks_completed": result.parallel_tasks_completed, "providers": result.providers, "latency_ms": result.latency_ms, "errors": result.errors}
 
     def handle_assistant_stream(self, text: str, confirmed: bool = False) -> Iterator[Any]:
-        """Yield low-latency orchestration events suitable for a voice/UI adapter."""
         yield from self._assistant_orchestrator().execute_stream(text, confirmed=confirmed)
 
     def handle_text(self, text: str) -> Any:
-        """Turn a conservative spoken/text intent into the appropriate guarded operation."""
         intent: Intent = parse_intent(text)
         if intent.kind == "place_search":
             query = str(intent.arguments["query"])
@@ -200,5 +167,7 @@ class JarvisRuntime:
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "computer.move", x=intent.arguments["x"], y=intent.arguments["y"])}
         if intent.kind == "windows_maintenance":
             request = str(intent.arguments["request"])
+            if "diagnos" in request.casefold() and not any(word in request.casefold() for word in ("fix", "repair", "clean")):
+                return {"intent": intent, "result": self.dispatch(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose")}
             return {"intent": intent, "result": self.dispatch(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", request=request)}
         return intent
