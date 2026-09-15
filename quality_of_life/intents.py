@@ -16,8 +16,8 @@ _PLACE = re.compile(r"^(?:open|show(?: me)?|find)\s+(.+)$", re.IGNORECASE)
 _ROUTE = re.compile(r"^(?:take|navigate|route)\s+(?:me\s+)?to\s+(.+)$", re.IGNORECASE)
 _MOVE = re.compile(r"^move mouse to\s+(-?\d+)\s+(-?\d+)$", re.IGNORECASE)
 _BROWSER = re.compile(r"^(?:open|use|launch)\s+(edge|microsoft edge|ms edge|chrome|google chrome|firefox|mozilla firefox|opera|opera gx|operagx|brave|brave browser|vivaldi)(?:\s+(?:and\s+)?(?:go to|open)\s+(https?://\S+))?$", re.IGNORECASE)
-_FILE_DELETE = re.compile(r"^(?:delete|remove)\s+(?:file\s+)?(.+)$", re.IGNORECASE)
-_APP_UNINSTALL = re.compile(r"^(?:uninstall)\s+(?:the\s+)?(?:program|application|app)?\s*(.+)$", re.IGNORECASE)
+_FILE_DELETE = re.compile(r"^(?:delete\s+(?:file\s+)?|remove\s+file\s+)(.+)$", re.IGNORECASE)
+_APP_UNINSTALL = re.compile(r"^(?:uninstall|remove\s+(?:the\s+)?(?:program|application|app))\s+(.+)$", re.IGNORECASE)
 _MAINTENANCE = re.compile(r"^(?:diagnose|check|repair|fix|optimize|clean up|stop|prevent|disable).*(?:pc|computer|windows|steam|startup|background|cpu|ram|gpu|network|system files)", re.IGNORECASE)
 
 
