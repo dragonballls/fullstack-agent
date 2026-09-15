@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import time
 from typing import Any, Callable, Iterable, Iterator
 
+from .capabilities import operation
 from .intents import parse_intent
 from .orchestration import OrchestrationPlan, RequestProfile, build_plan
 from .permissions import Capability
@@ -56,11 +57,12 @@ class AgentOrchestrator:
     def _messages(prompt: str) -> list[dict[str, str]]:
         return [{"role": "user", "content": prompt}]
 
-    def _specialist_requests(self, plan: OrchestrationPlan) -> list[tuple[list[dict[str, str]], RequestProfile]]:
+    def _specialist_requests(self, plan: OrchestrationPlan, deterministic_context: str = "") -> list[tuple[list[dict[str, str]], RequestProfile]]:
+        context = f"\n\nAuthoritative deterministic result:\n{deterministic_context}" if deterministic_context else ""
         return [
             (
                 self._messages(
-                    f"{task.prompt}\n\nUser request:\n{plan.primary.prompt}\n\nReturn concise findings only; do not execute anything."
+                    f"{task.prompt}\n\nUser request:\n{plan.primary.prompt}{context}\n\nReturn concise findings only; do not execute anything."
                 ),
                 task.profile,
             )
@@ -68,9 +70,11 @@ class AgentOrchestrator:
         ]
 
     def _execute_typed_plan(self, text: str, confirmed: bool) -> tuple[str, bool, bool, list[str]]:
+        if not hasattr(self.router, "complete"):
+            return "", False, False, []
         try:
             plan = plan_request(self.router, text)
-        except PlanError:
+        except (PlanError, AttributeError):
             return "", False, False, []
         if not plan.steps:
             return "", False, False, []
@@ -82,7 +86,7 @@ class AgentOrchestrator:
         verified = True
         for step in plan.steps:
             try:
-                spec = __import__("quality_of_life.capabilities", fromlist=["operation"]).operation(step.operation)
+                spec = operation(step.operation)
                 result = self.runtime.dispatch(spec.capability, step.operation, **step.arguments)
                 results.append(f"{step.operation}: {result}")
             except Exception as exc:
@@ -193,7 +197,7 @@ class AgentOrchestrator:
         providers: list[str] = []
         deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
         errors.extend(deterministic_errors)
-        if not deterministic_context and not needs_confirmation:
+        if not deterministic_context and not needs_confirmation and not plan.parallel_tasks and plan.primary.profile is not RequestProfile.CODING:
             typed_context, typed_verified, typed_confirmation, typed_errors = self._execute_typed_plan(text, confirmed)
             if typed_context:
                 deterministic_context, deterministic_verified, needs_confirmation = typed_context, typed_verified, typed_confirmation
@@ -204,7 +208,7 @@ class AgentOrchestrator:
             deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
             deterministic_verified = coding_verified
         if plan.parallel_tasks:
-            specialist_results = self.router.complete_many(self._specialist_requests(plan), max_parallel=self.max_parallel)
+            specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
             parallel_completed = sum(1 for result in specialist_results if result.ok and result.text)
             for result in specialist_results:
                 if result.target_name:
@@ -214,7 +218,7 @@ class AgentOrchestrator:
             synthesis_prompt = self._synthesis_prompt(plan, specialist_results, deterministic_context)
         else:
             synthesis_prompt = self._synthesis_prompt(plan, (), deterministic_context)
-        if deterministic_context and (deterministic_verified or needs_confirmation):
+        if deterministic_context and (deterministic_verified or needs_confirmation) and not plan.parallel_tasks:
             synthesis_text = deterministic_context
             provider = "deterministic"
         else:
