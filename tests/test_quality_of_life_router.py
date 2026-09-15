@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -25,12 +26,10 @@ class RouterTests(unittest.TestCase):
         self.assertNotIn("ollama", source.lower())
 
     def test_provider_order_is_preserved(self):
-        router = CloudModelRouter(
-            (
-                ProviderTarget("first", "https://first.invalid", "FIRST_KEY", "m1"),
-                ProviderTarget("second", "https://second.invalid", "SECOND_KEY", "m2"),
-            )
-        )
+        router = CloudModelRouter((
+            ProviderTarget("first", "https://first.invalid", "FIRST_KEY", "m1"),
+            ProviderTarget("second", "https://second.invalid", "SECOND_KEY", "m2"),
+        ))
         self.assertEqual([target.name for target in router.targets], ["first", "second"])
 
     def test_omniroute_defaults_are_explicit_and_openai_compatible(self):
@@ -42,13 +41,10 @@ class RouterTests(unittest.TestCase):
         router = CloudModelRouter((ProviderTarget("test", "https://example.invalid", "TEST_KEY", "m1"),))
         messages = [{"role": "system", "content": "base"}, {"role": "user", "content": "hi"}]
         result = router.prepare_messages(messages, "jarvis rules")
-        self.assertEqual(
-            result,
-            [
-                {"role": "system", "content": "base\n\njarvis rules"},
-                {"role": "user", "content": "hi"},
-            ],
-        )
+        self.assertEqual(result, [
+            {"role": "system", "content": "base\n\njarvis rules"},
+            {"role": "user", "content": "hi"},
+        ])
 
     def test_provider_target_rejects_insecure_remote_http(self):
         with self.assertRaisesRegex(ValueError, "HTTPS is required for non-loopback cloud targets"):
@@ -107,15 +103,40 @@ class RouterTests(unittest.TestCase):
             return response
 
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-            results = router.complete_many(
-                [
-                    ([{"role": "user", "content": "first"}], RequestProfile.FAST),
-                    ([{"role": "user", "content": "second"}], RequestProfile.CODING),
-                ],
-                max_parallel=2,
-            )
+            results = router.complete_many([
+                ([{"role": "user", "content": "first"}], RequestProfile.FAST),
+                ([{"role": "user", "content": "second"}], RequestProfile.CODING),
+            ], max_parallel=2)
         self.assertEqual([result.text for result in results], ["first", "second"])
         self.assertTrue(all(result.ok for result in results))
+
+    def test_parallel_completion_calls_overlap(self):
+        router = CloudModelRouter((ProviderTarget("local", "http://127.0.0.1:20128/v1", "MISSING_KEY", "auto"),))
+        entered = 0
+        entered_lock = threading.Lock()
+        both_entered = threading.Event()
+
+        def fake_urlopen(request, timeout):
+            nonlocal entered
+            with entered_lock:
+                entered += 1
+                if entered >= 2:
+                    both_entered.set()
+            self.assertTrue(both_entered.wait(timeout=2), "parallel requests did not overlap")
+            response = unittest.mock.Mock()
+            body = json.loads(request.data.decode())
+            content = body["messages"][0]["content"]
+            response.read.return_value = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
+            response.__enter__ = lambda self: self
+            response.__exit__ = lambda self, exc_type, exc, tb: None
+            return response
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            results = router.complete_many([
+                ([{"role": "user", "content": "one"}], RequestProfile.FAST),
+                ([{"role": "user", "content": "two"}], RequestProfile.SMART),
+            ], max_parallel=2)
+        self.assertEqual([result.text for result in results], ["one", "two"])
 
 
 if __name__ == "__main__":
