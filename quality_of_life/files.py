@@ -44,10 +44,14 @@ class FileController:
         if any(path == root or root in path.parents for root in protected):
             raise FilesystemError("Protected system location")
 
+    @staticmethod
+    def _info(target: Path) -> FileInfo:
+        return FileInfo(target, target.exists(), target.is_file(), target.is_dir(), target.stat().st_size if target.is_file() else 0)
+
     def info(self, path: str | Path) -> FileInfo:
         self.policy.check(Capability.FILE_READ)
         target = self._target(path)
-        return FileInfo(target, target.exists(), target.is_file(), target.is_dir(), target.stat().st_size if target.is_file() else 0)
+        return self._info(target)
 
     def search(self, pattern: str, root: str | Path | None = None, limit: int = 100) -> tuple[Path, ...]:
         self.policy.check(Capability.FILE_READ)
@@ -77,7 +81,7 @@ class FileController:
         target.write_text(text, encoding="utf-8")
         if not target.is_file():
             raise FilesystemError("Write could not be verified")
-        return self.info(target)
+        return self._info(target)
 
     def copy(self, source: str | Path, destination: str | Path) -> FileInfo:
         self.policy.check(Capability.FILE_WRITE)
@@ -92,7 +96,7 @@ class FileController:
             shutil.copy2(src, dst)
         if not dst.exists():
             raise FilesystemError("Copy could not be verified")
-        return self.info(dst)
+        return self._info(dst)
 
     def move(self, source: str | Path, destination: str | Path) -> FileInfo:
         self.policy.check(Capability.FILE_WRITE)
@@ -104,7 +108,7 @@ class FileController:
         shutil.move(str(src), str(dst))
         if src.exists() or not dst.exists():
             raise FilesystemError("Move could not be verified")
-        return self.info(dst)
+        return self._info(dst)
 
     def delete(self, path: str | Path) -> bool:
         self.policy.check(Capability.FILE_DELETE)
