@@ -13,6 +13,7 @@ class CapabilityDenied(PermissionError):
 class Capability(str, Enum):
     SCREEN_READ = "screen.read"
     LOCATION_READ = "location.read"
+    LOCATION_WRITE = "location.write"
     MOUSE_CONTROL = "mouse.control"
     KEYBOARD_CONTROL = "keyboard.control"
     CLIPBOARD = "clipboard"
@@ -52,6 +53,7 @@ class CapabilityPolicy:
         Capability.BROWSER_CONTROL,
         Capability.REPO_WRITE,
         Capability.ACCOUNT_WRITE,
+        Capability.LOCATION_WRITE,
         Capability.FILE_WRITE,
         Capability.FILE_DELETE,
         Capability.APP_WRITE,
