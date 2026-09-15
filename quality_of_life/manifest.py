@@ -39,6 +39,7 @@ class ToolRegistry:
 
 def default_registry() -> ToolRegistry:
     registry = ToolRegistry()
+    registry.register(ToolSpec("account_access", "Explicit user-authorized external accounts and scoped credentials", "quality_of_life.account_access.AccountAccessRegistry"))
     registry.register(ToolSpec("applications", "Installed application inventory and confirmed uninstall", "quality_of_life.applications.ApplicationManager"))
     registry.register(ToolSpec("background", "Bounded cancellable background jobs", "quality_of_life.background.BackgroundJobs"))
     registry.register(ToolSpec("browser", "Optional Playwright browser automation", "quality_of_life.browser.BrowserController"))
