@@ -1,31 +1,36 @@
-# Jarvis multi-AI orchestration
+# Jarvis orchestration
 
-The Jarvis extension layer uses OmniRoute as the cloud model gateway and chooses the smallest sufficient workflow for each request.
+Jarvis has one brain path: **OmniRoute**. The orchestration layer may use different OmniRoute model profiles for speed, reasoning, coding, vision, or maintenance, but these remain profiles of the same OmniRoute route.
 
-## Profiles
+Voice and typed requests share the same orchestration and permission path. Voice activation is handled before orchestration: the local listener waits for the wake word `Jarvis`, and only the accepted utterance enters the cloud request pipeline.
 
-- `fast`: one low-latency `auto/fast` request.
-- `smart`: `auto/smart` for harder reasoning and independent specialist checks when useful.
-- `coding`: `auto/coding` plus independent implementation/test review before synthesis.
-- `vision`: vision-oriented context analysis with the available cloud route.
-- `maintenance`: independent PC/process analysis followed by a synthesis step and, for supported requests, a deterministic Windows-maintenance action.
+## Voice defaults
 
-## Parallelism
+```text
+JARVIS_VOICE_MODE=open
+JARVIS_WAKE_WORD=jarvis
+JARVIS_WAKE_CONFIDENCE=0.70
+JARVIS_WAKE_POST_WINDOW_SECONDS=6
+JARVIS_VOICE_BRAIN=omniroute
+JARVIS_REQUIRE_OMNIROUTE=true
+JARVIS_ALLOW_CLAUDE=false
+```
 
-Independent, read-only specialist requests may run concurrently with a bounded worker pool. `JARVIS_OMNIROUTE_MAX_PARALLEL` controls the worker count (default 4; hard cap 8). The fast path does not fan out.
+## Provider rules
 
-## Safety boundary
+- OmniRoute is required for the Jarvis brain.
+- Claude Code and a Claude subscription are not required.
+- Claude is not a fallback brain.
+- A local LLM is not a silent fallback brain.
+- Missing OmniRoute configuration fails clearly instead of switching brains.
+- Existing capability, confirmation, cancellation, and emergency-stop controls are shared by typed and voice requests.
 
-Models never execute arbitrary PowerShell or bypass the capability policy. Computer control, browser control, location, clipboard, and Windows mutations continue through the existing runtime dispatch and confirmation gates. Windows diagnostics use a separate read-only `system.diagnostics` capability so diagnosis does not inherit mutation confirmation requirements.
+## Voice data flow
 
-## Provider failures
+`microphone -> local wake-word gate -> bounded post-wake utterance -> Jarvis orchestration -> OmniRoute -> existing tools/personality -> speech synthesis`
 
-OmniRoute remains cloud-only. A missing cloud credential, unavailable provider, or malformed response produces a redacted provider diagnostic. Repeated failures temporarily cool down the affected route so a broken provider is not hammered on every request.
+Wake detection is local-only. Ambient or non-addressed speech does not create an OmniRoute request and must not be logged.
 
-## Latency behavior
+## Reliability
 
-The orchestration layer emits a local acknowledgement before model work, avoids a second model call for simple requests, parallelizes independent analysis for complex requests, and records end-to-end latency in the result metadata.
-
-## Machine-only verification
-
-Hosted CI can verify routing, concurrency, policy, and deterministic dispatch contracts. Actual microphone/speaker playback, ElevenLabs speech quality, screen capture, mouse movement, browser launches, camera permission, and Windows repair effects still require validation on the user's Windows machine.
+Only one voice session may be active. Duplicate listeners must refuse ownership. If microphone access, wake gating, or required OmniRoute configuration is unavailable, Jarvis remains silent or reports the configuration error rather than forwarding ambient audio or choosing another brain.
