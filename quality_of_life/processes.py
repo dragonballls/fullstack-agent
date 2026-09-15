@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable
+from typing import Callable, Iterable
 
 from .permissions import Capability, CapabilityPolicy
 
@@ -29,9 +30,10 @@ class ServiceInfo:
 
 
 class ProcessManager:
-    def __init__(self, policy: CapabilityPolicy, process_provider: Callable[[], Iterable[ProcessInfo]] | None = None) -> None:
+    def __init__(self, policy: CapabilityPolicy, process_provider: Callable[[], Iterable[ProcessInfo]] | None = None, service_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None) -> None:
         self.policy = policy
         self._provider = process_provider or self._default_processes
+        self._services = ServiceManager(policy, service_runner)
 
     @staticmethod
     def _default_processes() -> tuple[ProcessInfo, ...]:
@@ -78,9 +80,17 @@ class ProcessManager:
             proc.wait(timeout=5)
         except ImportError as exc:
             raise ProcessControlError("Process control requires psutil") from exc
+        except ProcessControlError:
+            raise
         except Exception as exc:
             raise ProcessControlError(f"Unable to stop process {target.name} ({target.pid})") from exc
         return not any(proc.pid == pid for proc in self.list_processes())
+
+    def list_services(self) -> tuple[ServiceInfo, ...]:
+        return self._services.list_services()
+
+    def restart_service(self, name: str, confirmed: bool = False) -> bool:
+        return self._services.restart(name, confirmed=confirmed)
 
 
 class ServiceManager:
@@ -92,7 +102,7 @@ class ServiceManager:
 
     def list_services(self) -> tuple[ServiceInfo, ...]:
         self.policy.check(Capability.SERVICE_READ)
-        if not hasattr(__import__("os"), "name") or __import__("os").name != "nt":
+        if os.name != "nt":
             return ()
         result = self._runner(["sc.exe", "query", "type=", "service", "state=", "all"], capture_output=True, text=True, check=False)
         services: list[ServiceInfo] = []
@@ -119,7 +129,8 @@ class ServiceManager:
         self.policy.check(Capability.SERVICE_CONTROL)
         if not confirmed:
             raise PermissionError("Confirmation is required before restarting a service")
-        if not self._NAME.fullmatch(name.strip()):
+        name = name.strip()
+        if not self._NAME.fullmatch(name):
             raise ValueError("Invalid service name")
         if name.casefold() in {"eventlog", "windefend", "wininit", "plugplay"}:
             raise ProcessControlError("Protected service cannot be restarted by this capability")
