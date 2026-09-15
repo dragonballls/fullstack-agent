@@ -13,7 +13,7 @@ class RouterTests(unittest.TestCase):
         router = CloudModelRouter((ProviderTarget("one", "https://one.invalid", "ONE_KEY", "m1"),))
         old = os.environ.pop("ONE_KEY", None)
         try:
-            with self.assertRaisesRegex(RuntimeError, "one: missing ONE_KEY") as ctx:
+            with self.assertRaisesRegex(RuntimeError, r"one: missing ONE_KEY") as ctx:
                 router.complete([{"role": "user", "content": "hi"}])
             self.assertNotIn("secret-value", str(ctx.exception))
         finally:
@@ -47,13 +47,13 @@ class RouterTests(unittest.TestCase):
         ])
 
     def test_provider_target_rejects_insecure_remote_http(self):
-        with self.assertRaisesRegex(ValueError, "HTTPS is required for non-loopback cloud targets"):
+        with self.assertRaisesRegex(ValueError, r"HTTPS is required for non-loopback cloud targets"):
             ProviderTarget("remote", "http://example.com/v1", "KEY", "m1")
 
     def test_provider_target_rejects_invalid_configuration(self):
-        with self.assertRaisesRegex(ValueError, "base_url must be an absolute HTTP\(S\) URL"):
+        with self.assertRaisesRegex(ValueError, r"base_url must be an absolute HTTP\(S\) URL"):
             ProviderTarget("bad-url", "not-a-url", "KEY", "m1")
-        with self.assertRaisesRegex(ValueError, "model must be non-empty"):
+        with self.assertRaisesRegex(ValueError, r"model must be non-empty"):
             ProviderTarget("bad-model", "https://example.com/v1", "KEY", " ")
 
     def test_local_omniroute_allows_missing_key_without_sending_auth_header(self):
