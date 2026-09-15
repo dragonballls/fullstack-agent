@@ -21,7 +21,7 @@ class ComputerController:
     pyautogui: Any | None = None
 
     def __post_init__(self) -> None:
-        if platform.system() != "Windows":
+        if self.pyautogui is None and platform.system() != "Windows":
             raise ComputerControlUnavailable("Windows computer control is currently supported only on Windows.")
         try:
             if self.pyautogui is None:
