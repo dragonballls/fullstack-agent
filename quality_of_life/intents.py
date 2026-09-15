@@ -15,6 +15,7 @@ class Intent:
 _PLACE = re.compile(r"^(?:open|show(?: me)?|find)\s+(.+)$", re.IGNORECASE)
 _ROUTE = re.compile(r"^(?:take|navigate|route)\s+(?:me\s+)?to\s+(.+)$", re.IGNORECASE)
 _MOVE = re.compile(r"^move mouse to\s+(-?\d+)\s+(-?\d+)$", re.IGNORECASE)
+_MAINTENANCE = re.compile(r"^(?:diagnose|check|repair|fix|optimize|clean up|stop|prevent|disable).*(?:pc|computer|windows|steam|startup|background|cpu|ram|gpu|network|system files)", re.IGNORECASE)
 
 
 def parse_intent(text: str) -> Intent:
@@ -27,6 +28,8 @@ def parse_intent(text: str) -> Intent:
     match = _MOVE.match(value)
     if match:
         return Intent("computer_action", {"operation": "move", "x": int(match.group(1)), "y": int(match.group(2))})
+    if _MAINTENANCE.match(value):
+        return Intent("windows_maintenance", {"request": value})
     match = _ROUTE.match(value)
     if match:
         return Intent("route", {"query": match.group(1).strip()})

@@ -1,0 +1,44 @@
+name: Windows maintenance tests
+
+on:
+  push:
+    paths:
+      - 'windows_maintenance/**'
+      - 'quality_of_life/manifest.py'
+      - 'quality_of_life/intents.py'
+      - 'tests/test_windows_maintenance_integration.py'
+      - '.github/workflows/windows-maintenance.yml'
+  pull_request:
+    paths:
+      - 'windows_maintenance/**'
+      - 'quality_of_life/manifest.py'
+      - 'quality_of_life/intents.py'
+      - 'tests/test_windows_maintenance_integration.py'
+      - '.github/workflows/windows-maintenance.yml'
+  workflow_dispatch:
+
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile maintenance package
+        run: python -m compileall windows_maintenance quality_of_life tests
+      - name: Run maintenance and integration tests
+        run: python -m unittest windows_maintenance.tests.test_windows_maintenance tests/test_windows_maintenance_integration.py -v
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile maintenance package
+        run: python -m compileall windows_maintenance quality_of_life tests
+      - name: Run maintenance and integration tests
+        shell: pwsh
+        run: python -m unittest windows_maintenance.tests.test_windows_maintenance tests/test_windows_maintenance_integration.py -v
