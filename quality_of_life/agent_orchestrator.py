@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import json
 from dataclasses import dataclass
 import time
 from typing import Any, Callable, Iterable, Iterator
 
 from .capabilities import operation
+from .computer_use import ComputerUseAgent, ComputerUseAction, RouterComputerUsePlanner, ScreenObserver
 from .intents import parse_intent
 from .orchestration import OrchestrationPlan, RequestProfile, build_plan
 from .permissions import Capability
@@ -52,6 +55,17 @@ class AgentOrchestrator:
     def _needs_confirmation(text: str) -> bool:
         normalized = " ".join(text.lower().split())
         return any(marker in normalized for marker in _MUTATING_MARKERS)
+
+    @staticmethod
+    def _looks_like_computer_goal(text: str) -> bool:
+        normalized = " ".join(text.casefold().split())
+        markers = (
+            "computer", "desktop", "application", "app", "game", "roblox", "studio",
+            "mouse", "cursor", "click", "double click", "right click", "type into",
+            "press the", "open " , "launch ", "interact with", "on my screen", "on screen",
+            "window", "menu", "button", "play ", "navigate in", "use the ",
+        )
+        return any(marker in normalized for marker in markers)
 
     @staticmethod
     def _messages(prompt: str) -> list[dict[str, str]]:
@@ -163,6 +177,25 @@ class AgentOrchestrator:
             return str(result), True, [], False
         return "", False, [], False
 
+    def _computer_goal_context(self, text: str, confirmed: bool) -> tuple[str, bool, bool, list[str], str | None]:
+        if not confirmed:
+            return "This goal requires confirmation before Jarvis controls the computer.", False, True, [], None
+        try:
+            computer = self.runtime._tool("computer")
+            screen = self.runtime._tool("screen")
+            agent = ComputerUseAgent(
+                RouterComputerUsePlanner(self.router),
+                computer,
+                ScreenObserver(screen),
+                max_steps=max(1, min(int(self.max_parallel or 10), 10)),
+            )
+            result = agent.run(text)
+        except Exception as exc:
+            return "", False, False, [f"computer goal: {exc}"], None
+        if result.completed:
+            return f"Computer goal completed and re-observed after {result.steps_executed} action(s).", True, False, list(result.errors), "computer-use"
+        return f"Computer goal was not fully verified after {result.steps_executed} action(s).", False, False, list(result.errors), "computer-use"
+
     def _coding_context(self, text: str, confirmed: bool) -> tuple[str, bool]:
         if not confirmed:
             return "A repository-changing coding request requires confirmation before self-coding can run.", False
@@ -194,6 +227,17 @@ class AgentOrchestrator:
         providers: list[str] = []
         deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
         errors.extend(deterministic_errors)
+
+        if not deterministic_context and not needs_confirmation and self._looks_like_computer_goal(text) and not plan.parallel_tasks:
+            computer_context, computer_verified, computer_confirmation, computer_errors, computer_provider = self._computer_goal_context(text, confirmed)
+            if computer_context:
+                deterministic_context = computer_context
+                deterministic_verified = computer_verified
+                needs_confirmation = computer_confirmation
+                errors.extend(computer_errors)
+                if computer_provider:
+                    providers.append(computer_provider)
+
         if not deterministic_context and not needs_confirmation and not plan.parallel_tasks and plan.primary.profile is not RequestProfile.CODING:
             typed_context, typed_verified, typed_confirmation, typed_errors = self._execute_typed_plan(text, confirmed)
             if typed_context:
@@ -219,7 +263,7 @@ class AgentOrchestrator:
             synthesis_prompt = self._synthesis_prompt(plan, (), deterministic_context)
         if deterministic_context and (deterministic_verified or needs_confirmation) and not plan.parallel_tasks:
             synthesis_text = deterministic_context
-            provider = "deterministic"
+            provider = providers[-1] if providers else "deterministic"
         else:
             synthesis_text, provider = self.router.complete_profiled(self._messages(synthesis_prompt), plan.primary.profile)
         providers.append(provider)
@@ -234,7 +278,7 @@ class AgentOrchestrator:
             on_event(ack)
         yield ack
         plan = build_plan(text)
-        progress = OrchestrationEvent("progress", f"Running {len(plan.parallel_tasks)} specialist checks in parallel." if plan.parallel_tasks else "Using the fastest suitable cloud model.")
+        progress = OrchestrationEvent("progress", f"Running {len(plan.parallel_tasks)} specialist checks in parallel." if plan.parallel_tasks else "Using the fastest suitable cloud model or guarded computer-use loop.")
         if on_event:
             on_event(progress)
         yield progress
