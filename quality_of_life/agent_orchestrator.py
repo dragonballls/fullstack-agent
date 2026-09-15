@@ -65,7 +65,7 @@ class AgentOrchestrator:
         if any(marker.strip() in normalized for marker in markers):
             return True
         if normalized.startswith("open "):
-            candidate = normalized[5:].split(" and ", 1)[0].strip()
+            candidate = normalized[5:].split(" and ", 1)[0].split(" then ", 1)[0].strip()
             if candidate:
                 try:
                     apps = self.runtime._tool("applications").list()
@@ -171,6 +171,14 @@ class AgentOrchestrator:
             return str(result), True, [], False
         if intent.kind == "place_search":
             query = str(intent.arguments["query"])
+            if text.casefold().startswith("open "):
+                candidate = query.casefold().split(" and ", 1)[0].split(" then ", 1)[0].strip()
+                try:
+                    apps = self.runtime._tool("applications").list()
+                    if any(getattr(app, "name", "").casefold() == candidate for app in apps):
+                        return "", False, [], False
+                except Exception:
+                    pass
             result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.open_place", query=query)
             return str(result), True, [], False
         if intent.kind == "route":
