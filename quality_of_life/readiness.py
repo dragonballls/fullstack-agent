@@ -12,6 +12,8 @@ from typing import Callable, Mapping
 
 
 class CheckStatus(str, Enum):
+    """Represent the outcome of a readiness check."""
+
     PASS = "PASS"
     WARNING = "WARN"
     FAIL = "FAIL"
@@ -19,6 +21,8 @@ class CheckStatus(str, Enum):
 
 @dataclass(frozen=True)
 class ReadinessCheck:
+    """Represent one readiness result and whether it blocks startup."""
+
     name: str
     status: CheckStatus
     detail: str
@@ -27,16 +31,20 @@ class ReadinessCheck:
 
 @dataclass(frozen=True)
 class ReadinessReport:
+    """Collect readiness checks and expose aggregate startup status."""
+
     checks: tuple[ReadinessCheck, ...]
 
     @property
     def required_status(self) -> CheckStatus:
+        """Return FAIL when any required check fails, otherwise PASS."""
         if any(check.required and check.status is CheckStatus.FAIL for check in self.checks):
             return CheckStatus.FAIL
         return CheckStatus.PASS
 
     @property
     def ready(self) -> bool:
+        """Return whether all required readiness checks pass."""
         return self.required_status is CheckStatus.PASS
 
 
@@ -55,12 +63,14 @@ DEFAULT_CLOUD_KEYS: CloudKey = (
 
 
 def _python_check() -> ReadinessCheck:
+    """Check that the running Python version meets Jarvis's minimum."""
     supported = sys.version_info >= (3, 11)
     detail = f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     return ReadinessCheck("Python runtime", CheckStatus.PASS if supported else CheckStatus.FAIL, detail, True)
 
 
 def _git_check(which: Callable[[str], str | None]) -> ReadinessCheck:
+    """Check that Git is available on PATH."""
     path = which("git")
     return ReadinessCheck(
         "Git", CheckStatus.PASS if path else CheckStatus.FAIL,
@@ -69,11 +79,23 @@ def _git_check(which: Callable[[str], str | None]) -> ReadinessCheck:
     )
 
 
+def _configured_cloud_keys(env: Mapping[str, str], cloud_keys: CloudKey) -> tuple[str, ...]:
+    """Return supported credential variable names, including explicitly configured ones."""
+    names = list(cloud_keys)
+    for selector in ("JARVIS_OMNIROUTE_API_KEY_ENV", "JARVIS_CLOUD_API_KEY_ENV"):
+        configured_name = env.get(selector, "").strip()
+        if configured_name and configured_name not in names:
+            names.insert(0, configured_name)
+    return tuple(names)
+
+
 def _cloud_check(env: Mapping[str, str], cloud_keys: CloudKey) -> ReadinessCheck:
-    configured = next((name for name in cloud_keys if env.get(name)), None)
+    """Check for a configured cloud credential without exposing its value."""
+    supported_keys = _configured_cloud_keys(env, cloud_keys)
+    configured = next((name for name in supported_keys if env.get(name)), None)
     if configured:
         return ReadinessCheck("Cloud LLM", CheckStatus.PASS, f"configured via {configured}", True)
-    names = ", ".join(cloud_keys)
+    names = ", ".join(supported_keys)
     return ReadinessCheck("Cloud LLM", CheckStatus.FAIL, f"configure at least one supported key: {names}", True)
 
 
@@ -83,6 +105,7 @@ def _optional_import_check(
     importable: Callable[[str], bool],
     detail_when_missing: str,
 ) -> ReadinessCheck:
+    """Report whether an optional Python module is importable."""
     available = importable(name)
     return ReadinessCheck(display, CheckStatus.PASS if available else CheckStatus.WARNING, "available" if available else detail_when_missing)
 
@@ -129,7 +152,7 @@ def check_readiness(
 
 
 def format_report(report: ReadinessReport) -> str:
-    """Format a report using names/statuses only; never include secret values."""
+    """Format a report using names and statuses only; never include secret values."""
     lines = ["Jarvis readiness", "=" * 15]
     for check in report.checks:
         required = " required" if check.required else " optional"
