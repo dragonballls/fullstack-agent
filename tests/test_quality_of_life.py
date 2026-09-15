@@ -59,7 +59,10 @@ class QualityOfLifeTests(unittest.TestCase):
 
         fake = FakePyAutoGUI()
         from quality_of_life import computer
-        controller = computer.ComputerController(CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL, Capability.KEYBOARD_CONTROL})), pyautogui_module=fake)
+        controller = computer.ComputerController(
+            CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL, Capability.KEYBOARD_CONTROL})),
+            pyautogui=fake,
+        )
         controller.move(1, 2)
         controller.click()
         controller.scroll(3)
@@ -72,7 +75,7 @@ class QualityOfLifeTests(unittest.TestCase):
         import time
         jobs = BackgroundJobs()
         started = []
-        jobs.start("test", lambda: started.append(True))
+        jobs.start("test", lambda _cancel: started.append(True))
         deadline = time.monotonic() + 2
         while not started and time.monotonic() < deadline:
             time.sleep(0.01)
