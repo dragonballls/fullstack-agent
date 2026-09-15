@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from .background import BackgroundJobs
@@ -27,7 +27,6 @@ class JarvisRuntime:
         factories: dict[str, Callable[[], Any]] | None = None,
         gods_eye_launcher: GodsEyeLauncher | None = None,
     ) -> None:
-        """Initialize policy, lazy factories, God’s Eye, and the guarded action registry."""
         self.policy = policy
         self.confirmation = confirmation
         self.registry = default_registry()
@@ -35,6 +34,7 @@ class JarvisRuntime:
         self._instances: dict[str, Any] = {}
         self.gods_eye_launcher = gods_eye_launcher or GodsEyeLauncher()
         self.orchestrator = QoLOrchestrator(policy)
+        self._agent_orchestrator: Any | None = None
         self._register_actions()
 
     def available_tools(self) -> tuple[str, ...]:
@@ -82,6 +82,13 @@ class JarvisRuntime:
             self._instances[name] = self._factory_from_spec(name)()
         return self._instances[name]
 
+    def _assistant_orchestrator(self) -> Any:
+        """Construct the multi-model assistant orchestrator lazily."""
+        if self._agent_orchestrator is None:
+            from .agent_orchestrator import AgentOrchestrator
+            self._agent_orchestrator = AgentOrchestrator(self._tool("cloud_router"), self)
+        return self._agent_orchestrator
+
     def _register_actions(self) -> None:
         """Register all capability-gated runtime operations with the orchestrator."""
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.move", lambda x, y: self._tool("computer").move(x, y)))
@@ -111,7 +118,6 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
-        """Resolve the first God’s Eye place matching a user query."""
         eye = self._tool("gods_eye")
         places = eye.search(query)
         if not places:
@@ -119,12 +125,10 @@ class JarvisRuntime:
         return eye, places[0]
 
     def _open_place(self, query: str) -> dict[str, object]:
-        """Resolve a place and return the God’s Eye representation for it."""
         eye, place = self._first_place(query)
         return eye.open_place(place)
 
     def _route_to(self, query: str) -> dict[str, object]:
-        """Resolve a destination and generate a route from the permitted current location."""
         eye, place = self._first_place(query)
         snapshot = eye.locate_me()
         if not snapshot.permitted or snapshot.point is None:
@@ -134,6 +138,24 @@ class JarvisRuntime:
     def dispatch(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
         """Run one registered operation through capability and confirmation checks."""
         return self.orchestrator.run(capability, operation, *args, confirmation=self.confirmation, **kwargs)
+
+    def handle_assistant_request(self, text: str, confirmed: bool = False) -> dict[str, Any]:
+        """Run a user request through the multi-model planner while preserving deterministic tools."""
+        result = self._assistant_orchestrator().execute(text, confirmed=confirmed)
+        return {
+            "text": result.text,
+            "profile": result.profile,
+            "verified": result.verified,
+            "needs_confirmation": result.needs_confirmation,
+            "parallel_tasks_completed": result.parallel_tasks_completed,
+            "providers": result.providers,
+            "latency_ms": result.latency_ms,
+            "errors": result.errors,
+        }
+
+    def handle_assistant_stream(self, text: str, confirmed: bool = False) -> Iterator[Any]:
+        """Yield low-latency orchestration events suitable for a voice/UI adapter."""
+        yield from self._assistant_orchestrator().execute_stream(text, confirmed=confirmed)
 
     def handle_text(self, text: str) -> Any:
         """Turn a conservative spoken/text intent into the appropriate guarded operation."""
