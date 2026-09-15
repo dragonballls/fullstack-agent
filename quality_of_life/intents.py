@@ -14,6 +14,10 @@ class Intent:
 
 _PLACE = re.compile(r"^(?:open|show(?: me)?|find)\s+(.+)$", re.IGNORECASE)
 _ROUTE = re.compile(r"^(?:take|navigate|route)\s+(?:me\s+)?to\s+(.+)$", re.IGNORECASE)
+_SAVE_CURRENT = re.compile(r"^save\s+(?:my\s+current\s+location|this\s+location)\s+as\s+(.+)$", re.IGNORECASE)
+_SAVE_PLACE = re.compile(r"^save\s+(.+?)\s+as\s+(.+)$", re.IGNORECASE)
+_GET_SAVED = re.compile(r"^(?:go|route|navigate)\s+(?:me\s+)?to\s+my\s+(.+)$", re.IGNORECASE)
+_DELETE_SAVED = re.compile(r"^(?:delete|forget|remove)\s+(?:my\s+)?saved\s+location\s+(.+)$", re.IGNORECASE)
 _MOVE = re.compile(r"^move mouse to\s+(-?\d+)\s+(-?\d+)$", re.IGNORECASE)
 _BROWSER = re.compile(r"^(?:open|use|launch)\s+(edge|microsoft edge|ms edge|chrome|google chrome|firefox|mozilla firefox|opera|opera gx|operagx|brave|brave browser|vivaldi)(?:\s+(?:and\s+)?(?:go to|open)\s+(https?://\S+))?$", re.IGNORECASE)
 _FILE_DELETE = re.compile(r"^(?:delete\s+(?:file\s+)?|remove\s+file\s+)(.+)$", re.IGNORECASE)
@@ -28,6 +32,18 @@ def parse_intent(text: str) -> Intent:
     lowered = value.casefold()
     if lowered in {"where am i", "what is my location", "what's my location", "where are we"}:
         return Intent("locate_me", {})
+    match = _SAVE_CURRENT.match(value)
+    if match:
+        return Intent("save_current_location", {"name": match.group(1).strip()})
+    match = _DELETE_SAVED.match(value)
+    if match:
+        return Intent("delete_saved_location", {"name": match.group(1).strip()})
+    match = _GET_SAVED.match(value)
+    if match:
+        return Intent("saved_location", {"name": match.group(1).strip()})
+    match = _SAVE_PLACE.match(value)
+    if match and not lowered.startswith("save my "):
+        return Intent("save_place", {"place": match.group(1).strip(), "name": match.group(2).strip()})
     match = _MOVE.match(value)
     if match:
         return Intent("computer_action", {"operation": "move", "x": int(match.group(1)), "y": int(match.group(2))})

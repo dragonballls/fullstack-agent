@@ -13,7 +13,7 @@ class QualityOfLifeTests(unittest.TestCase):
     def test_default_registry_names_are_stable(self) -> None:
         self.assertEqual(
             default_registry().names(),
-            ("account_access", "applications", "background", "browser", "browser_registry", "clipboard", "cloud_router", "computer", "files", "gods_eye", "processes", "scheduler", "screen", "self_coding", "system", "windows", "windows_maintenance"),
+            ("account_access", "applications", "background", "browser", "browser_registry", "clipboard", "cloud_router", "computer", "files", "gods_eye", "locations", "processes", "scheduler", "screen", "self_coding", "system", "windows", "windows_maintenance"),
         )
 
     def test_orchestrator_checks_policy(self) -> None:

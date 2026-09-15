@@ -12,6 +12,7 @@ from .gods_eye import GodsEye, Place
 from .gods_eye_launcher import GodsEyeLauncher
 from .intents import Intent, parse_intent
 from .location import FallbackLocationProvider, IpLocationProvider, NominatimGeocoder, SystemLocationProvider
+from .location_memory import SavedLocationStore
 from .manifest import default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
 from .permissions import Capability, CapabilityPolicy
@@ -53,6 +54,9 @@ class JarvisRuntime:
             return lambda: target(self._tool("background"))
         if name == "gods_eye":
             return lambda: GodsEye(NominatimGeocoder(), FallbackLocationProvider(SystemLocationProvider(), IpLocationProvider()))
+        if name == "locations":
+            configured = os.environ.get("JARVIS_LOCATION_STORE")
+            return lambda: SavedLocationStore(configured)
         if name == "background":
             return lambda: BackgroundJobs()
         if name == "cloud_router":
@@ -164,6 +168,12 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.open_place", lambda query: self._open_place(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.route_to", lambda query: self._route_to(query)))
+        self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.current", lambda: self._tool("gods_eye").locate_me()))
+        self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.save", lambda name, latitude, longitude, address=None, accuracy_m=None, source="user", confirmed=False: self._save_location(name, latitude, longitude, address=address, accuracy_m=accuracy_m, source=source, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.save_current", lambda name, address=None, confirmed=False: self._save_current_location(name, address=address, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.get", lambda name: self._tool("locations").get(name)))
+        self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.list", lambda: self._tool("locations").list()))
+        self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.delete", lambda name, confirmed=False: self._delete_saved_location(name, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
         self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", lambda request, confirmed=False: self._tool("windows_maintenance").handle(request, confirmed=confirmed)))
 
@@ -194,6 +204,23 @@ class JarvisRuntime:
         if not snapshot.permitted or snapshot.point is None:
             raise PermissionError("Current location is unavailable; enable location access before routing")
         return eye.route(snapshot.point, place)
+
+    def _save_location(self, name: str, latitude: float, longitude: float, *, address: str | None = None, accuracy_m: float | None = None, source: str = "user", confirmed: bool = False) -> Any:
+        if not confirmed:
+            raise PermissionError("Saving a location requires confirmation")
+        from .gods_eye import GeoPoint
+        return self._tool("locations").save(name, GeoPoint(float(latitude), float(longitude)), address=address, accuracy_m=accuracy_m, source=source)
+
+    def _save_current_location(self, name: str, *, address: str | None = None, confirmed: bool = False) -> Any:
+        if not confirmed:
+            raise PermissionError("Saving the current location requires confirmation")
+        snapshot = self._tool("gods_eye").locate_me()
+        return self._tool("locations").save_current(name, snapshot, address=address)
+
+    def _delete_saved_location(self, name: str, *, confirmed: bool = False) -> bool:
+        if not confirmed:
+            raise PermissionError("Deleting a saved location requires confirmation")
+        return self._tool("locations").delete(name)
 
     def dispatch(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
         return self.orchestrator.run(capability, operation, *args, confirmation=self.confirmation, **kwargs)
@@ -235,6 +262,21 @@ class JarvisRuntime:
         if intent.kind == "route":
             query = str(intent.arguments["query"])
             return {"intent": intent, "result": self.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query=query)}
+        if intent.kind == "save_current_location":
+            name = str(intent.arguments["name"])
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.save_current", name=name)}
+        if intent.kind == "save_place":
+            place_query = str(intent.arguments["place"])
+            name = str(intent.arguments["name"])
+            place = self._first_place(place_query)[1]
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.save", name=name, latitude=place.point.latitude, longitude=place.point.longitude, source=place.provider)}
+        if intent.kind == "saved_location":
+            saved = self.dispatch(Capability.LOCATION_READ, "locations.get", name=str(intent.arguments["name"]))
+            if saved is None:
+                raise LookupError(f"No saved location found for: {intent.arguments['name']}")
+            return {"intent": intent, "result": saved}
+        if intent.kind == "delete_saved_location":
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_WRITE, "locations.delete", name=str(intent.arguments["name"]))}
         if intent.kind == "screen_read":
             return {"intent": intent, "result": self.dispatch(Capability.SCREEN_READ, "screen.capture")}
         if intent.kind == "computer_action":
