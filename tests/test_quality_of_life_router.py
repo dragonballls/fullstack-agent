@@ -54,7 +54,7 @@ class RouterTests(unittest.TestCase):
             ProviderTarget("remote", "http://example.com/v1", "KEY", "m1")
 
     def test_provider_target_rejects_invalid_configuration(self):
-        with self.assertRaisesRegex(ValueError, "base_url must be an absolute HTTP(S) URL"):
+        with self.assertRaisesRegex(ValueError, "base_url must be an absolute HTTP\(S\) URL"):
             ProviderTarget("bad-url", "not-a-url", "KEY", "m1")
         with self.assertRaisesRegex(ValueError, "model must be non-empty"):
             ProviderTarget("bad-model", "https://example.com/v1", "KEY", " ")
