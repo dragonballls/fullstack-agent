@@ -1,33 +1,55 @@
 # Jarvis voice
 
-The preferred high-quality cloud voice for the Jarvis setup is ElevenLabs.
+The Jarvis voice is an always-listening, wake-word-gated interface. The microphone may remain active after permission is granted, but Jarvis only starts a request after the local activation gate accepts the wake word **"Jarvis"**.
 
-## Default setup
+## Brain and routing
 
-During the `backtalk` setup, choose **ElevenLabs** rather than the built-in Kokoro voice. The backtalk maintainer documents the natural ElevenLabs path and identifies **Tarquin** as the voice used in the project author's videos.
+Jarvis uses **OmniRoute only** as its conversational/agent brain. Claude Code, a Claude subscription, and direct Claude routing are not required and are not valid Jarvis fallbacks.
 
-Do not store an ElevenLabs API key in this repository. On Windows, provide the key through the supported `ELEVENLABS_API_KEY` environment variable or the credential mechanism supported by the installed backtalk version.
+Required voice routing defaults:
 
-## Jarvis quality + latency profile
+```text
+JARVIS_VOICE_MODE=open
+JARVIS_WAKE_WORD=jarvis
+JARVIS_WAKE_CONFIDENCE=0.70
+JARVIS_WAKE_POST_WINDOW_SECONDS=6
+JARVIS_VOICE_BRAIN=omniroute
+JARVIS_REQUIRE_OMNIROUTE=true
+JARVIS_ALLOW_CLAUDE=false
+```
 
-Prioritize a natural, consistent speaking voice without adding unnecessary generation latency:
+`JARVIS_ALLOW_CLAUDE` is fixed to `false` for the Jarvis profile. A misconfigured non-OmniRoute brain must fail closed.
 
-- Prefer an ElevenLabs low-latency model supported by the installed backtalk release when it offers the required voice quality.
-- Start around **stability 0.50**, **similarity 0.75**, **style 0**, and **speed 1.0**, then audition and adjust by ear.
-- Keep speaker boost off when the extra similarity is not needed because it adds processing cost; enable it only when the actual voice test benefits.
-- Do not hard-code a voice ID. Look up the requested voice in the account's voice library so stale IDs cannot silently select the wrong voice.
+## Always-listening behavior
 
-These are starting points, not a claim that one setting is universally optimal. The real speech audition remains the authority for the final configuration.
+Wake-word detection is local. Before the wake word is accepted, ambient speech is ignored locally and does not create a cloud request. After acceptance, Jarvis captures only the bounded utterance associated with that wake event, then sends that utterance through the existing OmniRoute orchestration path.
+
+The default wake confidence threshold is 0.70. The default post-wake capture window is 6 seconds. These values are configuration defaults, not guarantees of recognition accuracy across all microphones or environments.
+
+One active voice session is permitted at a time. A duplicate listener must refuse ownership rather than creating two simultaneous response pipelines. Explicit cancel/stop and speaking interruption remain supported.
+
+## Speech output
+
+The preferred high-quality cloud speech output is **ElevenLabs**. Do not store an ElevenLabs API key in this repository. On Windows, provide the key through the supported `ELEVENLABS_API_KEY` environment variable or the credential mechanism supported by the installed speech version.
+
+The built-in **Kokoro** voice remains the fallback. ElevenLabs and Kokoro are speech-output engines only; neither may replace OmniRoute as the Jarvis brain.
 
 ## Reliability
 
 The voice setup must:
 
-1. Verify the ElevenLabs credential before completing setup.
-2. Select the requested Tarquin voice by looking it up in the ElevenLabs voice library rather than hard-coding an unknown voice ID.
-3. Perform an actual speech test before declaring voice setup complete.
-4. Keep the existing Kokoro voice configured as the automatic fallback so a temporary cloud failure does not make the assistant silent.
+1. Verify the ElevenLabs credential before completing setup when ElevenLabs is selected.
+2. Select the requested voice from the account's voice library rather than guessing or hard-coding a stale voice ID.
+3. Perform an actual speech test before declaring voice output successful.
+4. Keep Kokoro available as an automatic speech-output fallback.
 5. Never print the API key or write it into tracked files.
-6. Preserve the existing push-to-talk/open-listening mode selected during setup; orchestration speed improvements must not silently change microphone behavior.
+6. Preserve the always-listening wake-word mode selected by the Jarvis profile; push-to-talk is not the default Jarvis activation behavior.
 
-The fullstack-agent installer should read this file before configuring backtalk's voice. It should never claim the Jarvis voice is working until the real speech test succeeds.
+## Privacy and failure behavior
+
+- Wake detection is local-only.
+- No cloud request is created before wake acceptance.
+- Non-addressed transcripts must not be written to logs.
+- Microphone audio must not be written to logs.
+- If safe microphone capture or wake gating cannot be established, Jarvis remains silent.
+- Existing capability, permission, confirmation, and emergency-stop controls remain in force.
