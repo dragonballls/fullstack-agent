@@ -6,11 +6,17 @@ from quality_of_life.orchestration import RequestProfile
 from quality_of_life.permissions import Capability
 
 
+class FakeOperation:
+    def __init__(self, success=True, verified=True):
+        self.success = success
+        self.verified = verified
+
+
 class FakeResult:
-    def __init__(self, text="tool-result"):
+    def __init__(self, text="tool-result", results=None):
         self.message = text
         self.verified = True
-        self.results = ()
+        self.results = tuple(results or ())
 
 
 class FakeRouter:
@@ -83,7 +89,7 @@ class AgentOrchestratorTests(unittest.TestCase):
 
     def test_confirmed_maintenance_request_uses_guarded_runtime_action(self):
         router = FakeRouter()
-        runtime = FakeRuntime(FakeResult("repair verified"))
+        runtime = FakeRuntime(FakeResult("repair verified", [FakeOperation()]))
         result = AgentOrchestrator(router, runtime).execute("repair my PC", confirmed=True)
         self.assertTrue(runtime.dispatch_calls)
         self.assertEqual(runtime.dispatch_calls[-1][0], Capability.SYSTEM_MAINTENANCE)
