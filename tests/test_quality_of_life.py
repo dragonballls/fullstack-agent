@@ -55,6 +55,38 @@ class QualityOfLifeTests(unittest.TestCase):
             orchestrator.run(Capability.MOUSE_CONTROL, "click")
         self.assertFalse(called)
 
+    def test_mutation_requires_confirmation_and_executes_after_approval(self) -> None:
+        called = []
+
+        orchestrator = QoLOrchestrator(
+            CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL}))
+        )
+        orchestrator.register(Action(Capability.MOUSE_CONTROL, "click", lambda: called.append(True)))
+
+        with self.assertRaises(PermissionError):
+            orchestrator.run(Capability.MOUSE_CONTROL, "click")
+        self.assertEqual(called, [])
+
+        self.assertTrue(
+            orchestrator.run(
+                Capability.MOUSE_CONTROL,
+                "click",
+                confirmation=lambda capability, operation: capability == Capability.MOUSE_CONTROL and operation == "click",
+            )
+            is None
+        )
+        self.assertEqual(called, [True])
+
+    def test_confirmation_denial_prevents_execution(self) -> None:
+        called = []
+        orchestrator = QoLOrchestrator(
+            CapabilityPolicy(allowed=frozenset({Capability.APP_LAUNCH}))
+        )
+        orchestrator.register(Action(Capability.APP_LAUNCH, "launch", lambda: called.append(True)))
+        with self.assertRaises(PermissionError):
+            orchestrator.run(Capability.APP_LAUNCH, "launch", confirmation=lambda *_: False)
+        self.assertEqual(called, [])
+
     def test_fake_desktop_adapter_calls_pyautogui(self) -> None:
         policy = CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL, Capability.KEYBOARD_CONTROL, Capability.APP_LAUNCH}))
         fake = FakePyAutoGUI()
