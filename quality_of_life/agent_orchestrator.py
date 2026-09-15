@@ -61,9 +61,7 @@ class AgentOrchestrator:
         context = f"\n\nAuthoritative deterministic result:\n{deterministic_context}" if deterministic_context else ""
         return [
             (
-                self._messages(
-                    f"{task.prompt}\n\nUser request:\n{plan.primary.prompt}{context}\n\nReturn concise findings only; do not execute anything."
-                ),
+                self._messages(f"{task.prompt}\n\nUser request:\n{plan.primary.prompt}{context}\n\nReturn concise findings only; do not execute anything."),
                 task.profile,
             )
             for task in plan.parallel_tasks
@@ -166,7 +164,6 @@ class AgentOrchestrator:
         return "", False, [], False
 
     def _coding_context(self, text: str, confirmed: bool) -> tuple[str, bool]:
-        """Use the existing self-coding engine only after explicit confirmation."""
         if not confirmed:
             return "A repository-changing coding request requires confirmation before self-coding can run.", False
         result = self.runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal=text)
@@ -207,6 +204,8 @@ class AgentOrchestrator:
             coding_context, coding_verified = self._coding_context(text, confirmed)
             deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
             deterministic_verified = coding_verified
+            if not confirmed:
+                needs_confirmation = True
         if plan.parallel_tasks:
             specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
             parallel_completed = sum(1 for result in specialist_results if result.ok and result.text)
