@@ -3,6 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 
+from quality_of_life.orchestration import RequestProfile
 from quality_of_life.router import CloudModelRouter, ProviderTarget
 
 
@@ -75,6 +76,46 @@ class RouterTests(unittest.TestCase):
         finally:
             if old is not None:
                 os.environ["MISSING_KEY"] = old
+
+    def test_profile_model_defaults_to_omniroute_specialized_variants(self):
+        self.assertEqual(CloudModelRouter.profile_model(RequestProfile.FAST), "auto/fast")
+        self.assertEqual(CloudModelRouter.profile_model(RequestProfile.SMART), "auto/smart")
+        self.assertEqual(CloudModelRouter.profile_model(RequestProfile.CODING), "auto/coding")
+
+    def test_profile_model_can_be_overridden_without_changing_other_profiles(self):
+        old = os.environ.get("JARVIS_OMNIROUTE_FAST_MODEL")
+        os.environ["JARVIS_OMNIROUTE_FAST_MODEL"] = "auto/fast"
+        try:
+            self.assertEqual(CloudModelRouter.profile_model("fast"), "auto/fast")
+            self.assertEqual(CloudModelRouter.profile_model("coding"), "auto/coding")
+        finally:
+            if old is None:
+                os.environ.pop("JARVIS_OMNIROUTE_FAST_MODEL", None)
+            else:
+                os.environ["JARVIS_OMNIROUTE_FAST_MODEL"] = old
+
+    def test_parallel_completion_preserves_input_order(self):
+        router = CloudModelRouter((ProviderTarget("local", "http://127.0.0.1:20128/v1", "MISSING_KEY", "auto"),))
+
+        def fake_urlopen(request, timeout):
+            response = unittest.mock.Mock()
+            body = json.loads(request.data.decode())
+            content = body["messages"][0]["content"]
+            response.read.return_value = json.dumps({"choices": [{"message": {"content": content}}]}).encode()
+            response.__enter__ = lambda self: self
+            response.__exit__ = lambda self, exc_type, exc, tb: None
+            return response
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            results = router.complete_many(
+                [
+                    ([{"role": "user", "content": "first"}], RequestProfile.FAST),
+                    ([{"role": "user", "content": "second"}], RequestProfile.CODING),
+                ],
+                max_parallel=2,
+            )
+        self.assertEqual([result.text for result in results], ["first", "second"])
+        self.assertTrue(all(result.ok for result in results))
 
 
 if __name__ == "__main__":
