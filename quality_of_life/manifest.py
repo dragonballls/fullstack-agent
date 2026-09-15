@@ -47,6 +47,8 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("clipboard", "Bounded clipboard text read/write", "quality_of_life.clipboard.ClipboardController"))
     registry.register(ToolSpec("cloud_router", "Ordered cloud-provider failover", "quality_of_life.router.CloudModelRouter"))
     registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
+    registry.register(ToolSpec("hand_control", "Optional webcam hand tracking bridged to guarded computer input", "quality_of_life.hand_control.HandControlBridge"))
+    registry.register(ToolSpec("hand_control_server", "Loopback-only webcam hand-control bridge", "quality_of_life.hand_control_server.HandControlHandler"))
     registry.register(ToolSpec("files", "Guarded filesystem read and mutation operations", "quality_of_life.files.FileController"))
     registry.register(ToolSpec("gods_eye", "Location search, current-location context, routing, and in-app map state", "quality_of_life.gods_eye.GodsEye"))
     registry.register(ToolSpec("locations", "Persistent user-named locations backed by a local JSON store", "quality_of_life.location_memory.SavedLocationStore"))
