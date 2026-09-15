@@ -21,6 +21,16 @@ class Capability(str, Enum):
     BROWSER_CONTROL = "browser.control"
     REPO_READ = "repo.read"
     REPO_WRITE = "repo.write"
+    FILE_READ = "file.read"
+    FILE_WRITE = "file.write"
+    FILE_DELETE = "file.delete"
+    APP_READ = "app.read"
+    APP_WRITE = "app.write"
+    PROCESS_READ = "process.read"
+    PROCESS_CONTROL = "process.control"
+    SERVICE_READ = "service.read"
+    SERVICE_CONTROL = "service.control"
+    SYSTEM_SETTINGS = "system.settings"
     BACKGROUND_JOBS = "background.jobs"
     CLOUD_ROUTING = "cloud.routing"
     SYSTEM_DIAGNOSTICS = "system.diagnostics"
@@ -39,6 +49,12 @@ class CapabilityPolicy:
         Capability.APP_LAUNCH,
         Capability.BROWSER_CONTROL,
         Capability.REPO_WRITE,
+        Capability.FILE_WRITE,
+        Capability.FILE_DELETE,
+        Capability.APP_WRITE,
+        Capability.PROCESS_CONTROL,
+        Capability.SERVICE_CONTROL,
+        Capability.SYSTEM_SETTINGS,
         Capability.BACKGROUND_JOBS,
         Capability.SYSTEM_MAINTENANCE,
     })
