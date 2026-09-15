@@ -29,6 +29,24 @@ class ReadinessTests(unittest.TestCase):
         report = check_readiness(env=env, which=lambda _name: "available", importable=lambda _name: True)
         self.assertEqual(CheckStatus.FAIL, report.required_status)
 
+    def test_custom_omniroute_key_environment_is_recognized(self) -> None:
+        env = {
+            "JARVIS_OMNIROUTE_API_KEY_ENV": "MY_LOCAL_OMNI_KEY",
+            "MY_LOCAL_OMNI_KEY": "configured",
+        }
+        report = check_readiness(env=env, which=lambda _name: "available", importable=lambda _name: True)
+        self.assertEqual(CheckStatus.PASS, report.required_status)
+        self.assertIn("MY_LOCAL_OMNI_KEY", format_report(report))
+
+    def test_custom_cloud_key_environment_is_recognized(self) -> None:
+        env = {
+            "JARVIS_CLOUD_BASE_URL": "https://example.com/v1",
+            "JARVIS_CLOUD_API_KEY_ENV": "MY_CLOUD_KEY",
+            "MY_CLOUD_KEY": "configured",
+        }
+        report = check_readiness(env=env, which=lambda _name: "available", importable=lambda _name: True)
+        self.assertEqual(CheckStatus.PASS, report.required_status)
+
 
 if __name__ == "__main__":
     unittest.main()
