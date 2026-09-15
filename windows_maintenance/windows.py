@@ -63,8 +63,32 @@ def system_snapshot() -> dict[str, Any]:
 def process_list() -> list[dict[str, Any]]:
     if os.name != "nt":
         return []
-    script = "Get-Process | Select Id,ProcessName,Path,CPU,WorkingSet64,Responding,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress"
-    data = _ps(script)
+    # Sample CPU twice, then correlate network ownership and GPU engine counters by PID.
+    script = r"""
+$first = Get-Process | Select-Object Id,ProcessName,Path,CPU,WorkingSet64,Responding,MainWindowHandle,MainWindowTitle
+Start-Sleep -Milliseconds 500
+$second = Get-Process | Select-Object Id,ProcessName,Path,CPU,WorkingSet64,Responding,MainWindowHandle,MainWindowTitle
+$cpu = @{}
+foreach($p in $second){
+  $old = $first | Where-Object Id -eq $p.Id | Select-Object -First 1
+  if($old -and $p.CPU -ne $null -and $old.CPU -ne $null){ $cpu[[int]$p.Id] = [math]::Round([math]::Max(0,(([double]$p.CPU-[double]$old.CPU)/0.5)/[Environment]::ProcessorCount*100),2) }
+}
+$net = @{}
+Get-NetTCPConnection -ErrorAction SilentlyContinue | Group-Object OwningProcess | ForEach-Object { $net[[int]$_.Name] = $_.Count }
+$gpu = @{}
+try {
+  (Get-Counter '\GPU Engine(*)\Utilization Percentage' -ErrorAction Stop).CounterSamples | ForEach-Object {
+    if($_.InstanceName -match 'pid_(\d+)_'){ $pid=[int]$Matches[1]; if(-not $gpu.ContainsKey($pid)){$gpu[$pid]=0}; $gpu[$pid] += [double]$_.CookedValue }
+  }
+} catch {}
+$second | ForEach-Object {
+  $id=[int]$_.Id
+  [pscustomobject]@{
+    Id=$id; ProcessName=$_.ProcessName; Path=$_.Path; CPU=$_.CPU; CPUPercent=if($cpu.ContainsKey($id)){$cpu[$id]}else{0}; WorkingSet64=$_.WorkingSet64; Responding=$_.Responding; MainWindowHandle=$_.MainWindowHandle; MainWindowTitle=$_.MainWindowTitle; NetworkConnections=if($net.ContainsKey($id)){$net[$id]}else{0}; GPUPercent=if($gpu.ContainsKey($id)){$gpu[$id]}else{0}
+  }
+} | ConvertTo-Json -Compress
+"""
+    data = _ps(script, timeout=45)
     if data is None:
         return []
     return data if isinstance(data, list) else [data]
@@ -105,9 +129,7 @@ def disable_user_run_entry(name: str) -> dict[str, Any]:
     escaped = name.replace("'", "''")
     script = f"$key='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'; $p=Get-ItemProperty -Path $key -ErrorAction Stop; if(-not ($p.PSObject.Properties.Name -contains '{escaped}')){{throw 'startup entry not found'}}; $old=[string]$p.PSObject.Properties['{escaped}'].Value; Remove-ItemProperty -Path $key -Name '{escaped}' -ErrorAction Stop; [pscustomobject]@{{previous=$old;present=[bool](Get-ItemProperty -Path $key -Name '{escaped}' -ErrorAction SilentlyContinue)}} | ConvertTo-Json -Compress"
     value = _ps(script)
-    if not isinstance(value, dict):
-        raise RuntimeError("unexpected startup response")
-    if value.get("present"):
+    if not isinstance(value, dict) or value.get("present"):
         raise RuntimeError("startup entry was not removed")
     return value
 
