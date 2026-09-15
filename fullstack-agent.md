@@ -103,7 +103,7 @@ Before the first hello, read `JARVIS_VOICE.md` and `quality_of_life/README.md`. 
 
 For the voice, keep the person's engine choice. When ElevenLabs is selected, follow `JARVIS_VOICE.md`: use the supported credential mechanism, never print or commit the API key, look up the requested voice rather than guessing an ID, and require an actual speech test before declaring the voice successful. If the cloud voice fails temporarily, keep the documented fallback available rather than leaving the agent silent.
 
-For quality-of-life tools, read `quality_of_life/manifest.py` and expose the registered tools by name. The subsystem is optional and must remain isolated from the base stack. Start with `CapabilityPolicy()` defaults and explicitly enable capabilities only when the person has chosen them. Before any mutating action, call the policy/confirmation path; never bypass the check just because the action originated from an AI request.
+For quality-of-life tools, read `quality_of_life/manifest.py` and expose the registered tools by name. The subsystem is optional and must remain isolated from the base stack. Start with `CapabilityPolicy()` defaults and explicitly enable capabilities only when the person has chosen them. The policy is **deny-by-default**, and before any mutating action, call the policy/permission/confirmation path; never bypass the check just because the action originated from an AI request.
 
 The available tools are:
 
@@ -115,7 +115,9 @@ The available tools are:
 
 When connecting these tools to an agent action, use `QoLOrchestrator` so the capability check happens before the registered operation executes. Missing optional dependencies must produce an unavailable capability, not a crash of the whole installation.
 
-Also make the resulting HOME `CLAUDE.md` aware that `quality_of_life/` exists and that self-coding and computer-control are separate systems. Never grant a coding pass unrestricted computer-control capability merely because self-coding is enabled.
+Before using autonomous coding, read `self_coding/README.md`. Only the guarded self-coding runner may perform an autonomous coding pass; it must retain clean-tree, isolated-branch, verification, commit-after-success, and rollback behavior. Do not grant a self-coding pass unrestricted computer-control capability merely because both features are installed.
+
+Also make the resulting HOME `CLAUDE.md` aware that `quality_of_life/` exists and that self-coding and computer-control are separate systems.
 
 ## Phase 5: The first hello
 
