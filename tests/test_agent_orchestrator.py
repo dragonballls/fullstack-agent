@@ -26,8 +26,7 @@ class FakeRouter:
             self.active += 1
             self.max_active = max(self.max_active, self.active)
         try:
-            prompt = messages[-1]["content"]
-            return f"answer:{prompt}", "fake"
+            return f"answer:{messages[-1]['content']}", "fake"
         finally:
             with self.lock:
                 self.active -= 1
@@ -66,11 +65,11 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertEqual(len(router.calls), 3)
         self.assertTrue(result.verified)
 
-    def test_maintenance_diagnosis_uses_existing_guarded_runtime_action(self):
+    def test_maintenance_diagnosis_uses_existing_read_only_runtime_action(self):
         router = FakeRouter()
         runtime = FakeRuntime(FakeResult("real diagnostic report"))
         result = AgentOrchestrator(router, runtime).execute("diagnose my PC")
-        self.assertEqual(runtime.dispatch_calls[0][0], Capability.SYSTEM_MAINTENANCE)
+        self.assertEqual(runtime.dispatch_calls[0][0], Capability.SYSTEM_DIAGNOSTICS)
         self.assertEqual(runtime.dispatch_calls[0][1], "windows_maintenance.diagnose")
         self.assertIn("real diagnostic report", router.calls[-1][0][-1]["content"])
         self.assertTrue(result.verified)
@@ -89,6 +88,22 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertTrue(runtime.dispatch_calls)
         self.assertEqual(runtime.dispatch_calls[-1][0], Capability.SYSTEM_MAINTENANCE)
         self.assertEqual(runtime.dispatch_calls[-1][1], "windows_maintenance.handle")
+        self.assertTrue(result.verified)
+
+    def test_coding_handoff_requires_confirmation(self):
+        router = FakeRouter()
+        runtime = FakeRuntime(FakeResult("coding branch ready"))
+        result = AgentOrchestrator(router, runtime).execute("implement the fix and run the tests")
+        self.assertTrue(result.needs_confirmation)
+        self.assertEqual(runtime.dispatch_calls, [])
+
+    def test_confirmed_coding_handoff_uses_guarded_self_coding_action(self):
+        router = FakeRouter()
+        runtime = FakeRuntime(FakeResult("agent/self-code/verified"))
+        result = AgentOrchestrator(router, runtime).execute("implement the fix and run the tests", confirmed=True)
+        self.assertTrue(runtime.dispatch_calls)
+        self.assertEqual(runtime.dispatch_calls[-1][0], Capability.REPO_WRITE)
+        self.assertEqual(runtime.dispatch_calls[-1][1], "self_coding.run")
         self.assertTrue(result.verified)
 
     def test_stream_starts_with_local_ack_and_ends_with_result(self):
