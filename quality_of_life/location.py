@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -69,3 +70,44 @@ class SystemLocationProvider:
         if not isinstance(snapshot, LocationSnapshot):
             return LocationSnapshot(None, None, False, "invalid")
         return snapshot
+
+
+class IpLocationProvider:
+    """Best-effort approximate location from public-IP geolocation; opt-in only."""
+
+    def __init__(
+        self,
+        endpoint: str = "https://ipapi.co/json/",
+        fetch_json: Callable[[str], Any] | None = None,
+    ) -> None:
+        self.endpoint = endpoint
+        self._fetch_json = fetch_json or self._request_json
+
+    def current(self) -> LocationSnapshot:
+        if os.environ.get("JARVIS_ALLOW_IP_LOCATION") != "1":
+            return LocationSnapshot(None, None, False, "ip-location-disabled")
+        if not self.endpoint.startswith("https://"):
+            return LocationSnapshot(None, None, False, "invalid-endpoint")
+        try:
+            payload = self._fetch_json(self.endpoint)
+            point = GeoPoint(float(payload["latitude"]), float(payload["longitude"]))
+        except (KeyError, TypeError, ValueError, OSError, TimeoutError):
+            return LocationSnapshot(None, None, False, "unavailable")
+        return LocationSnapshot(point, 25000.0, True, "ip-geolocation")
+
+    @staticmethod
+    def _request_json(url: str) -> Any:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "fullstack-agent-gods-eye/1.0"}), timeout=5) as response:  # nosec B310: URL is explicitly HTTPS-validated
+            return json.load(response)
+
+
+class FallbackLocationProvider:
+    """Use the explicit system provider first, with optional approximate IP fallback."""
+
+    def __init__(self, primary: SystemLocationProvider, fallback: IpLocationProvider) -> None:
+        self.primary = primary
+        self.fallback = fallback
+
+    def current(self) -> LocationSnapshot:
+        snapshot = self.primary.current()
+        return snapshot if snapshot.permitted and snapshot.point is not None else self.fallback.current()
