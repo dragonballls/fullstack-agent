@@ -43,6 +43,8 @@ OPERATION_CATALOG: tuple[OperationSpec, ...] = (
     OperationSpec("files.move", Capability.FILE_WRITE, OperationRisk.MUTATE, "Move a file or directory"),
     OperationSpec("files.delete", Capability.FILE_DELETE, OperationRisk.DESTRUCTIVE, "Delete an explicitly selected path"),
     OperationSpec("applications.list", Capability.APP_READ, OperationRisk.READ, "List installed applications"),
+    OperationSpec("applications.install", Capability.APP_WRITE, OperationRisk.EXTERNAL, "Install a selected package through Windows package management"),
+    OperationSpec("applications.update", Capability.APP_WRITE, OperationRisk.EXTERNAL, "Update a selected package through Windows package management"),
     OperationSpec("applications.uninstall", Capability.APP_WRITE, OperationRisk.DESTRUCTIVE, "Uninstall a uniquely selected application"),
     OperationSpec("processes.list", Capability.PROCESS_READ, OperationRisk.READ, "Inspect running processes"),
     OperationSpec("processes.stop", Capability.PROCESS_CONTROL, OperationRisk.MUTATE, "Stop a selected process"),
