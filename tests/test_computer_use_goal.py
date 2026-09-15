@@ -7,9 +7,11 @@ class _FakeComputer:
     def __init__(self):
         self.actions = []
 
-    def execute(self, action):
-        self.actions.append(action)
-        return {"ok": True, "action": action.kind}
+    def click(self, button="left", clicks=1):
+        self.actions.append(ComputerUseAction("click", {"button": button, "clicks": clicks}))
+
+    def wait(self, seconds):
+        self.actions.append(ComputerUseAction("wait", {"seconds": seconds}))
 
 
 class _FakeObserver:
@@ -18,24 +20,26 @@ class _FakeObserver:
 
     def observe(self):
         self.calls += 1
-        return {"screen": "Roblox window visible", "focused_app": "Roblox"}
+        return {"screen": "application window visible"}
 
 
 class ComputerUseGoalTests(unittest.TestCase):
-    def test_goal_agent_executes_allowlisted_plan_and_reobserves(self):
+    def test_goal_agent_replans_and_reobserves_until_done(self):
         computer = _FakeComputer()
         observer = _FakeObserver()
-        agent = ComputerUseAgent(
-            planner=lambda goal, observation: [
-                ComputerUseAction("click", {"x": 100, "y": 200}),
-                ComputerUseAction("wait", {"seconds": 0.01}),
-            ],
-            computer=computer,
-            observer=observer,
-        )
+        calls = []
+
+        def planner(goal, observation):
+            calls.append(observation)
+            if len(calls) == 1:
+                return [ComputerUseAction("click", {"x": 100, "y": 200})]
+            return [ComputerUseAction("done", {})]
+
+        agent = ComputerUseAgent(planner, computer, observer, max_steps=3)
         result = agent.run("open the game shop")
         self.assertTrue(result.completed)
-        self.assertEqual([item.kind for item in computer.actions], ["click", "wait"])
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(computer.actions), 1)
         self.assertEqual(observer.calls, 2)
 
     def test_goal_agent_rejects_unknown_actions(self):
@@ -49,10 +53,11 @@ class ComputerUseGoalTests(unittest.TestCase):
 
     def test_goal_agent_bounds_steps(self):
         agent = ComputerUseAgent(
-            planner=lambda goal, observation: [ComputerUseAction("wait", {"seconds": 0})] * 11,
+            planner=lambda goal, observation: [ComputerUseAction("wait", {"seconds": 0})],
             computer=_FakeComputer(),
             observer=_FakeObserver(),
-            max_steps=10,
+            max_steps=2,
         )
-        with self.assertRaises(ValueError):
-            agent.run("do lots")
+        result = agent.run("keep going")
+        self.assertFalse(result.completed)
+        self.assertEqual(result.steps_executed, 2)
