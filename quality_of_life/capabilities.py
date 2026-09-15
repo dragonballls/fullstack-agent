@@ -54,6 +54,8 @@ OPERATION_CATALOG: tuple[OperationSpec, ...] = (
     OperationSpec("system.change_setting", Capability.SYSTEM_SETTINGS, OperationRisk.MUTATE, "Change a supported setting"),
     OperationSpec("background.start", Capability.BACKGROUND_JOBS, OperationRisk.MUTATE, "Start a bounded background job"),
     OperationSpec("background.cancel", Capability.BACKGROUND_JOBS, OperationRisk.MUTATE, "Cancel a background job"),
+    OperationSpec("accounts.list", Capability.ACCOUNT_READ, OperationRisk.READ, "List explicitly configured external account grants"),
+    OperationSpec("accounts.github_fork", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Create a GitHub fork through an authorized account"),
     OperationSpec("self_coding.run", Capability.REPO_WRITE, OperationRisk.EXTERNAL, "Run guarded repository coding"),
     OperationSpec("windows_maintenance.diagnose", Capability.SYSTEM_DIAGNOSTICS, OperationRisk.READ, "Diagnose Windows state"),
     OperationSpec("windows_maintenance.handle", Capability.SYSTEM_MAINTENANCE, OperationRisk.DESTRUCTIVE, "Perform a guarded Windows maintenance action"),
