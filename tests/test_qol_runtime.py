@@ -1,6 +1,7 @@
 import os
 import unittest
 
+from quality_of_life.account_access import AccountGrant, AccountProvider, AccountRisk, AccountScope
 from quality_of_life.gods_eye import GeoPoint, LocationSnapshot, Place
 from quality_of_life.permissions import Capability, CapabilityDenied, CapabilityPolicy
 from quality_of_life.runtime import JarvisRuntime
@@ -24,12 +25,33 @@ class FakeMaintenance:
         return {"diagnose": True}
 
 
+class FakeAccounts:
+    def __init__(self):
+        self.grants = (
+            AccountGrant(
+                AccountProvider.GITHUB,
+                "primary",
+                (AccountScope("repo.fork", "Create a fork", AccountRisk.WRITE),),
+            ),
+        )
+    def list_accounts(self):
+        return self.grants
+
+
+class FakeGitHubClient:
+    def __init__(self):
+        self.calls = []
+    def fork_repository(self, repository, **kwargs):
+        self.calls.append((repository, kwargs))
+        return {"full_name": "primary/example", "html_url": "https://github.com/primary/example", "clone_url": "https://github.com/primary/example.git"}
+
+
 class JarvisRuntimeTests(unittest.TestCase):
     def test_runtime_exposes_all_capability_tools_and_dispatches_gods_eye(self):
         policy = CapabilityPolicy(frozenset({Capability.LOCATION_READ}))
         runtime = JarvisRuntime(policy, factories={"gods_eye": lambda: FakeEye()})
         names = set(runtime.available_tools())
-        self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye", "windows_maintenance"} <= names)
+        self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye", "windows_maintenance", "account_access"} <= names)
         places = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.search", query="Tokyo")
         self.assertEqual(places[0].name, "Tokyo")
 
@@ -80,3 +102,28 @@ class JarvisRuntimeTests(unittest.TestCase):
         runtime = JarvisRuntime(policy, factories={"windows_maintenance": lambda: FakeMaintenance()})
         result = runtime.handle_text("repair my PC")
         self.assertEqual(result["result"]["confirmed"], False)
+
+    def test_account_read_is_reachable_without_write_confirmation(self):
+        policy = CapabilityPolicy(frozenset({Capability.ACCOUNT_READ}))
+        runtime = JarvisRuntime(policy, factories={"account_access": FakeAccounts})
+        result = runtime.dispatch(Capability.ACCOUNT_READ, "accounts.list")
+        self.assertEqual(result[0].provider, AccountProvider.GITHUB)
+
+    def test_account_fork_requires_capability_and_confirmation(self):
+        policy = CapabilityPolicy(frozenset({Capability.ACCOUNT_WRITE}))
+        accounts = FakeAccounts()
+        client = FakeGitHubClient()
+        runtime = JarvisRuntime(policy, factories={"account_access": lambda: accounts})
+        original = runtime._github_fork
+        runtime._github_fork = lambda repository, *, account_id="primary", organization=None: client.fork_repository(repository, account_id=account_id, organization=organization, access=accounts, confirmed=True)
+        with self.assertRaises(PermissionError):
+            runtime.dispatch(Capability.ACCOUNT_WRITE, "accounts.github_fork", "source/example")
+        runtime.confirmation = lambda capability, operation: True
+        result = runtime.dispatch(Capability.ACCOUNT_WRITE, "accounts.github_fork", "source/example")
+        self.assertEqual(result["full_name"], "primary/example")
+        self.assertEqual(client.calls[0][0], "source/example")
+        runtime._github_fork = original
+
+
+if __name__ == "__main__":
+    unittest.main()
