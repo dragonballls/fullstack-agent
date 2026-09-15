@@ -19,18 +19,26 @@ class FakeHandRuntime:
         return {"enabled": self.enabled, "url": self.url}
 
 
-def test_runtime_exposes_hand_control_start_stop(monkeypatch):
+def test_runtime_exposes_hand_control_start_stop():
     fake = FakeHandRuntime()
-    runtime = JarvisRuntime(CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL})), factories={"hand_control_runtime": lambda: fake})
+    runtime = JarvisRuntime(
+        CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL})),
+        confirmation=lambda *_: True,
+        factories={"hand_control_runtime": lambda: fake},
+    )
     assert runtime.dispatch(Capability.MOUSE_CONTROL, "hand_control.start") is True
     assert fake.enabled is True
     runtime.dispatch(Capability.MOUSE_CONTROL, "hand_control.stop")
     assert fake.enabled is False
 
 
-def test_text_commands_route_to_hand_control(monkeypatch):
+def test_text_commands_route_to_hand_control():
     fake = FakeHandRuntime()
-    runtime = JarvisRuntime(CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL})), factories={"hand_control_runtime": lambda: fake})
+    runtime = JarvisRuntime(
+        CapabilityPolicy(allowed=frozenset({Capability.MOUSE_CONTROL})),
+        confirmation=lambda *_: True,
+        factories={"hand_control_runtime": lambda: fake},
+    )
     intent = parse_intent("turn on hand control")
     assert intent.kind == "hand_control_start"
     result = runtime.handle_text("turn on hand control")
