@@ -9,6 +9,8 @@ from typing import Any
 
 from .background import BackgroundJobs
 from .gods_eye import GodsEye, Place
+from .gods_eye_launcher import GodsEyeLauncher
+from .intents import Intent, parse_intent
 from .location import FallbackLocationProvider, IpLocationProvider, NominatimGeocoder, SystemLocationProvider
 from .manifest import default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
@@ -24,12 +26,14 @@ class JarvisRuntime:
         policy: CapabilityPolicy,
         confirmation: ConfirmationHook | None = None,
         factories: dict[str, Callable[[], Any]] | None = None,
+        gods_eye_launcher: GodsEyeLauncher | None = None,
     ) -> None:
         self.policy = policy
         self.confirmation = confirmation
         self.registry = default_registry()
         self._factories = dict(factories or {})
         self._instances: dict[str, Any] = {}
+        self.gods_eye_launcher = gods_eye_launcher or GodsEyeLauncher()
         self.orchestrator = QoLOrchestrator(policy)
         self._register_actions()
 
@@ -109,3 +113,22 @@ class JarvisRuntime:
 
     def dispatch(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
         return self.orchestrator.run(capability, operation, *args, confirmation=self.confirmation, **kwargs)
+
+    def handle_text(self, text: str) -> Any:
+        """Turn a conservative spoken/text intent into the appropriate guarded operation."""
+        intent: Intent = parse_intent(text)
+        if intent.kind == "place_search":
+            query = str(intent.arguments["query"])
+            result = self.dispatch(Capability.LOCATION_READ, "gods_eye.open_place", query=query)
+            self.gods_eye_launcher.launch_query(query)
+            return {"intent": intent, "result": result, "opened": True}
+        if intent.kind == "locate_me":
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_READ, "gods_eye.locate_me")}
+        if intent.kind == "route":
+            query = str(intent.arguments["query"])
+            return {"intent": intent, "result": self.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query=query)}
+        if intent.kind == "screen_read":
+            return {"intent": intent, "result": self.dispatch(Capability.SCREEN_READ, "screen.capture")}
+        if intent.kind == "computer_action":
+            return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "computer.move", x=intent.arguments["x"], y=intent.arguments["y"])}
+        return intent
