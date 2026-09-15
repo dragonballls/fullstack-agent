@@ -132,6 +132,16 @@ class CloudModelRouter:
         """Build the default OmniRoute target."""
         return ProviderTarget("omniroute", cls.omniroute_base_url(), cls.omniroute_api_key_env(), model or cls.omniroute_model())
 
+    @classmethod
+    def jarvis_brain_target(cls, profile: RequestProfile | str = RequestProfile.SMART) -> ProviderTarget:
+        """Return the only supported Jarvis conversational brain target."""
+        from .voice_activation import VoiceActivationConfig
+
+        config = VoiceActivationConfig.from_env()
+        if config.brain != "omniroute" or not config.require_omniroute or config.allow_claude:
+            raise RuntimeError("Jarvis brain policy requires OmniRoute and does not permit Claude")
+        return cls.omniroute_target(cls.profile_model(profile))
+
     @staticmethod
     def prepare_messages(messages: list[dict[str, str]], system_prompt: str | None = None) -> list[dict[str, str]]:
         """Return a copy of messages with an optional system prompt merged in."""
@@ -259,48 +269,20 @@ class CloudModelRouter:
     def complete_profiled(self, messages: list[dict[str, str]], profile: RequestProfile | str) -> tuple[str, str]:
         """Complete a profiled request using latency-aware target ordering."""
         selected = RequestProfile(profile)
-        targets = tuple(ProviderTarget(target.name, target.base_url, target.api_key_env, self.profile_model(selected), target.timeout_seconds) for target in self.targets)
-        errors: list[str] = []
-        for target in self._ordered_targets(targets):
-            result = self.try_target(target, messages)
-            if result.ok and result.text is not None:
-                return result.text, result.target_name
-            if result.error:
-                errors.append(result.error)
-        raise RuntimeError("All configured cloud targets failed: " + " | ".join(errors))
+        model = self.profile_model(selected)
+        targets = tuple(target for target in self.targets if target.model == model or target.name == "omniroute")
+        if not targets:
+            targets = (self.omniroute_target(model),)
+        return CloudModelRouter(targets).complete(messages)
 
-    def complete_many(
-        self,
-        requests: Sequence[tuple[list[dict[str, str]], RequestProfile | str]],
-        max_parallel: int | None = None,
-    ) -> tuple[ProviderResult, ...]:
-        """Run independent model requests concurrently with a bounded worker pool."""
-        if not requests:
-            return ()
-        if max_parallel is None:
-            try:
-                max_parallel = int(os.environ.get("JARVIS_OMNIROUTE_MAX_PARALLEL", "4"))
-            except ValueError:
-                max_parallel = 4
-        worker_count = max(1, min(max_parallel, len(requests), 8))
-
-        def run_one(item: tuple[list[dict[str, str]], RequestProfile | str]) -> ProviderResult:
-            messages, profile = item
-            selected = RequestProfile(profile)
-            targets = tuple(ProviderTarget(target.name, target.base_url, target.api_key_env, self.profile_model(selected), target.timeout_seconds) for target in self.targets)
-            failures: list[str] = []
-            started = time.monotonic()
-            for target in self._ordered_targets(targets):
-                result = self.try_target(target, messages)
-                if result.ok and result.text is not None:
-                    return result
-                if result.error:
-                    failures.append(result.error)
-            return ProviderResult(False, None, targets[0].name, int((time.monotonic() - started) * 1000), " | ".join(failures))
-
-        results: list[ProviderResult | None] = [None] * len(requests)
-        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="jarvis-ai") as executor:
-            futures = {executor.submit(run_one, item): index for index, item in enumerate(requests)}
-            for future in as_completed(futures):
-                results[futures[future]] = future.result()
-        return tuple(result for result in results if result is not None)
+    def complete_parallel(self, messages: list[dict[str, str]], max_parallel: int = 4) -> tuple[ProviderResult, ...]:
+        """Query healthy targets in bounded parallelism for specialist fan-out."""
+        if max_parallel <= 0:
+            raise ValueError("max_parallel must be positive")
+        targets = [target for target in self._ordered_targets(self.targets) if not self._cooldown_active(target)]
+        if not targets:
+            raise RuntimeError("All configured cloud targets are cooling down")
+        workers = min(max_parallel, len(targets))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(self.try_target, target, messages) for target in targets]
+            return tuple(future.result() for future in as_completed(futures))
