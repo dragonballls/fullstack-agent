@@ -270,10 +270,7 @@ class CloudModelRouter:
         """Complete a profiled request using latency-aware target ordering."""
         selected = RequestProfile(profile)
         model = self.profile_model(selected)
-        targets = tuple(target for target in self.targets if target.model == model or target.name == "omniroute")
-        if not targets:
-            targets = (self.omniroute_target(model),)
-        return CloudModelRouter(targets).complete(messages)
+        return self.complete([ProviderTarget(target.name, target.base_url, target.api_key_env, model, target.timeout_seconds) for target in self.targets]) if self.targets else self.complete([self.omniroute_target(model)])
 
     def complete_parallel(self, messages: list[dict[str, str]], max_parallel: int = 4) -> tuple[ProviderResult, ...]:
         """Query healthy targets in bounded parallelism for specialist fan-out."""
