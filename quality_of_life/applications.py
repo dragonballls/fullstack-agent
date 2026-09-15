@@ -1,8 +1,9 @@
-"""Windows installed-application inventory and guarded uninstall support."""
+"""Windows installed-application inventory and guarded install/update/uninstall support."""
 
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 import time
@@ -27,10 +28,13 @@ class InstalledApplication:
 
 
 class ApplicationManager:
-    def __init__(self, policy: CapabilityPolicy, provider: Callable[[], Iterable[InstalledApplication]] | None = None, launcher: Callable[[list[str]], Any] | None = None) -> None:
+    _PACKAGE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+    def __init__(self, policy: CapabilityPolicy, provider: Callable[[], Iterable[InstalledApplication]] | None = None, launcher: Callable[[list[str]], Any] | None = None, runner: Callable[..., subprocess.CompletedProcess[str]] | None = None) -> None:
         self.policy = policy
         self.provider = provider or self._registry_inventory
         self._launcher = launcher or (lambda command: subprocess.Popen(command, shell=False))
+        self._runner = runner or subprocess.run
 
     @staticmethod
     def _registry_inventory() -> tuple[InstalledApplication, ...]:
@@ -80,6 +84,35 @@ class ApplicationManager:
         if len(matches) != 1:
             raise ApplicationError("Application selection is ambiguous or unavailable")
         return matches[0]
+
+    @classmethod
+    def _validate_package_id(cls, package_id: str) -> str:
+        value = package_id.strip()
+        if not cls._PACKAGE_ID.fullmatch(value):
+            raise ApplicationError("Invalid package id")
+        return value
+
+    def _winget(self, action: str, package_id: str) -> bool:
+        package_id = self._validate_package_id(package_id)
+        result = self._runner(["winget", action, "--id", package_id, "--exact", "--accept-source-agreements", "--accept-package-agreements"], capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise ApplicationError(f"winget {action} failed")
+        verify = self._runner(["winget", "list", "--id", package_id, "--exact"], capture_output=True, text=True, check=False)
+        if action == "uninstall":
+            return verify.returncode != 0 or package_id.casefold() not in verify.stdout.casefold()
+        return verify.returncode == 0 and package_id.casefold() in verify.stdout.casefold()
+
+    def install(self, package_id: str, confirmed: bool = False) -> bool:
+        self.policy.check(Capability.APP_WRITE)
+        if not confirmed:
+            raise PermissionError("Confirmation is required before installing software")
+        return self._winget("install", package_id)
+
+    def update(self, package_id: str, confirmed: bool = False) -> bool:
+        self.policy.check(Capability.APP_WRITE)
+        if not confirmed:
+            raise PermissionError("Confirmation is required before updating software")
+        return self._winget("upgrade", package_id)
 
     @staticmethod
     def _safe_uninstaller(app: InstalledApplication) -> list[str]:
