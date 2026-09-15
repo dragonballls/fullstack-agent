@@ -3,6 +3,14 @@ import unittest
 
 from quality_of_life.agent_orchestrator import AgentOrchestrator
 from quality_of_life.orchestration import RequestProfile
+from quality_of_life.permissions import Capability
+
+
+class FakeResult:
+    def __init__(self, text="tool-result"):
+        self.message = text
+        self.verified = True
+        self.results = ()
 
 
 class FakeRouter:
@@ -33,8 +41,13 @@ class FakeRouter:
 
 
 class FakeRuntime:
-    def __init__(self):
-        self.mutating_calls = 0
+    def __init__(self, execute_result=None):
+        self.execute_result = execute_result
+        self.dispatch_calls = []
+
+    def dispatch(self, capability, operation, *args, **kwargs):
+        self.dispatch_calls.append((capability, operation, args, kwargs))
+        return self.execute_result or FakeResult()
 
 
 class AgentOrchestratorTests(unittest.TestCase):
@@ -53,12 +66,30 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertEqual(len(router.calls), 3)
         self.assertTrue(result.verified)
 
-    def test_mutating_request_is_not_executed_by_model_layer(self):
+    def test_maintenance_diagnosis_uses_existing_guarded_runtime_action(self):
+        router = FakeRouter()
+        runtime = FakeRuntime(FakeResult("real diagnostic report"))
+        result = AgentOrchestrator(router, runtime).execute("diagnose my PC")
+        self.assertEqual(runtime.dispatch_calls[0][0], Capability.SYSTEM_MAINTENANCE)
+        self.assertEqual(runtime.dispatch_calls[0][1], "windows_maintenance.diagnose")
+        self.assertIn("real diagnostic report", router.calls[-1][0][-1]["content"])
+        self.assertTrue(result.verified)
+
+    def test_mutating_request_is_not_executed_without_confirmation(self):
         router = FakeRouter()
         runtime = FakeRuntime()
-        result = AgentOrchestrator(router, runtime).execute("close this application")
+        result = AgentOrchestrator(router, runtime).execute("repair my PC")
         self.assertTrue(result.needs_confirmation)
-        self.assertEqual(runtime.mutating_calls, 0)
+        self.assertEqual(runtime.dispatch_calls, [])
+
+    def test_confirmed_maintenance_request_uses_guarded_runtime_action(self):
+        router = FakeRouter()
+        runtime = FakeRuntime(FakeResult("repair verified"))
+        result = AgentOrchestrator(router, runtime).execute("repair my PC", confirmed=True)
+        self.assertTrue(runtime.dispatch_calls)
+        self.assertEqual(runtime.dispatch_calls[-1][0], Capability.SYSTEM_MAINTENANCE)
+        self.assertEqual(runtime.dispatch_calls[-1][1], "windows_maintenance.handle")
+        self.assertTrue(result.verified)
 
     def test_stream_starts_with_local_ack_and_ends_with_result(self):
         events = list(AgentOrchestrator(FakeRouter(), FakeRuntime()).execute_stream("diagnose my PC"))
