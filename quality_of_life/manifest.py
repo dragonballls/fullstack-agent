@@ -46,6 +46,7 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
     registry.register(ToolSpec("gods_eye", "Location search, current-location context, routing, and in-app map state", "quality_of_life.gods_eye.GodsEye"))
     registry.register(ToolSpec("screen", "Screen capture for computer-aware reasoning", "quality_of_life.screen.ScreenCapture"))
+    registry.register(ToolSpec("self_coding", "Guarded autonomous repository coding with verification and rollback", "self_coding.agent.SelfCodingAgent"))
     registry.register(ToolSpec("windows", "Windows window enumeration and management", "quality_of_life.windows.WindowsController"))
     registry.register(ToolSpec("windows_maintenance", "Guarded Windows PC diagnostics, background-process cleanup, startup management, and confirmed repairs", "windows_maintenance.facade.MaintenanceFacade"))
     return registry
