@@ -221,7 +221,9 @@ class AgentOrchestrator:
                     if not snapshot.permitted or snapshot.point is None:
                         return "Current location is unavailable; enable location access before routing.", False, [], False
                     eye = self.runtime._tool("gods_eye")
-                    return str(eye.route(snapshot.point, saved)), True, [], False
+                    from .gods_eye import Place
+                    destination = Place(saved.name, saved.point, None, saved.source)
+                    return str(eye.route(snapshot.point, destination)), True, [], False
             result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query=query)
             return str(result), True, [], False
         if intent.kind == "computer_action":
