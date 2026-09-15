@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -12,6 +13,7 @@ from .location import NominatimGeocoder, SystemLocationProvider
 from .manifest import default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
 from .permissions import Capability, CapabilityPolicy
+from .router import CloudModelRouter, ProviderTarget
 
 
 class JarvisRuntime:
@@ -38,14 +40,20 @@ class JarvisRuntime:
         if name in self._factories:
             return self._factories[name]
         spec = self.registry.get(name)
-        module_name, attribute = spec.factory.rsplit(".", 1)
-        target = getattr(importlib.import_module(module_name), attribute)
+        target = spec.resolve()
         if name in {"computer", "screen", "browser", "clipboard", "windows"}:
             return lambda: target(self.policy)
         if name == "gods_eye":
             return lambda: GodsEye(NominatimGeocoder(), SystemLocationProvider())
         if name == "background":
             return lambda: BackgroundJobs()
+        if name == "cloud_router":
+            base_url = os.environ.get("JARVIS_CLOUD_BASE_URL")
+            key_env = os.environ.get("JARVIS_CLOUD_API_KEY_ENV", "OPENAI_API_KEY")
+            model = os.environ.get("JARVIS_CLOUD_MODEL")
+            if not (base_url and model):
+                raise RuntimeError("cloud router is not configured; set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
+            return lambda: CloudModelRouter((ProviderTarget("primary", base_url, key_env, model),))
         raise RuntimeError(f"No runtime factory is configured for: {name}")
 
     def _tool(self, name: str) -> Any:
@@ -69,6 +77,10 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.maximize", lambda identifier: self._tool("windows").maximize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.close", lambda identifier: self._tool("windows").close_window(identifier)))
         self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.open_url", lambda url: self._tool("browser").open_url(url)))
+        self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.start", lambda name, task: self._tool("background").start(name, task)))
+        self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.cancel", lambda name: self._tool("background").cancel(name)))
+        self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "background.active", lambda: self._tool("background").active()))
+        self.orchestrator.register(Action(Capability.CLOUD_ROUTING, "cloud_router.complete", lambda messages: self._tool("cloud_router").complete(messages)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.search", lambda query: self._tool("gods_eye").search(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.open_place", lambda query: self._open_place(query)))
