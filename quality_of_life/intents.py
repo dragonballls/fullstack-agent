@@ -15,6 +15,9 @@ class Intent:
 _PLACE = re.compile(r"^(?:open|show(?: me)?|find)\s+(.+)$", re.IGNORECASE)
 _ROUTE = re.compile(r"^(?:take|navigate|route)\s+(?:me\s+)?to\s+(.+)$", re.IGNORECASE)
 _MOVE = re.compile(r"^move mouse to\s+(-?\d+)\s+(-?\d+)$", re.IGNORECASE)
+_BROWSER = re.compile(r"^(?:open|use|launch)\s+(edge|microsoft edge|ms edge|chrome|google chrome|firefox|mozilla firefox|opera|opera gx|operagx|brave|brave browser|vivaldi)(?:\s+(?:and\s+)?(?:go to|open)\s+(https?://\S+))?$", re.IGNORECASE)
+_FILE_DELETE = re.compile(r"^(?:delete|remove)\s+(?:file\s+)?(.+)$", re.IGNORECASE)
+_APP_UNINSTALL = re.compile(r"^(?:uninstall)\s+(?:the\s+)?(?:program|application|app)?\s*(.+)$", re.IGNORECASE)
 _MAINTENANCE = re.compile(r"^(?:diagnose|check|repair|fix|optimize|clean up|stop|prevent|disable).*(?:pc|computer|windows|steam|startup|background|cpu|ram|gpu|network|system files)", re.IGNORECASE)
 
 
@@ -28,8 +31,25 @@ def parse_intent(text: str) -> Intent:
     match = _MOVE.match(value)
     if match:
         return Intent("computer_action", {"operation": "move", "x": int(match.group(1)), "y": int(match.group(2))})
+    match = _BROWSER.match(value)
+    if match:
+        return Intent("browser_open", {"browser": match.group(1), "url": match.group(2)})
     if _MAINTENANCE.match(value):
         return Intent("windows_maintenance", {"request": value})
+    match = _FILE_DELETE.match(value)
+    if match:
+        return Intent("file_delete", {"path": match.group(1).strip()})
+    match = _APP_UNINSTALL.match(value)
+    if match:
+        return Intent("application_uninstall", {"name": match.group(1).strip()})
+    if lowered in {"list installed programs", "show installed programs", "what programs are installed"}:
+        return Intent("application_list", {})
+    if lowered in {"list processes", "show running processes", "what is running"}:
+        return Intent("process_list", {})
+    if lowered in {"system info", "system information", "check my system"}:
+        return Intent("system_inspect", {})
+    if lowered.startswith("read file "):
+        return Intent("file_read", {"path": value.split(None, 2)[2].strip()})
     match = _ROUTE.match(value)
     if match:
         return Intent("route", {"query": match.group(1).strip()})
