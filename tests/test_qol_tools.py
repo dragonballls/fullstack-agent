@@ -57,6 +57,7 @@ class QoLToolsTests(unittest.TestCase):
     def test_windows_controller_rejects_unknown_handle(self):
         class User32:
             def IsWindow(self, _hwnd): return False
+            def SetForegroundWindow(self, _hwnd): raise AssertionError("unknown handles must be rejected first")
         with patch("quality_of_life.windows.platform.system", return_value="Windows"):
             controller = WindowsController(policy(Capability.WINDOW_CONTROL), user32=User32())
         with self.assertRaises(LookupError):
