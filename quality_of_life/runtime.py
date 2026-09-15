@@ -28,6 +28,7 @@ class JarvisRuntime:
         factories: dict[str, Callable[[], Any]] | None = None,
         gods_eye_launcher: GodsEyeLauncher | None = None,
     ) -> None:
+        """Initialize policy, lazy factories, God’s Eye, and the guarded action registry."""
         self.policy = policy
         self.confirmation = confirmation
         self.registry = default_registry()
@@ -38,9 +39,11 @@ class JarvisRuntime:
         self._register_actions()
 
     def available_tools(self) -> tuple[str, ...]:
+        """Return the names of tools exposed by the runtime registry."""
         return self.registry.names()
 
     def _factory_from_spec(self, name: str) -> Callable[[], Any]:
+        """Resolve a tool name into a lazy factory while preserving security policy boundaries."""
         if name in self._factories:
             return self._factories[name]
         spec = self.registry.get(name)
@@ -55,20 +58,30 @@ class JarvisRuntime:
         if name == "background":
             return lambda: BackgroundJobs()
         if name == "cloud_router":
-            base_url = os.environ.get("JARVIS_CLOUD_BASE_URL")
-            key_env = os.environ.get("JARVIS_CLOUD_API_KEY_ENV", "OPENAI_API_KEY")
-            model = os.environ.get("JARVIS_CLOUD_MODEL")
-            if not (base_url and model):
-                raise RuntimeError("cloud router is not configured; set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
-            return lambda: CloudModelRouter((ProviderTarget("primary", base_url, key_env, model),))
+            explicit_base_url = os.environ.get("JARVIS_CLOUD_BASE_URL")
+            if explicit_base_url:
+                key_env = os.environ.get("JARVIS_CLOUD_API_KEY_ENV", "OPENAI_API_KEY")
+                model = os.environ.get("JARVIS_CLOUD_MODEL")
+                if not model:
+                    raise RuntimeError("cloud router is not configured; set JARVIS_CLOUD_MODEL")
+                target_config = ProviderTarget("primary", explicit_base_url, key_env, model)
+            elif os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}:
+                target_config = CloudModelRouter.omniroute_target()
+            else:
+                raise RuntimeError(
+                    "cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL"
+                )
+            return lambda: CloudModelRouter((target_config,))
         raise RuntimeError(f"No runtime factory is configured for: {name}")
 
     def _tool(self, name: str) -> Any:
+        """Return a cached tool instance, constructing it lazily on first use."""
         if name not in self._instances:
             self._instances[name] = self._factory_from_spec(name)()
         return self._instances[name]
 
     def _register_actions(self) -> None:
+        """Register all capability-gated runtime operations with the orchestrator."""
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.move", lambda x, y: self._tool("computer").move(x, y)))
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.click", lambda button="left", clicks=1: self._tool("computer").click(button, clicks)))
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.scroll", lambda amount: self._tool("computer").scroll(amount)))
@@ -94,6 +107,7 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.route_to", lambda query: self._route_to(query)))
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
+        """Resolve the first God’s Eye place matching a user query."""
         eye = self._tool("gods_eye")
         places = eye.search(query)
         if not places:
@@ -101,10 +115,12 @@ class JarvisRuntime:
         return eye, places[0]
 
     def _open_place(self, query: str) -> dict[str, object]:
+        """Resolve a place and return the God’s Eye representation for it."""
         eye, place = self._first_place(query)
         return eye.open_place(place)
 
     def _route_to(self, query: str) -> dict[str, object]:
+        """Resolve a destination and generate a route from the permitted current location."""
         eye, place = self._first_place(query)
         snapshot = eye.locate_me()
         if not snapshot.permitted or snapshot.point is None:
@@ -112,6 +128,7 @@ class JarvisRuntime:
         return eye.route(snapshot.point, place)
 
     def dispatch(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
+        """Run one registered operation through capability and confirmation checks."""
         return self.orchestrator.run(capability, operation, *args, confirmation=self.confirmation, **kwargs)
 
     def handle_text(self, text: str) -> Any:
