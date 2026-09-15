@@ -1,6 +1,7 @@
 import unittest
 
 from quality_of_life.gods_eye import GeoPoint, LocationSnapshot, Place
+from quality_of_life.gods_eye_launcher import GodsEyeLauncher
 from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.runtime import JarvisRuntime
 
@@ -55,14 +56,21 @@ class FakeEye:
     def route(self, origin, destination): return {"origin": origin.as_dict(), "destination": destination.point.as_dict()}
 
 
+class FakeLauncher:
+    def __init__(self): self.queries = []
+    def launch_query(self, query): self.queries.append(query)
+
+
 class QoLRuntimeIntegrationTests(unittest.TestCase):
     def setUp(self):
         allowed = frozenset(Capability)
         self.policy = CapabilityPolicy(allowed=allowed)
         self.confirm = lambda *_: True
+        self.launcher = FakeLauncher()
         self.runtime = JarvisRuntime(
             self.policy,
             confirmation=self.confirm,
+            gods_eye_launcher=self.launcher,
             factories={
                 "computer": FakeComputer,
                 "screen": FakeScreen,
@@ -85,3 +93,19 @@ class QoLRuntimeIntegrationTests(unittest.TestCase):
         self.assertEqual(self.runtime.dispatch(Capability.CLOUD_ROUTING, "cloud_router.complete", messages=[]), ("ok", "fake"))
         self.assertEqual(self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.open_place", query="Tokyo")["surface"], "gods-eye")
         self.assertEqual(self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query="Tokyo")["origin"], {"latitude": 34.1, "longitude": -117.7})
+
+    def test_spoken_location_intent_opens_gods_eye(self):
+        result = self.runtime.handle_text("open Tokyo")
+        self.assertTrue(result["opened"])
+        self.assertEqual(self.launcher.queries, ["Tokyo"])
+        self.assertEqual(result["result"]["surface"], "gods-eye")
+
+
+class GodsEyeLauncherTests(unittest.TestCase):
+    def test_launcher_uses_python_module_without_shell(self):
+        calls = []
+        launcher = GodsEyeLauncher(popen=lambda *args, **kwargs: calls.append((args, kwargs)))
+        launcher.launch_query("Tokyo")
+        self.assertEqual(calls[0][0][0][1:4], ("-m", "quality_of_life.gods_eye_window", "--query"))
+        self.assertEqual(calls[0][0][0][4], "Tokyo")
+        self.assertFalse(calls[0][1]["shell"])
