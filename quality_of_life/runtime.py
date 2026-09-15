@@ -41,6 +41,8 @@ class JarvisRuntime:
             return self._factories[name]
         spec = self.registry.get(name)
         target = spec.resolve()
+        if name == "account_access":
+            return lambda: target.from_environment()
         if name in {"computer", "screen", "browser", "clipboard", "windows"}:
             return lambda: target(self.policy)
         if name == "browser_registry":
@@ -155,6 +157,8 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "scheduler.cancel", lambda name: self._tool("scheduler").cancel(name)))
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "scheduler.active", lambda: self._tool("scheduler").active()))
         self.orchestrator.register(Action(Capability.CLOUD_ROUTING, "cloud_router.complete", lambda messages: self._tool("cloud_router").complete(messages)))
+        self.orchestrator.register(Action(Capability.ACCOUNT_READ, "accounts.list", lambda: self._tool("account_access").list_accounts()))
+        self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.github_fork", lambda repository, account_id="primary", organization=None: self._github_fork(repository, account_id=account_id, organization=organization)))
         self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.run", lambda goal: self._tool("self_coding").run(goal)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.search", lambda query: self._tool("gods_eye").search(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
@@ -162,6 +166,16 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.route_to", lambda query: self._route_to(query)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
         self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", lambda request, confirmed=False: self._tool("windows_maintenance").handle(request, confirmed=confirmed)))
+
+    def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> dict[str, str]:
+        from .account_access import GitHubRepositoryClient
+        return GitHubRepositoryClient().fork_repository(
+            repository,
+            account_id=account_id,
+            access=self._tool("account_access"),
+            confirmed=True,
+            organization=organization,
+        )
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
         eye = self._tool("gods_eye")
