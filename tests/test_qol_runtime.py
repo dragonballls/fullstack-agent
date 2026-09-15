@@ -27,6 +27,7 @@ class JarvisRuntimeTests(unittest.TestCase):
         self.assertEqual(places[0].name, "Tokyo")
 
     def test_runtime_defaults_cloud_router_to_omniroute(self):
+        """Use the local OmniRoute target when explicit cloud routing is absent."""
         old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED")}
         try:
             for name in old:

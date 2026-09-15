@@ -33,11 +33,13 @@ class RouterTests(unittest.TestCase):
         self.assertEqual([target.name for target in router.targets], ["first", "second"])
 
     def test_omniroute_defaults_are_explicit_and_openai_compatible(self):
+        """Expose stable OpenAI-compatible defaults for the OmniRoute gateway."""
         self.assertEqual(CloudModelRouter.omniroute_base_url(), "http://127.0.0.1:20128/v1")
         self.assertEqual(CloudModelRouter.omniroute_model(), "auto")
         self.assertEqual(CloudModelRouter.omniroute_api_key_env(), "OMNIROUTE_API_KEY")
 
     def test_custom_system_prompt_is_injected_once_without_overwriting_existing_system_message(self):
+        """Append the Jarvis prompt without replacing an existing system message."""
         router = CloudModelRouter((ProviderTarget("test", "https://example.invalid", "TEST_KEY", "m1"),))
         messages = [{"role": "system", "content": "base"}, {"role": "user", "content": "hi"}]
         result = router.prepare_messages(messages, "jarvis rules")
@@ -50,16 +52,19 @@ class RouterTests(unittest.TestCase):
         )
 
     def test_provider_target_rejects_insecure_remote_http(self):
+        """Reject cleartext HTTP for provider targets outside the loopback interface."""
         with self.assertRaisesRegex(ValueError, "HTTPS is required for non-loopback cloud targets"):
             ProviderTarget("remote", "http://example.com/v1", "KEY", "m1")
 
     def test_provider_target_rejects_invalid_configuration(self):
+        """Reject malformed provider URLs and empty model names."""
         with self.assertRaisesRegex(ValueError, "base_url must be an absolute HTTP\(S\) URL"):
             ProviderTarget("bad-url", "not-a-url", "KEY", "m1")
         with self.assertRaisesRegex(ValueError, "model must be non-empty"):
             ProviderTarget("bad-model", "https://example.com/v1", "KEY", " ")
 
     def test_local_omniroute_allows_missing_key_without_sending_auth_header(self):
+        """Allow keyless loopback requests without adding an authorization header."""
         router = CloudModelRouter((ProviderTarget("local", "http://127.0.0.1:20128/v1", "MISSING_KEY", "auto"),))
         old = os.environ.pop("MISSING_KEY", None)
         response = unittest.mock.Mock()

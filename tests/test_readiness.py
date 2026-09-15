@@ -30,6 +30,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(CheckStatus.FAIL, report.required_status)
 
     def test_custom_omniroute_key_environment_is_recognized(self) -> None:
+        """Recognize a credential variable selected by the OmniRoute configuration."""
         env = {
             "JARVIS_OMNIROUTE_API_KEY_ENV": "MY_LOCAL_OMNI_KEY",
             "MY_LOCAL_OMNI_KEY": "configured",
@@ -39,6 +40,7 @@ class ReadinessTests(unittest.TestCase):
         self.assertIn("MY_LOCAL_OMNI_KEY", format_report(report))
 
     def test_custom_cloud_key_environment_is_recognized(self) -> None:
+        """Recognize a credential variable selected by explicit cloud configuration."""
         env = {
             "JARVIS_CLOUD_BASE_URL": "https://example.com/v1",
             "JARVIS_CLOUD_API_KEY_ENV": "MY_CLOUD_KEY",
