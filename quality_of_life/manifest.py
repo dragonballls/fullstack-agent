@@ -39,14 +39,20 @@ class ToolRegistry:
 
 def default_registry() -> ToolRegistry:
     registry = ToolRegistry()
+    registry.register(ToolSpec("applications", "Installed application inventory and confirmed uninstall", "quality_of_life.applications.ApplicationManager"))
     registry.register(ToolSpec("background", "Bounded cancellable background jobs", "quality_of_life.background.BackgroundJobs"))
     registry.register(ToolSpec("browser", "Optional Playwright browser automation", "quality_of_life.browser.BrowserController"))
+    registry.register(ToolSpec("browser_registry", "Installed desktop browser discovery and selection", "quality_of_life.browser_registry.BrowserRegistry"))
     registry.register(ToolSpec("clipboard", "Bounded clipboard text read/write", "quality_of_life.clipboard.ClipboardController"))
     registry.register(ToolSpec("cloud_router", "Ordered cloud-provider failover", "quality_of_life.router.CloudModelRouter"))
     registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
+    registry.register(ToolSpec("files", "Guarded filesystem read and mutation operations", "quality_of_life.files.FileController"))
     registry.register(ToolSpec("gods_eye", "Location search, current-location context, routing, and in-app map state", "quality_of_life.gods_eye.GodsEye"))
+    registry.register(ToolSpec("processes", "Guarded process and service inspection/control", "quality_of_life.processes.ProcessManager"))
+    registry.register(ToolSpec("scheduler", "Bounded delayed background jobs", "quality_of_life.scheduler.Scheduler"))
     registry.register(ToolSpec("screen", "Screen capture for computer-aware reasoning", "quality_of_life.screen.ScreenCapture"))
     registry.register(ToolSpec("self_coding", "Guarded autonomous repository coding with verification and rollback", "self_coding.agent.SelfCodingAgent"))
+    registry.register(ToolSpec("system", "Structured system inspection and allowlisted settings", "quality_of_life.system.SystemController"))
     registry.register(ToolSpec("windows", "Windows window enumeration and management", "quality_of_life.windows.WindowsController"))
     registry.register(ToolSpec("windows_maintenance", "Guarded Windows PC diagnostics, background-process cleanup, startup management, and confirmed repairs", "windows_maintenance.facade.MaintenanceFacade"))
     return registry
