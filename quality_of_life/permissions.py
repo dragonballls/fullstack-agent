@@ -21,6 +21,8 @@ class Capability(str, Enum):
     BROWSER_CONTROL = "browser.control"
     REPO_READ = "repo.read"
     REPO_WRITE = "repo.write"
+    ACCOUNT_READ = "account.read"
+    ACCOUNT_WRITE = "account.write"
     FILE_READ = "file.read"
     FILE_WRITE = "file.write"
     FILE_DELETE = "file.delete"
@@ -49,6 +51,7 @@ class CapabilityPolicy:
         Capability.APP_LAUNCH,
         Capability.BROWSER_CONTROL,
         Capability.REPO_WRITE,
+        Capability.ACCOUNT_WRITE,
         Capability.FILE_WRITE,
         Capability.FILE_DELETE,
         Capability.APP_WRITE,
