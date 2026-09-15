@@ -15,8 +15,11 @@ class Action:
     execute: Callable[..., Any]
 
 
+ConfirmationHook = Callable[[Capability, str], bool]
+
+
 class QoLOrchestrator:
-    """Dispatch explicitly registered actions after capability checks."""
+    """Dispatch registered actions only after capability and confirmation checks."""
 
     def __init__(self, policy: CapabilityPolicy) -> None:
         self.policy = policy
@@ -28,8 +31,20 @@ class QoLOrchestrator:
             raise ValueError(f"action already registered: {action.capability.value}/{action.operation}")
         self._actions[key] = action
 
-    def run(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
+    def run(
+        self,
+        capability: Capability,
+        operation: str,
+        *args: Any,
+        confirmation: ConfirmationHook | None = None,
+        **kwargs: Any,
+    ) -> Any:
         self.policy.check(capability)
+        if self.policy.needs_confirmation(capability):
+            if confirmation is None:
+                raise PermissionError(f"Confirmation is required: {capability.value}/{operation}")
+            if not confirmation(capability, operation):
+                raise PermissionError(f"Confirmation was denied: {capability.value}/{operation}")
         try:
             action = self._actions[(capability, operation)]
         except KeyError as exc:
