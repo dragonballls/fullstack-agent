@@ -1,6 +1,7 @@
 """Optional quality-of-life capability layer for fullstack-agent."""
 
 from .agent_orchestrator import AgentOrchestrator, OrchestrationEvent, OrchestrationResult
+from .capabilities import OPERATION_CATALOG, OperationRisk, OperationSpec, operation, operations_for
 from .gods_eye import GeoPoint, GodsEye, LocationSnapshot, Place
 from .health_monitor import HealthMonitor, HealthSnapshot
 from .intents import Intent, parse_intent
@@ -28,6 +29,9 @@ __all__ = [
     "Intent",
     "JarvisRuntime",
     "LocationSnapshot",
+    "OPERATION_CATALOG",
+    "OperationRisk",
+    "OperationSpec",
     "OrchestrationEvent",
     "OrchestrationPlan",
     "OrchestrationResult",
@@ -46,5 +50,7 @@ __all__ = [
     "classify_request",
     "default_registry",
     "format_report",
+    "operation",
+    "operations_for",
     "parse_intent",
 ]
