@@ -77,12 +77,7 @@ class JarvisRuntime:
             configured_repo = os.environ.get("JARVIS_SELF_CODING_REPO")
             if not configured_repo:
                 raise RuntimeError("self-coding is not configured; set JARVIS_SELF_CODING_REPO")
-            return lambda: SelfCodingAgent(SelfCodingConfig(
-                repo=Path(configured_repo),
-                push_branch=os.environ.get("JARVIS_SELF_CODING_PUSH", "0").strip().lower() in {"1", "true", "yes", "on"},
-                max_passes=max(1, int(os.environ.get("JARVIS_SELF_CODING_MAX_PASSES", "1"))),
-                backend=os.environ.get("JARVIS_SELF_CODING_BACKEND", "auto"),
-            ))
+            return lambda: SelfCodingAgent(SelfCodingConfig(repo=Path(configured_repo), push_branch=os.environ.get("JARVIS_SELF_CODING_PUSH", "0").strip().lower() in {"1", "true", "yes", "on"}, max_passes=max(1, int(os.environ.get("JARVIS_SELF_CODING_MAX_PASSES", "1"))), backend=os.environ.get("JARVIS_SELF_CODING_BACKEND", "auto")))
         if name == "windows_maintenance":
             from windows_maintenance import MaintenanceFacade
             return lambda: MaintenanceFacade()
@@ -133,7 +128,13 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.minimize", lambda identifier: self._tool("windows").minimize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.maximize", lambda identifier: self._tool("windows").maximize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.close", lambda identifier: self._tool("windows").close_window(identifier)))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.start", lambda browser=None: self._tool("browser").start(browser)))
         self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.open_url", lambda url, browser=None: self._tool("browser").open_url(url, browser=browser)))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.navigate", lambda url: self._tool("browser").navigate(url)))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.click", lambda selector: self._tool("browser").click(selector)))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.fill", lambda selector, text: self._tool("browser").fill(selector, text)))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.read_text", lambda selector="body": self._tool("browser").read_text(selector)))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "browser.pages", lambda: self._tool("browser").pages()))
         self.orchestrator.register(Action(Capability.FILE_READ, "files.info", lambda path: self._tool("files").info(path)))
         self.orchestrator.register(Action(Capability.FILE_READ, "files.search", lambda pattern, root=None, limit=100: self._tool("files").search(pattern, root, limit)))
         self.orchestrator.register(Action(Capability.FILE_READ, "files.read", lambda path, max_bytes=5_000_000: self._tool("files").read_text(path, max_bytes)))
@@ -197,7 +198,11 @@ class JarvisRuntime:
     def handle_text(self, text: str) -> Any:
         intent: Intent = parse_intent(text)
         if intent.kind == "browser_open":
-            return {"intent": intent, "result": self.dispatch(Capability.BROWSER_CONTROL, "browser.open_url", url=str(intent.arguments.get("url") or "https://www.google.com"), browser=str(intent.arguments["browser"]))}
+            browser = str(intent.arguments["browser"])
+            url = intent.arguments.get("url")
+            if url:
+                return {"intent": intent, "result": self.dispatch(Capability.BROWSER_CONTROL, "browser.open_url", url=str(url), browser=browser)}
+            return {"intent": intent, "result": self.dispatch(Capability.BROWSER_CONTROL, "browser.start", browser=browser)}
         if intent.kind == "application_list":
             return {"intent": intent, "result": self.dispatch(Capability.APP_READ, "applications.list")}
         if intent.kind == "application_uninstall":
