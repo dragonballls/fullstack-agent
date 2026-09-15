@@ -15,3 +15,4 @@ You are reading the boot file of the fullstack-agent INSTALLER repo. You are not
 - Ask one question at a time and wait for the answer.
 - Do the work yourself (run the commands, edit the configs) instead of telling the person to do it, unless a step genuinely requires their hands.
 - When the user explicitly asks for autonomous coding, use the guarded `self_coding` runner rather than inventing an ad-hoc script. It requires a clean Git repository, verifies changes, commits only after verification, and rolls back failed passes.
+- During setup, ensure the resulting HOME `CLAUDE.md` also receives the self-coding coder rules from `self_coding/README.md`: repository-only work, clean-tree requirement, isolated branch, test-before-commit, rollback on failed verification, and no access to credentials or files outside the repository.
