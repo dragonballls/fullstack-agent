@@ -55,12 +55,20 @@ class JarvisRuntime:
         if name == "background":
             return lambda: BackgroundJobs()
         if name == "cloud_router":
-            base_url = os.environ.get("JARVIS_CLOUD_BASE_URL")
-            key_env = os.environ.get("JARVIS_CLOUD_API_KEY_ENV", "OPENAI_API_KEY")
-            model = os.environ.get("JARVIS_CLOUD_MODEL")
-            if not (base_url and model):
-                raise RuntimeError("cloud router is not configured; set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
-            return lambda: CloudModelRouter((ProviderTarget("primary", base_url, key_env, model),))
+            explicit_base_url = os.environ.get("JARVIS_CLOUD_BASE_URL")
+            if explicit_base_url:
+                key_env = os.environ.get("JARVIS_CLOUD_API_KEY_ENV", "OPENAI_API_KEY")
+                model = os.environ.get("JARVIS_CLOUD_MODEL")
+                if not model:
+                    raise RuntimeError("cloud router is not configured; set JARVIS_CLOUD_MODEL")
+                target_config = ProviderTarget("primary", explicit_base_url, key_env, model)
+            elif os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}:
+                target_config = CloudModelRouter.omniroute_target()
+            else:
+                raise RuntimeError(
+                    "cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL"
+                )
+            return lambda: CloudModelRouter((target_config,))
         raise RuntimeError(f"No runtime factory is configured for: {name}")
 
     def _tool(self, name: str) -> Any:
