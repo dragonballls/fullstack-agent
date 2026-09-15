@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -65,8 +64,10 @@ class BrowserController:
     def open_url(self, url: str, browser: str | None = None) -> None:
         self.policy.check(Capability.BROWSER_CONTROL)
         self._validate_url(url)
-        if browser is not None and self._selected_browser not in {None, browser.casefold().replace(" ", "-")}:
-            self.close()
+        if browser is not None:
+            requested_id = self._registry().resolve(browser).id
+            if self.browser is not None and self._selected_browser != requested_id:
+                self.close()
         self.start(browser)
         self._page().goto(url, wait_until="domcontentloaded")
 
