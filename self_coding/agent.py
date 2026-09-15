@@ -1,15 +1,15 @@
 """Safe, provider-agnostic autonomous coding loop.
 
-The module deliberately limits an agent to a clean Git repository, requires
-verification after every coding pass, and restores the exact starting state
-when verification fails. It never executes through a shell.
+The module limits an agent to a clean Git repository, requires verification
+after every coding pass, and restores the exact starting commit on failure.
+It never executes commands through a shell.
 """
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,7 +23,7 @@ class SelfCodingError(RuntimeError):
 @dataclass(frozen=True)
 class SelfCodingConfig:
     repo: Path
-    test_commands: tuple[tuple[str, ...], ...] = (("python", "-m", "unittest", "discover", "-s", "tests"),)
+    test_commands: tuple[tuple[str, ...], ...] = ((sys.executable, "-m", "unittest", "discover", "-s", "tests"),)
     timeout_seconds: int = 900
     push_branch: bool = False
     max_passes: int = 1
@@ -158,9 +158,9 @@ Implement the goal directly, then leave the repository in a clean, testable stat
                 status = self._git("status", "--porcelain")
                 if not status.stdout.strip():
                     raise SelfCodingError("Coding agent completed without producing a change.")
-                committed = self._git("add", "--all")
-                if committed.returncode != 0:
-                    raise SelfCodingError(committed.stderr.strip() or "Unable to stage changes.")
+                staged = self._git("add", "--all")
+                if staged.returncode != 0:
+                    raise SelfCodingError(staged.stderr.strip() or "Unable to stage changes.")
                 committed = self._git("commit", "-m", "agent: verified self-coding change")
                 if committed.returncode != 0:
                     raise SelfCodingError(committed.stderr.strip() or "Unable to commit verified changes.")
