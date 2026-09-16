@@ -61,6 +61,12 @@ class SelfUpdateTests(unittest.TestCase):
         self.assertIn("Start-Process", script)
         self.assertIn("Move-Item", script)
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_handoff_script_does_not_treat_failed_replacement_as_success(self) -> None:
+        script = build_windows_handoff_script(
+            pid=1234,
+            current_exe=Path(r"C:\Jarvis\Jarvis.exe"),
+            staged_exe=Path(r"C:\Users\test\AppData\Local\Temp\Jarvis-new.exe"),
+        )
+        self.assertIn("$replaced = $false", script)
+        self.assertIn("$replaced = $true", script)
+        self.assertIn("if (-not $replaced)", script)
