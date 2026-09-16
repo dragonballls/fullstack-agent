@@ -29,6 +29,8 @@ jobs:
           cache-dependency-path: quality_of_life/requirements.txt
       - name: Install runtime dependencies
         run: python -m pip install -r quality_of_life/requirements.txt
+      - name: Verify installed dependency consistency
+        run: python -m pip check
       - name: Compile every Python module
         run: python -m compileall quality_of_life self_coding windows_maintenance tests readiness.py
       - name: Run complete unittest suite
@@ -45,6 +47,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install runtime dependencies
+        run: python -m pip install -r quality_of_life/requirements.txt
       - name: Build portable bundle
         shell: bash
         run: |
@@ -77,7 +81,11 @@ jobs:
               raise SystemExit(f'Missing bundle members: {missing}')
           print('Portable bundle contents verified')
           PY
-          python -m compileall extracted/Jarvis/quality_of_life extracted/Jarvis/self_coding extracted/Jarvis/windows_maintenance extracted/Jarvis/tests extracted/Jarvis/readiness.py
+      - name: Run tests from extracted bundle
+        working-directory: extracted/Jarvis
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Compile extracted bundle
+        run: python -m compileall extracted/Jarvis/quality_of_life extracted/Jarvis/self_coding extracted/Jarvis/windows_maintenance extracted/Jarvis/tests extracted/Jarvis/readiness.py
       - uses: actions/upload-artifact@v4
         with:
           name: Jarvis-Source-Bundle
