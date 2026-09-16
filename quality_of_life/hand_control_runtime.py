@@ -1,7 +1,7 @@
 """Optional lifecycle manager for the webcam hand-control bridge."""
 from __future__ import annotations
 
-from threading import Lock, Thread
+from threading import Lock, Thread, current_thread
 from typing import Any
 import webbrowser
 
@@ -53,7 +53,6 @@ class HandControlRuntime:
             try:
                 webbrowser.open(self.url, new=1)
             except Exception:
-                self._state = "active"
                 self._detail = "bridge is running; browser could not be opened automatically"
         return True
 
@@ -71,7 +70,7 @@ class HandControlRuntime:
                 server.shutdown()
             finally:
                 server.server_close()
-        if thread is not None and thread is not Thread.current_thread():
+        if thread is not None and thread is not current_thread():
             thread.join(timeout=1.0)
 
     def status(self) -> dict[str, object]:
