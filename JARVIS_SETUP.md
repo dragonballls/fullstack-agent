@@ -24,7 +24,9 @@ These files are runtime state and are not source dependencies for the applicatio
 
 ## Runtime and cloud configuration
 
-Jarvis uses OmniRoute as its conversational/agent routing layer. Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
+The supported agent brain is **OmniRoute only**. Jarvis uses OmniRoute as its conversational/agent routing layer. Claude Code, a Claude subscription, and direct Claude routing are not Jarvis fallbacks.
+
+Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
 
 Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor.
 
