@@ -30,14 +30,14 @@
 
 **Interfaces:**
 - `build_runtime()` returns a configured `JarvisRuntime` using `CapabilityPolicy()`.
-- `JarvisDesktopController.execute_request(text, confirmed=False)` returns the existing `OrchestrationResult` shape or an error-safe equivalent.
+- `JarvisDesktopController.execute_request(text, confirmed=False)` returns the existing `OrchestrationResult` or an error-safe result.
 - `JarvisDesktopController.close()` releases the controller without leaving worker threads active.
 
 - [ ] **Step 1: Write failing tests for runtime construction and confirmation forwarding**
 
 ```python
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from scripts.jarvis_desktop import JarvisDesktopController, build_runtime
 
@@ -104,22 +104,21 @@ git commit -m "feat: add guarded Jarvis desktop launcher"
 - Modify: `tests/test_jarvis_desktop.py`
 
 **Interfaces:**
-- `JarvisDesktopApp(root, controller)` builds a compact always-on-top-friendly chat bar.
+- `JarvisDesktopApp(root, controller)` builds a compact chat bar.
 - `submit()` queues work on a daemon worker thread and returns UI updates to Tk on the main thread.
 - `confirm_and_retry()` replays only the pending request with `confirmed=True` after an explicit user confirmation dialog.
 
-- [ ] **Step 1: Add failing tests for background execution and confirmation state**
+- [ ] **Step 1: Add a non-GUI contract test for confirmation state**
 
 ```python
-from unittest.mock import patch
+from types import SimpleNamespace
 
-    def test_confirmation_result_is_exposed_without_auto_approving(self):
-        result = Mock(needs_confirmation=True, text="confirm required")
+    def test_request_result_with_confirmation_does_not_auto_retry(self):
         controller = Mock()
-        controller.execute_request.return_value = result
-        with patch("scripts.jarvis_desktop.threading.Thread") as thread:
-            # construct app against a mocked Tk root; the test only verifies no confirmed retry happens automatically
-            pass
+        controller.execute_request.return_value = SimpleNamespace(needs_confirmation=True, text="confirm required")
+        result = controller.execute_request("remove app", confirmed=False)
+        self.assertTrue(result.needs_confirmation)
+        controller.execute_request.assert_called_once_with("remove app", confirmed=False)
 ```
 
 - [ ] **Step 2: Implement asynchronous submit and bounded UI updates**
@@ -132,7 +131,7 @@ When `OrchestrationResult.needs_confirmation` is true, store the exact original 
 
 - [ ] **Step 4: Keep the interface minimal**
 
-The window should contain only the conversation/output label, one single-line input field, and a send button. Escape closes the window; Enter submits. Do not add extra dashboard panels.
+The window should contain only a compact response label, one single-line input field, and a send button. Escape closes the window; Enter submits. Do not add dashboard panels.
 
 - [ ] **Step 5: Run targeted tests**
 
@@ -171,7 +170,7 @@ Start-Process -FilePath $PythonW -ArgumentList @($Entry) -WorkingDirectory $Root
 
 - [ ] **Step 2: Document the supported launch command**
 
-State that the Jarvis launcher is the supported Windows entrypoint for the Jarvis profile and that `start.bat` remains upstream-only. Document the local readiness command before first launch.
+State that this launcher is the supported Windows entrypoint for the Jarvis profile and that `start.bat` remains upstream-only. Document `python readiness.py` as the pre-launch diagnostic.
 
 - [ ] **Step 3: Run static validation**
 
@@ -205,7 +204,7 @@ The required gate is the repository's `Jarvis full release gate`; do not merge w
 
 - [ ] **Step 3: Verify the feature branch workflows are green**
 
-Check the Windows/source-bundle path as well as the integration, quality-of-life, and self-coding workflows.
+Check the Windows/source-bundle path plus integration, quality-of-life, and self-coding workflows.
 
 - [ ] **Step 4: Merge to `main` only after the release gate is green**
 
