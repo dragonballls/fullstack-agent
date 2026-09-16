@@ -309,9 +309,16 @@ class FullstackJarvisHost:
 
 
 def main() -> int:
-    controller = JarvisDesktopController()
-    host = FullstackJarvisHost(controller)
+    visualizer = VisualizerAdapter()
+    host: FullstackJarvisHost | None = None
     try:
+        # Start the lightweight embedded visualizer before constructing the
+        # heavier Jarvis controller. This guarantees that the presentation
+        # surface is available immediately even when core/cloud initialization
+        # takes time during first launch or after an update.
+        visualizer.start()
+        controller = JarvisDesktopController()
+        host = FullstackJarvisHost(controller, visualizer=visualizer)
         host.start()
         host.run_window()
         return 0
@@ -325,7 +332,13 @@ def main() -> int:
                 pass
         return 1
     finally:
-        host.stop()
+        if host is not None:
+            host.stop()
+        else:
+            try:
+                visualizer.stop()
+            except Exception:
+                LOGGER.exception("embedded visualizer failed during startup cleanup")
 
 
 if __name__ == "__main__":
