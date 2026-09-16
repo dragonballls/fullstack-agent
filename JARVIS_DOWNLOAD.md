@@ -14,6 +14,14 @@ The bundle is built only after the complete unittest suite, Windows-maintenance 
 
 Tagged releases (`vMAJOR.MINOR.PATCH`) publish the same verified source bundle to the GitHub release automatically.
 
+## Windows runtime launcher
+
+The Jarvis profile now has a dedicated Windows host at `scripts/jarvis_desktop.pyw` plus the convenience launcher `scripts/start-jarvis.ps1`. The PowerShell wrapper starts the host with the repository's `.venv\Scripts\pythonw.exe`, so the running Jarvis chat bar does not need a persistent console window.
+
+`start.bat` is retained for the upstream fullstack-agent multi-repository stack and is not the Jarvis runtime launcher.
+
+The desktop host is intentionally lightweight: it presents a compact chat bar and delegates requests to the existing guarded `JarvisRuntime` and `AgentOrchestrator`. It does not create a second tool executor or bypass confirmation and capability policy.
+
 ## Runtime requirements that cannot be certified by hosted CI
 
 A downloaded bundle still requires the machine-specific pieces that the code intentionally does not fake:
