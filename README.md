@@ -22,7 +22,7 @@ Those upstream components remain separate projects. The Jarvis extensions in thi
 This fork ships independent Jarvis extensions without replacing the upstream stack:
 
 - **`self_coding/`** is a guarded cloud coding engine. It requires a clean Git tree, uses an isolated branch, verifies changes before committing, and rolls failed passes back to the exact starting point.
-- **`quality_of_life/`** provides guarded computer control, browser automation, location/God's Eye context, account access, multi-AI cloud routing, and Windows maintenance.
+- **`quality_of_life/`** provides guarded computer control, browser automation, persistent named workflows, authorized family-location/God's Eye context, account access, multi-AI cloud routing, and Windows maintenance.
 - **Webcam hand control** provides guarded system-wide pointer movement, click/drag/scroll gestures, tracking-loss handling, emergency pause, and an explicit activation boundary.
 - **Background-efficient mode** keeps local voice wake listening available while allowing foreground-only presentation work to suspend when minimized; active hand control remains independently managed. See `docs/jarvis-background-mode.md`.
 
@@ -36,7 +36,7 @@ Jarvis also includes a scoped multi-account model for Google, Microsoft, GitHub,
 
 ## Jarvis Windows launch
 
-For the Jarvis profile on Windows, use `scripts/start-jarvis.ps1`. It starts `scripts/jarvis_desktop.pyw` with the repository `.venv\Scripts\pythonw.exe`, giving Jarvis a lightweight chat-bar host without a persistent PowerShell console. Run `python readiness.py` first on a new installation.
+For the Jarvis profile on Windows, use `scripts/start-jarvis.ps1`. It starts `scripts/jarvis_desktop.pyw` with the repository `.venv\\Scripts\\pythonw.exe`, launching the full native Fullstack Agent visualizer without a persistent PowerShell console. Run `python readiness.py` first on a new installation.
 
 The upstream `start.bat` remains available for the separate fullstack-agent stack and is **not** the Jarvis runtime launcher.
 
@@ -61,38 +61,9 @@ mkdir -p ~/my-agent && cd ~/my-agent && git clone https://github.com/jaredrhod/f
 Windows (PowerShell):
 
 ```text
-$d="$env:USERPROFILE\.local\bin"; if (Test-Path "$d\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\my-agent | Out-Null; cd $HOME\my-agent; if (-not (Test-Path fullstack-agent\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
+$d="$env:USERPROFILE\\.local\\bin"; if (Test-Path "$d\\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\\my-agent | Out-Null; cd $HOME\\my-agent; if (-not (Test-Path fullstack-agent\\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
 ```
 
 ## Upstream already-built pieces
 
 The upstream wizard can adopt an existing memory vault, voice line, or visualizer. Those behaviors remain documented here for compatibility with the original project. The Jarvis profile, however, uses the contracts in `JARVIS_SETUP.md`, `JARVIS_VOICE.md`, and `JARVIS_DOWNLOAD.md` rather than the upstream Claude-only setup path.
-
-## After upstream setup
-
-The original upstream shortcuts and `start.sh` / `start.bat` continue to describe that upstream multi-repository stack. They are **not** the Jarvis runtime launcher. For Jarvis, use `scripts/start-jarvis.ps1` and the documented source-layer/runtime contract in `JARVIS_SETUP.md` and `JARVIS_DOWNLOAD.md`.
-
-## Safety and runtime boundaries
-
-- Jarvis must not bypass capability policy, confirmation hooks, emergency stop, cancellation, self-coding safeguards, or browser/domain restrictions.
-- Microphone wake detection stays local until wake acceptance.
-- Webcam hand control is explicitly activated, fails closed on tracking loss, and remains independently stoppable.
-- Background mode reduces foreground presentation work; it does not claim zero CPU/RAM while active microphone or hand tracking is running.
-- Unsupported external operations are reported as unsupported instead of being fabricated.
-- Credentials and refresh tokens are kept behind the runtime credential broker and never stored in tracked configuration or returned to the model.
-
-## Troubleshooting and readiness
-
-Use `JARVIS_READINESS.md` and `readiness.py` for machine-specific checks. A `READY` result means the required local prerequisites detected by that diagnostic are present. Optional integrations may still report warnings.
-
-The authoritative Windows/source distribution contract is `JARVIS_DOWNLOAD.md`. `fullstack-agent.md` is retained for the upstream setup flow and is not the Jarvis installer/runtime contract.
-
-## The rest of it
-
-The upstream project remains free and open under AGPL-3.0-or-later. See `LICENSE` for full terms.
-
-## License
-
-Copyright (c) 2026 Jared Rhodenizer.
-
-Licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later).
