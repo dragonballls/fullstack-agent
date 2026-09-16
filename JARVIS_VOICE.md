@@ -34,7 +34,7 @@ An open-microphone mode is available through the supported Backtalk configuratio
 
 ## Speech output
 
-Kokoro is embedded as a local speech-output option. Other configured speech providers are output engines only. They do not become agent planners or tool executors.
+Kokoro is embedded as a local speech-output option. **ElevenLabs** is supported as an optional externally configured speech-output provider. Both are output engines only; neither becomes an agent planner or tool executor, and neither changes the OmniRoute-only brain boundary.
 
 Microphone/speaker access is machine-specific. If audio initialization fails, Jarvis should keep the Fullstack visualizer running and log the degraded voice component rather than terminating the desktop application.
 
