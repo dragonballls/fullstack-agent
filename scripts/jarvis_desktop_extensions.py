@@ -11,8 +11,9 @@ import sys
 from typing import Any
 
 from quality_of_life.family_locations import FamilyLocationService, configured_life360_provider
+from quality_of_life.permissions import Capability
 from quality_of_life.planner import PlanError, plan_request
-from quality_of_life.workflows import WorkflowService, WorkflowStep, WorkflowStore
+from quality_of_life.workflows import Workflow, WorkflowService, WorkflowStep, WorkflowStore
 from scripts.jarvis_desktop import JarvisDesktopController
 
 
@@ -78,7 +79,7 @@ class JarvisExtendedController(JarvisDesktopController):
             return DesktopFeatureResult("The previous task could not be represented by Jarvis's approved operations, so I did not save it.", False)
         try:
             steps = tuple(WorkflowStep(step.operation, step.arguments) for step in plan.steps)
-            workflow = __import__("quality_of_life.workflows", fromlist=["Workflow"]).Workflow.new(name, steps=steps)
+            workflow = Workflow.new(name, steps=steps)
             self.workflow_store.create(workflow)
         except (ValueError, KeyError) as exc:
             return DesktopFeatureResult(f"I couldn't save that workflow: {exc}", False, errors=(str(exc)[:500],))
@@ -102,6 +103,7 @@ class JarvisExtendedController(JarvisDesktopController):
         kind, reference = command
         if self.family_service.provider is None:
             return DesktopFeatureResult("Family location sharing is not configured. Configure an authorized Life360 bridge before requesting family locations.", False) if kind == "show_all" else None
+        self.runtime.policy.check(Capability.FAMILY_LOCATION_READ)
         if kind == "stop":
             self.family_service.stop_follow()
             return DesktopFeatureResult("Family follow mode stopped.", True, map_state=self.family_service.map_state())
