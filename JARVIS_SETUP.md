@@ -24,9 +24,9 @@ These files are runtime state and are not source dependencies for the applicatio
 
 ## Runtime and cloud configuration
 
-The supported agent brain is **OmniRoute only**. Jarvis uses OmniRoute as its conversational/agent routing layer. Claude Code, a Claude subscription, and direct Claude routing are not Jarvis fallbacks.
+The supported agent brain is **OmniRoute only**. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
 
-Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
+Jarvis uses OmniRoute as its conversational/agent routing layer. Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
 
 Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor.
 
@@ -38,7 +38,7 @@ The native desktop build embeds the pinned Backtalk source and the Jarvis voice 
 
 Microphone and speaker access are machine-specific. A missing device, denied permission, or unavailable audio dependency must not prevent the Fullstack visualizer from opening; Jarvis records the degraded voice state and keeps the main desktop interface available.
 
-See `JARVIS_VOICE.md` for the current voice/I/O contract.
+See `JARVIS_VOICE.md` for the current voice/I/O contract and the real speech test procedure.
 
 ## Fullstack interface
 
