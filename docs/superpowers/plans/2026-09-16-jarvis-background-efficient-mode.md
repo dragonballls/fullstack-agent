@@ -24,63 +24,15 @@
 ---
 
 ### Task 1: Lifecycle controller
-
-**Files:**
-- Create: `quality_of_life/background_mode.py`
-- Test: `tests/test_background_mode.py`
-
-**Interfaces:**
-- Consumes: host lifecycle events.
-- Produces: `BackgroundModeController.enter_background()`, `enter_foreground()`, and `status()`.
-
-- [x] Define `BackgroundMode` and `BackgroundComponent` with `always` and `foreground_only` policies.
-- [x] Add idempotent background/foreground transitions.
-- [x] Isolate callback failures and report degraded components.
-- [x] Cover lifecycle transitions and failure isolation with unittest.
+- [x] Implement `quality_of_life/background_mode.py` and lifecycle regression tests.
 
 ### Task 2: Voice lifecycle
-
-**Files:**
-- Modify: `quality_of_life/voice_listener.py`
-- Test: `tests/test_voice_listener.py`
-
-**Interfaces:**
-- Consumes: existing `LocalWakeWordListener.run_forever()`.
-- Produces: `start()`, `stop()`, `running`, and `last_error`.
-
-- [x] Add one daemon listener thread with idempotent start.
-- [x] Add stop event and bounded thread join.
-- [x] Preserve local wake detection and no-network listener behavior.
-- [x] Add lifecycle regression coverage.
+- [x] Add idempotent start/stop lifecycle to `LocalWakeWordListener` with regression coverage.
 
 ### Task 3: Background service coordinator
-
-**Files:**
-- Create: `quality_of_life/background_runtime.py`
-- Modify: `quality_of_life/__init__.py`
-- Test: `tests/test_background_mode.py`
-
-**Interfaces:**
-- Consumes: `BackgroundModeController`, `LocalWakeWordListener`, `HandControlRuntime`.
-- Produces: `JarvisBackgroundRuntime.start()`, `stop()`, `minimize()`, `restore()`, and `status()`.
-
-- [x] Keep voice service alive through minimize.
-- [x] Keep hand-control service untouched by minimize.
-- [x] Stop both services cleanly on application shutdown.
-- [x] Export the coordinator for desktop-host integration.
-- [x] Add an end-to-end lifecycle unit test with mocked services.
+- [x] Implement `JarvisBackgroundRuntime` and export it for desktop-host integration.
+- [x] Verify minimize does not stop active hand control or voice.
 
 ### Task 4: Documentation and release verification
-
-**Files:**
-- Create: `docs/superpowers/specs/2026-09-16-jarvis-background-efficient-mode-design.md`
-- Modify: `JARVIS_DOWNLOAD.md`
-- Modify: `JARVIS_SETUP.md`
-
-**Interfaces:**
-- Consumes: runtime integration contract.
-- Produces: documented minimize/restore/quit semantics.
-
-- [ ] Document that the source-layer repository exposes host lifecycle hooks rather than pretending to contain a native desktop shell.
-- [ ] Document resource expectations: minimized mode is low-overhead, not literally zero-resource.
-- [ ] Run the full cross-platform release/test gate before merge.
+- [x] Add the design/spec and host integration documentation.
+- [ ] Verify the full cross-platform release/test gate and merge only after green.
