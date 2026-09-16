@@ -95,8 +95,8 @@ class CloudModelRouter:
     _failure_lock = threading.Lock()
     _failure_cooldowns: dict[tuple[str, str], float] = {}
     _health_lock = threading.Lock()
-    _latency_ewma_ms: dict[tuple[str, str], float] = {}
-    _latency_samples: dict[tuple[str, str], int] = {}
+    _latency_ewma_ms: dict[tuple[str, str, str], float] = {}
+    _latency_samples: dict[tuple[str, str, str], int] = {}
     _EWMA_ALPHA = 0.25
 
     def __init__(self, targets: Iterable[ProviderTarget]) -> None:
@@ -178,9 +178,9 @@ class CloudModelRouter:
             cls._failure_cooldowns.pop((target.base_url, target.model), None)
 
     @classmethod
-    def _health_key(cls, target: ProviderTarget) -> tuple[str, str]:
-        """Return a stable latency key scoped to endpoint and model."""
-        return (target.base_url.rstrip("/"), target.model)
+    def _health_key(cls, target: ProviderTarget) -> tuple[str, str, str]:
+        """Return a stable latency key scoped to provider, endpoint, and model."""
+        return (target.name, target.base_url.rstrip("/"), target.model)
 
     @classmethod
     def _record_success(cls, target: ProviderTarget, latency_ms: int) -> None:
@@ -198,7 +198,7 @@ class CloudModelRouter:
         selected = RequestProfile(profile)
         model = cls.profile_model(selected)
         with cls._health_lock:
-            values = [latency for (base_url, target_model), latency in cls._latency_ewma_ms.items() if target_model == model]
+            values = [latency for (provider_name, _base_url, target_model), latency in cls._latency_ewma_ms.items() if provider_name == target_name and target_model == model]
         return int(round(min(values))) if values else 0
 
     @classmethod
