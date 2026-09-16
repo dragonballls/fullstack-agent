@@ -31,7 +31,7 @@ class VoiceContractTests(unittest.TestCase):
         self.assertIn("Kokoro", readme)
         self.assertIn("OmniRoute only", readme)
         self.assertIn("Claude Code and a Claude subscription are not required", readme)
-        self.assertIn("The Jarvis profile is the primary product contract", readme)
+        self.assertIn("Jarvis profile is the primary product contract for this fork", readme)
         self.assertNotIn("Runs on: Claude Code only", readme)
 
 
