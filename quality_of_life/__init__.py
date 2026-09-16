@@ -3,6 +3,7 @@
 from .account_integrations import AccountIdentity, AccountSelector, AuthorizationState, ServiceProvider
 from .account_manager import AccountServiceManager
 from .agent_orchestrator import AgentOrchestrator, OrchestrationEvent, OrchestrationResult
+from .background_mode import BackgroundComponent, BackgroundMode, BackgroundModeController
 from .capabilities import OPERATION_CATALOG, OperationRisk, OperationSpec, operation, operations_for
 from .computer_use import ComputerUseAction, ComputerUseAgent, ComputerUseResult, RouterComputerUsePlanner, ScreenObserver
 from .gods_eye import GeoPoint, GodsEye, LocationSnapshot, Place
@@ -27,6 +28,9 @@ __all__ = [
     "AuthorizationState",
     "Action",
     "AgentOrchestrator",
+    "BackgroundComponent",
+    "BackgroundMode",
+    "BackgroundModeController",
     "Capability",
     "CapabilityDenied",
     "CapabilityPolicy",
