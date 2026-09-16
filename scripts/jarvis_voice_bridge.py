@@ -7,16 +7,13 @@ import os
 from pathlib import Path
 import sys
 import threading
+import time
 from typing import Any, Callable
 
 
 APP_DIR = Path.home() / "AppData" / "Local" / "Jarvis"
 SIGNALS_DIR = APP_DIR / "signals"
 BACKTALK_CONFIG = APP_DIR / "backtalk.json"
-
-
-def _truthy(value: str | None) -> bool:
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _configure_vendor() -> Path:
@@ -43,6 +40,7 @@ def _configure_vendor() -> Path:
                     "signals_dir": str(SIGNALS_DIR),
                     "thinking_sound": "",
                     "greeting": "Hello. I'm online and ready.",
+                    "greeting_open_mic": "",
                     "elevenlabs": {"enabled": False, "voice_id": ""},
                 },
                 indent=2,
@@ -73,20 +71,24 @@ class JarvisVoiceBridge:
         self.thread: threading.Thread | None = None
         self.stop_event = threading.Event()
         self.stopped = False
+        self.config: dict[str, Any] = {}
 
     def _load_components(self) -> None:
-        if self.ears is not None and self.mouth is not None:
-            return
         _configure_vendor()
-        from backtalk.ears import Ears
-        from backtalk.mouth import Mouth
+        from backtalk.config import CFG
+        self.config = CFG
 
-        self.ears = Ears()
-        self.mouth = Mouth()
-        mode = os.environ.get("JARVIS_MIC_MODE", "ptt").strip().lower()
+        if self.ears is None:
+            from backtalk.ears import Ears
+            self.ears = Ears()
+        if self.mouth is None:
+            from backtalk.mouth import Mouth
+            self.mouth = Mouth()
+
+        mode = os.environ.get("JARVIS_MIC_MODE", str(self.config.get("mic_mode", "ptt"))).strip().lower()
         if mode != "open" and self.ptt is None:
             from backtalk.ptt import PTTListener
-            self.ptt = PTTListener(os.environ.get("JARVIS_PTT_KEY", "home"))
+            self.ptt = PTTListener(os.environ.get("JARVIS_PTT_KEY", str(self.config.get("ptt_key", "home"))))
 
     @staticmethod
     def _native_confirmation(text: str) -> bool:
@@ -102,6 +104,11 @@ class JarvisVoiceBridge:
         self._load_components()
         self.stop_event.clear()
         self.stopped = False
+        greeting_key = "greeting_open_mic" if os.environ.get("JARVIS_MIC_MODE", "ptt").strip().lower() == "open" else "greeting"
+        greeting = str(self.config.get(greeting_key) or self.config.get("greeting") or "")
+        greeting = greeting.replace("{ptt_key}", str(self.config.get("ptt_key", "home")))
+        if greeting:
+            self._speak(greeting)
         self.thread = threading.Thread(target=self._run, name="jarvis-voice", daemon=True)
         self.thread.start()
 
@@ -127,7 +134,7 @@ class JarvisVoiceBridge:
         return result
 
     def _run(self) -> None:
-        mode = os.environ.get("JARVIS_MIC_MODE", "ptt").strip().lower()
+        mode = os.environ.get("JARVIS_MIC_MODE", str(self.config.get("mic_mode", "ptt"))).strip().lower()
         if mode == "open":
             self._run_open_mic()
         else:
@@ -144,6 +151,8 @@ class JarvisVoiceBridge:
                 self.stop_event.wait(1.0)
 
     def _run_ptt(self) -> None:
+        from backtalk.ears import record_held
+
         while not self.stop_event.is_set():
             try:
                 self.ptt.wait_press()
@@ -151,7 +160,7 @@ class JarvisVoiceBridge:
                     break
                 if getattr(self.mouth, "speaking", False):
                     self.mouth.shut_up()
-                text = self.ears.listen_once(timeout_s=30.0)
+                text = record_held(self.ptt.is_held)
                 if text:
                     self.handle_transcript(text)
             except Exception as exc:
