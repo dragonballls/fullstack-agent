@@ -9,6 +9,14 @@ This is the authoritative setup contract for the Jarvis profile in this reposito
 - `JARVIS_ALLOW_CLAUDE` is always false for the Jarvis profile.
 - ElevenLabs and Kokoro are speech-output engines, not agent brains.
 
+## Installation and distribution
+
+The repository's `Jarvis-Source-Bundle.zip` is a verified source distribution for the Jarvis integration layer. This repository is not a standalone native Windows `.exe`: some upstream fullstack components remain separate projects, and live services, credentials, user permissions, and hardware are necessarily configured on the target machine.
+
+The `Jarvis full release gate` workflow is the authoritative CI gate for the source bundle. It tests Ubuntu and Windows on Python 3.11–3.13, checks dependency consistency, compiles the Python modules, runs the complete test suite, tests Windows maintenance, and executes the test suite again from the extracted downloadable bundle.
+
+See `JARVIS_DOWNLOAD.md` for the complete download/runtime contract.
+
 ## Voice
 
 Jarvis starts an always-listening local wake-word listener after microphone permission is granted. The detailed voice contract is `JARVIS_VOICE.md` and must be read before configuring the voice runtime.
@@ -39,4 +47,4 @@ Do not bypass the capability policy, confirmation hooks, emergency stop, cancell
 
 ## Installation separation
 
-`fullstack-agent.md` is retained for the upstream fullstack-agent setup flow. It is **not** the Jarvis installer and must not be used as the Jarvis runtime contract. Jarvis installations use this document and the repository's normal launcher/update mechanisms.
+`fullstack-agent.md` is retained for the upstream fullstack-agent setup flow. It is **not** the Jarvis installer or runtime contract. The Jarvis profile uses this document plus the verified source-bundle/runtime contract in `JARVIS_DOWNLOAD.md`.
