@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -56,13 +57,15 @@ def service_operation(name: str) -> ServiceOperation:
 
 
 def _map_provider(provider: ServiceProvider) -> AccountProvider:
-    if provider is ServiceProvider.GOOGLE:
-        return AccountProvider.GOOGLE
-    if provider is ServiceProvider.YOUTUBE:
-        return AccountProvider.YOUTUBE
-    if provider is ServiceProvider.GITHUB:
-        return AccountProvider.GITHUB
-    return AccountProvider.GENERIC
+    mapping = {
+        ServiceProvider.GOOGLE: AccountProvider.GOOGLE,
+        ServiceProvider.YOUTUBE: AccountProvider.YOUTUBE,
+        ServiceProvider.GITHUB: AccountProvider.GITHUB,
+        ServiceProvider.MICROSOFT: AccountProvider.MICROSOFT,
+        ServiceProvider.INSTAGRAM: AccountProvider.INSTAGRAM,
+        ServiceProvider.GENERIC_WEB: AccountProvider.GENERIC,
+    }
+    return mapping[provider]
 
 
 class ApiServiceAdapter:
@@ -97,20 +100,19 @@ class ApiServiceAdapter:
                 confirmed=confirmed,
             )
             token = self._token_broker.get_access_token(identity, spec.scope)
-        except (AccountAccessError, Exception) as exc:
-            if isinstance(exc, AccountAccessError):
-                return ServiceResult(False, spec.provider, operation, error=str(exc))
+        except AccountAccessError as exc:
+            return ServiceResult(False, spec.provider, operation, error=str(exc))
+        except Exception:
             return ServiceResult(False, spec.provider, operation, error="credential authorization is unavailable")
 
         request = Request(
             spec.path,
-            data=None if payload is None else __import__("json").dumps(payload).encode("utf-8"),
+            data=None if payload is None else json.dumps(payload).encode("utf-8"),
             method=spec.method,
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "User-Agent": "fullstack-agent-jarvis"},
         )
         try:
             with self._opener(request, timeout=20) as response:
-                import json
                 data = json.loads(response.read().decode("utf-8"))
         except (HTTPError, URLError, OSError, ValueError) as exc:
             return ServiceResult(False, spec.provider, operation, error=f"provider request failed: {type(exc).__name__}")
