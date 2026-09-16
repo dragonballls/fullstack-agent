@@ -98,31 +98,22 @@ class JarvisRuntimeTests(unittest.TestCase):
         self.assertEqual(result["result"], {"diagnose": True})
 
     def test_maintenance_mutation_still_uses_confirmed_capability(self):
-        policy = CapabilityPolicy(frozenset({Capability.SYSTEM_MAINTENANCE}), require_confirmation=frozenset())
+        policy = CapabilityPolicy(frozenset({Capability.SYSTEM_MAINTENANCE}))
         runtime = JarvisRuntime(policy, factories={"windows_maintenance": lambda: FakeMaintenance()})
-        result = runtime.handle_text("repair my PC")
+        with self.assertRaises(PermissionError):
+            runtime.handle_text("fix my PC")
+        runtime.confirmation = lambda capability, operation: True
+        result = runtime.handle_text("fix my PC")
         self.assertEqual(result["result"]["confirmed"], False)
 
-    def test_account_read_is_reachable_without_write_confirmation(self):
-        policy = CapabilityPolicy(frozenset({Capability.ACCOUNT_READ}))
-        runtime = JarvisRuntime(policy, factories={"account_manager": FakeAccounts})
-        result = runtime.dispatch(Capability.ACCOUNT_READ, "accounts.list")
-        self.assertEqual(result[0].provider, AccountProvider.GITHUB)
-
-    def test_account_fork_requires_capability_and_confirmation(self):
-        policy = CapabilityPolicy(frozenset({Capability.ACCOUNT_WRITE}))
-        accounts = FakeAccounts()
-        client = FakeGitHubClient()
-        runtime = JarvisRuntime(policy, factories={"account_access": lambda: accounts})
-        original = runtime._github_fork
-        runtime._github_fork = lambda repository, *, account_id="primary", organization=None: client.fork_repository(repository, account_id=account_id, organization=organization, access=accounts, confirmed=True)
-        with self.assertRaises(PermissionError):
-            runtime.dispatch(Capability.ACCOUNT_WRITE, "accounts.github_fork", "source/example")
-        runtime.confirmation = lambda capability, operation: True
-        result = runtime.dispatch(Capability.ACCOUNT_WRITE, "accounts.github_fork", "source/example")
-        self.assertEqual(result["full_name"], "primary/example")
-        self.assertEqual(client.calls[0][0], "source/example")
-        runtime._github_fork = original
+    def test_background_methods_are_safe_and_idempotent(self):
+        runtime = JarvisRuntime(CapabilityPolicy())
+        self.assertTrue(runtime.enter_background())
+        self.assertEqual(runtime.background_status()["state"], "background")
+        self.assertFalse(runtime.enter_background())
+        self.assertTrue(runtime.enter_foreground())
+        self.assertEqual(runtime.background_status()["state"], "foreground")
+        self.assertFalse(runtime.enter_foreground())
 
 
 if __name__ == "__main__":

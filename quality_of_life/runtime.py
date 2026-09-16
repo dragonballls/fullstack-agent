@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .background import BackgroundJobs
+from .background_mode import BackgroundModeController
 from .gods_eye import GodsEye, Place
 from .gods_eye_launcher import GodsEyeLauncher
 from .intents import Intent, parse_intent
@@ -34,6 +35,7 @@ class JarvisRuntime:
         self.orchestrator = QoLOrchestrator(policy)
         self._agent_orchestrator: Any | None = None
         self._health_monitor: Any | None = None
+        self._background_mode = BackgroundModeController()
         self._register_actions()
 
     def available_tools(self) -> tuple[str, ...]:
@@ -122,6 +124,22 @@ class JarvisRuntime:
 
     def health_snapshot(self) -> dict[str, Any]:
         return self.health_monitor().snapshot()
+
+    def background_mode(self) -> BackgroundModeController:
+        """Return the lifecycle controller used by a desktop host."""
+        return self._background_mode
+
+    def enter_background(self) -> bool:
+        """Enter low-overhead background presentation mode without stopping Jarvis core."""
+        return self._background_mode.enter_background()
+
+    def enter_foreground(self) -> bool:
+        """Restore foreground presentation mode without recreating Jarvis core."""
+        return self._background_mode.enter_foreground()
+
+    def background_status(self) -> dict[str, object]:
+        """Return the current background lifecycle state and degraded components."""
+        return self._background_mode.status()
 
     def _register_actions(self) -> None:
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.move", lambda x, y: self._tool("computer").move(x, y)))
