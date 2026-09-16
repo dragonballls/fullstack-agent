@@ -16,7 +16,7 @@ from .account_integrations import (
     TokenBroker,
 )
 from .account_store import AccountStore
-from .oauth_broker import KeyringTokenStore, OAuthBroker, build_default_oauth_configs
+from .oauth_broker import KeyringTokenStore, OAuthBroker, SecureTokenBroker, build_default_oauth_configs
 from .oauth_desktop import connect_in_browser
 from .service_adapters import GoogleAdapter, MicrosoftAdapter, ServiceResult, YouTubeAdapter
 
@@ -29,11 +29,11 @@ class AccountConnection:
 
 _READ_SCOPE_BY_PROVIDER: dict[ServiceProvider, tuple[tuple[str, str], ...]] = {
     ServiceProvider.GOOGLE: (
-        ("https://www.googleapis.com/auth/gmail.readonly", "Read Gmail"),
-        ("https://www.googleapis.com/auth/calendar.readonly", "Read Google Calendar"),
-        ("https://www.googleapis.com/auth/drive.readonly", "Read Google Drive"),
+        ("gmail.metadata", "Read Gmail"),
+        ("calendar.events.readonly", "Read Google Calendar"),
+        ("drive.readonly", "Read Google Drive"),
     ),
-    ServiceProvider.YOUTUBE: (("https://www.googleapis.com/auth/youtube.readonly", "Read YouTube channel data"),),
+    ServiceProvider.YOUTUBE: (("youtube.readonly", "Read YouTube channel data"),),
     ServiceProvider.MICROSOFT: (
         ("User.Read", "Read Microsoft profile"),
         ("Mail.Read", "Read Microsoft mail"),
@@ -81,8 +81,7 @@ class AccountServiceManager:
 
     def disconnect_account(self, provider: ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> None:
         identity = self.select_account(provider, account_id=account_id, label=label)
-        store = KeyringTokenStore()
-        store.delete(identity)
+        KeyringTokenStore().delete(identity)
         self._identities = tuple(item for item in self._identities if item != identity)
         self.account_store.delete(identity)
 
@@ -98,15 +97,9 @@ class AccountServiceManager:
             self._identities = (*self._identities, identity)
         self.account_store.upsert(identity)
 
-    def grant_scope(self, identity: AccountIdentity, scope: str, description: str, *, risk: AccountRisk = AccountRisk.READ) -> None:
+    def grant_scope(self, identity: AccountIdentity, scope: str, description: str, *, risk: AccountRisk = AccountRisk.READ) -> AccountGrant:
         provider = AccountProvider(identity.provider.value if identity.provider.value != "generic_web" else "generic")
-        try:
-            grant = self.account_access.get(provider, identity.account_id)
-            scopes = [item for item in grant.scopes if item.name != scope]
-            scopes.append(AccountScope(scope, description, risk))
-            self.account_access._grants[(provider, identity.account_id)] = AccountGrant(provider, identity.account_id, tuple(scopes), True)
-        except Exception:
-            self.account_access.register(AccountGrant(provider, identity.account_id, (AccountScope(scope, description, risk),), True))
+        return self.account_access.add_scope(provider, identity.account_id, AccountScope(scope, description, risk))
 
     def service_action(
         self,
@@ -138,15 +131,9 @@ class AccountServiceManager:
     def _secure_token_broker(self) -> TokenBroker:
         if self._token_broker is None:
             store = KeyringTokenStore()
-            self._token_broker = __import__("quality_of_life.oauth_broker", fromlist=["SecureTokenBroker"]).SecureTokenBroker(self._secure_oauth(), store)
+            self._token_broker = SecureTokenBroker(self._secure_oauth(), store)
         return self._token_broker
 
     def _grant_default_read_scopes(self, identity: AccountIdentity) -> None:
         for scope, description in _READ_SCOPE_BY_PROVIDER.get(identity.provider, ()):
-            friendly = {
-                "https://www.googleapis.com/auth/gmail.readonly": "gmail.metadata",
-                "https://www.googleapis.com/auth/calendar.readonly": "calendar.events.readonly",
-                "https://www.googleapis.com/auth/drive.readonly": "drive.readonly",
-                "https://www.googleapis.com/auth/youtube.readonly": "youtube.readonly",
-            }.get(scope, scope)
-            self.grant_scope(identity, friendly, description, risk=AccountRisk.READ)
+            self.grant_scope(identity, scope, description, risk=AccountRisk.READ)
