@@ -39,15 +39,15 @@ class VoiceListenerTests(unittest.TestCase):
     def test_prediction_below_threshold_does_not_emit(self):
         events = []
         listener = LocalWakeWordListener(on_wake=events.append, wakeword_model=FakeModel(score=0.69), threshold=0.70)
-        class FakeStream:
-            def __enter__(self): return self
-            def __exit__(self, *args): return False
-        class FakeSound:
-            def InputStream(self, **_kwargs): return FakeStream()
-            def sleep(self, _ms): raise RuntimeError("stop")
-        with self.assertRaises(RuntimeError):
-            listener.run_forever_with_sound(FakeSound())
+        listener.process_prediction({"hey_jarvis_v0.1": 0.69})
         self.assertEqual(events, [])
+
+    def test_prediction_at_threshold_emits(self):
+        events = []
+        listener = LocalWakeWordListener(on_wake=events.append, wakeword_model=FakeModel(), threshold=0.70)
+        listener.process_prediction({"hey_jarvis_v0.1": 0.70})
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].model, "hey_jarvis")
 
 
 if __name__ == "__main__":
