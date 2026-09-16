@@ -1,0 +1,104 @@
+name: Jarvis full release gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Regression / ${{ matrix.os }} / Python ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.11', '3.12', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: quality_of_life/requirements.txt
+      - name: Install runtime dependencies
+        run: python -m pip install -r quality_of_life/requirements.txt
+      - name: Compile every Python module
+        run: python -m compileall quality_of_life self_coding windows_maintenance tests readiness.py
+      - name: Run complete unittest suite
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Run Windows-maintenance unit tests
+        run: python -m unittest discover -s windows_maintenance/tests -p 'test_*.py' -v
+
+  portable-bundle:
+    name: Portable source bundle smoke test
+    needs: regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build portable bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist extracted
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+          root = Path.cwd()
+          output = root / 'dist' / 'Jarvis-Source-Bundle.zip'
+          excluded = {'.git', '.pytest_cache', '__pycache__', 'dist', 'extracted'}
+          with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
+              for path in root.rglob('*'):
+                  if path.is_dir() or any(part in excluded for part in path.parts):
+                      continue
+                  archive.write(path, Path('Jarvis') / path.relative_to(root))
+          print(output)
+          PY
+      - name: Validate extracted bundle
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          with ZipFile('dist/Jarvis-Source-Bundle.zip') as archive:
+              archive.extractall('extracted')
+          root = Path('extracted/Jarvis')
+          required = ['JARVIS_SETUP.md', 'JARVIS_VOICE.md', 'quality_of_life', 'self_coding', 'windows_maintenance', 'tests', 'readiness.py']
+          missing = [item for item in required if not (root / item).exists()]
+          if missing:
+              raise SystemExit(f'Missing bundle members: {missing}')
+          print('Portable bundle contents verified')
+          PY
+          python -m compileall extracted/Jarvis/quality_of_life extracted/Jarvis/self_coding extracted/Jarvis/windows_maintenance extracted/Jarvis/tests extracted/Jarvis/readiness.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-Source-Bundle
+          path: dist/Jarvis-Source-Bundle.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  tagged-release:
+    name: Publish tagged source bundle
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: portable-bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Jarvis-Source-Bundle
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Jarvis-Source-Bundle.zip
+          generate_release_notes: true
