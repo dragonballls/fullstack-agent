@@ -341,13 +341,22 @@ class WorkflowService:
 
         for step in workflow.steps:
             spec = operation(step.operation)
-            if not confirmed and runtime.policy.needs_confirmation(spec.capability):
+            protected = runtime.policy.needs_confirmation(spec.capability)
+            if protected and not confirmed:
                 needs_confirmation = True
                 verified = False
                 errors.append(f"confirmation required: {step.operation}")
                 break
             try:
-                result = runtime.dispatch(spec.capability, step.operation, **dict(step.arguments))
+                if protected and confirmed:
+                    result = runtime.orchestrator.run(
+                        spec.capability,
+                        step.operation,
+                        confirmation=lambda _capability, _operation: True,
+                        **dict(step.arguments),
+                    )
+                else:
+                    result = runtime.dispatch(spec.capability, step.operation, **dict(step.arguments))
                 outputs.append(f"{step.operation}: {result}")
                 completed += 1
             except PermissionError as exc:
