@@ -27,18 +27,22 @@ Every piece is optional. The wizard asks which ones you want and explains each i
 
 ## Jarvis integration
 
-This fork also ships two independent extensions for a stronger Jarvis-style setup without replacing the base stack:
+This fork also ships independent Jarvis extensions without replacing the base stack:
 
 - **`self_coding/`** is a guarded cloud coding engine. It requires a clean Git tree, uses an isolated branch, verifies changes before committing, and rolls failed passes back to the exact starting point.
-- **`quality_of_life/`** is an optional capability layer for Windows computer control, screen capture, browser automation, cancellable background jobs, and cloud-model failover. Capabilities are deny-by-default, mutating operations pass a shared policy, and missing optional dependencies do not break the base stack.
+- **`quality_of_life/`** provides guarded computer control, browser automation, location/God's Eye context, account access, multi-AI cloud routing, and Windows maintenance.
 
-The preferred high-quality cloud voice is **ElevenLabs**. The repository includes `JARVIS_VOICE.md` with the secure setup contract: API keys stay outside Git, the requested voice is looked up rather than guessed, and a real speech test is required before setup is called successful. The built-in **Kokoro** voice remains the fallback.
+The Jarvis profile uses **OmniRoute only** as its conversational/agent brain. Claude Code and a Claude subscription are not required by the Jarvis profile and are not valid Jarvis fallbacks.
 
-These extensions are deliberately separate so one optional feature can fail without taking down memory, voice, face, hands, or self-coding.
+The Jarvis voice profile adds local wake-word activation: after microphone permission is granted, wake detection can run locally and Jarvis does not send cloud requests until the wake word is accepted. See `JARVIS_SETUP.md` and `JARVIS_VOICE.md`.
+
+The preferred high-quality Jarvis speech output is **ElevenLabs**, with **Kokoro** available as a fallback. They are speech engines only, not Jarvis brains.
+
+Jarvis also includes a scoped multi-account model for Google, Microsoft, GitHub, YouTube, Instagram, and generic web services. OAuth/user consent, provider scopes, local capability policy, and confirmation gates remain required; account credentials are kept behind a runtime credential broker.
 
 ## Install
 
-You need [Claude Code](https://jaredrhod.com/start) with a Claude subscription. Mac and Linux also use git (macOS offers to install it the first time you use it). Windows needs nothing else: the installer sets up git for you during setup. Then one paste into your terminal.
+You need [Claude Code](https://jaredrhod.com/start) with a Claude subscription for the **upstream fullstack-agent setup flow** described by this README. The **Jarvis profile is separate** and uses `JARVIS_SETUP.md`; it does not require Claude Code or a Claude subscription.
 
 Mac and Linux:
 
@@ -52,9 +56,9 @@ Windows (PowerShell):
 $d="$env:USERPROFILE\.local\bin"; if (Test-Path "$d\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\my-agent | Out-Null; cd $HOME\my-agent; if (-not (Test-Path fullstack-agent\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
 ```
 
-(The Windows command downloads the toolbox as a zip on purpose, so it works on a machine with no git installed. The installer sets up git for you during setup. Safe to paste as many times as you like: it skips the download when the toolbox is already there, and if an earlier attempt died partway and left a half-finished folder, it downloads again and finishes the job rather than assuming it was already done. If it tells you Claude Code is not installed yet, do the [start page](https://jaredrhod.com/start) first. Heads up for that step on Windows: the Claude Code installer downloads about 330 MB and prints nothing at all while it does, so leave that window alone until it says Installation complete.)
+## Jarvis setup
 
-Claude Code opens with the installer already talking to you. (The agent lives in a folder right in your home directory on purpose: on Macs, things that run in the background out of Documents get silently blocked by the system.) Everything after that is a conversation: it asks for your agent's name and personality (or hands you mine, Jarvis, ready to use), which pieces you want, and where your notes live. It does the installing, the configuring, and the wiring itself.
+Use `JARVIS_SETUP.md` for the Jarvis profile. It is the authoritative Claude-free setup/runtime contract for this fork. `fullstack-agent.md` remains the upstream setup conductor and is not the Jarvis brain.
 
 ## Already built some of this?
 
@@ -69,7 +73,7 @@ Then you're exactly who this was designed around. If you set up a memory vault, 
 - **Use your agent:** the wizard leaves three shortcuts on your Desktop, named after your agent. **Chat** opens a typed session, terminal only. **Talk** starts the voice and the face. **Barehands** starts the voice and the hands board (the board is the screen in that mode). Double-click the mood you want; Ctrl-C in the window stops it. (They just run `fullstack-agent/start.sh`, or `start.bat` on Windows, if you ever prefer the terminal.)
 - **Something broken or confusing? Ask your agent to fix it.** Seriously. Open the chat and describe the problem. Every repo here ships a troubleshooting guide written for your agent to read, and your agent is instructed during setup to do the fixing itself. This is the part everyone finds out late: you never have to debug this stack yourself.
 - **Update everything:** `./fullstack-agent/update.sh` on macOS. On Windows, ask your agent: "update everything and tell me what changed." Your files live outside the repos, so updates never touch who your agent is or what it remembers.
-- **Daily habit:** open Claude Code in your agent's folder. That's where it lives.
+- **Daily habit:** open Claude Code in your agent's folder.
 
 ## The fine print that matters
 
@@ -90,7 +94,7 @@ Everything here is free and open, and there is a whole community using it.
 
 Free to use, and always will be. If this helped you out, you can buy me a coffee:
 
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/jaredrhod)
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/img/githubbutton_sm.svg)
 
 ## License
 
