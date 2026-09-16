@@ -6,8 +6,20 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from .capabilities import OperationRisk, operation
-from .permissions import CapabilityPolicy
+from .capabilities import OperationRisk, OperationSpec, operation
+from .permissions import Capability, CapabilityPolicy
+
+
+UNIVERSAL_OPERATION_SPECS: tuple[OperationSpec, ...] = (
+    OperationSpec("web.fetch", Capability.SYSTEM_DIAGNOSTICS, OperationRisk.READ, "Fetch an allowlisted HTTPS web resource"),
+    OperationSpec("web.search", Capability.SYSTEM_DIAGNOSTICS, OperationRisk.READ, "Search through the configured web search provider"),
+    OperationSpec("api.request.read", Capability.ACCOUNT_READ, OperationRisk.READ, "Read from a configured JSON API endpoint"),
+    OperationSpec("api.request.write", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Write to a configured JSON API endpoint"),
+    OperationSpec("tools.list", Capability.CLOUD_ROUTING, OperationRisk.READ, "List universal tool adapters"),
+    OperationSpec("tools.describe", Capability.CLOUD_ROUTING, OperationRisk.READ, "Describe a universal tool adapter"),
+    OperationSpec("tools.invoke", Capability.CLOUD_ROUTING, OperationRisk.EXTERNAL, "Invoke a registered universal tool operation"),
+)
+_UNIVERSAL_OPERATION_MAP = {spec.name: spec for spec in UNIVERSAL_OPERATION_SPECS}
 
 
 @dataclass(frozen=True)
@@ -48,9 +60,8 @@ class UniversalToolBroker:
         if manifest.name in self._adapters:
             raise ValueError(f"tool already registered: {manifest.name}")
         for op_name in manifest.operations:
-            operation(op_name)
-            existing = self._operation_to_tool.get(op_name)
-            if existing is not None:
+            self._resolve_spec(op_name)
+            if op_name in self._operation_to_tool:
                 raise ValueError(f"operation already registered: {op_name}")
         self._adapters[manifest.name] = adapter
         for op_name in manifest.operations:
@@ -67,10 +78,13 @@ class UniversalToolBroker:
 
     def invoke(self, operation_name: str, arguments: dict[str, object], *, confirmed: bool = False) -> ToolResult:
         try:
-            spec = operation(operation_name)
+            spec = self._resolve_spec(operation_name)
         except KeyError as exc:
             return ToolResult(False, operation_name, error=str(exc))
-        self.policy.check(spec.capability)
+        try:
+            self.policy.check(spec.capability)
+        except PermissionError as exc:
+            return ToolResult(False, operation_name, error=str(exc))
         if spec.risk is not OperationRisk.READ and not confirmed and self.policy.needs_confirmation(spec.capability):
             return ToolResult(False, operation_name, error="confirmation required before this tool operation")
         tool_name = self._operation_to_tool.get(operation_name)
@@ -87,6 +101,16 @@ class UniversalToolBroker:
             return ToolResult(False, operation_name, error=self._safe_error(exc))
         data, truncated = self._bound_result(raw)
         return ToolResult(True, operation_name, data=data, truncated=truncated)
+
+    @staticmethod
+    def _resolve_spec(operation_name: str) -> OperationSpec:
+        try:
+            return operation(operation_name)
+        except KeyError:
+            try:
+                return _UNIVERSAL_OPERATION_MAP[operation_name]
+            except KeyError as exc:
+                raise KeyError(f"unknown capability operation: {operation_name}") from exc
 
     def _bound_result(self, value: Any) -> tuple[Any, bool]:
         if isinstance(value, str):
