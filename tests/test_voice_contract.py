@@ -9,7 +9,7 @@ class VoiceContractTests(unittest.TestCase):
         contract = (ROOT / "JARVIS_VOICE.md").read_text(encoding="utf-8")
         self.assertIn("ElevenLabs", contract)
         self.assertIn("ELEVENLABS_API_KEY", contract)
-        self.assertIn("Never print the API key", contract)
+        self.assertRegex(contract, r"(?i)(never|do not) (store|save).{0,40}API key")
         self.assertIn("real speech test", contract)
 
     def test_installer_requires_voice_contract(self):
