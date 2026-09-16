@@ -1,6 +1,6 @@
 # Quality of Life
 
-This subsystem is a real capability layer for fullstack-agent. It adds computer awareness, computer interaction, orchestration, background maintenance, cloud-model routing, God’s Eye location/map context, and explicit external-account authorization without replacing memory, voice, face, hands, or guarded self-coding.
+This subsystem is a real capability layer for fullstack-agent. It adds computer awareness, computer interaction, orchestration, persistent named workflows, family-location/God’s Eye context, background maintenance, cloud-model routing, and explicit external-account authorization without replacing memory, voice, face, hands, or guarded self-coding.
 
 ## Shipped capabilities
 
@@ -11,12 +11,32 @@ This subsystem is a real capability layer for fullstack-agent. It adds computer 
 - **Windows control:** enumerate visible windows and explicitly focus, minimize, maximize, or close a selected window.
 - **Browser automation:** optional Playwright control for approved HTTP(S) URLs.
 - **Background jobs:** bounded daemon jobs with cancellation and active-job inspection.
+- **Persistent workflows:** save a previous supported task under a name such as `morning setup`, then run it later with `do my morning setup`. Workflows persist across Jarvis restarts in `~/.jarvis/workflows.json` by default and record only bounded run status/history.
 - **Cloud routing:** deterministic provider failover with no local LLM requirement.
 - **God’s Eye:** place search, current-location context, route generation, and an in-app map-state contract (`surface: gods-eye`).
+- **Authorized family locations:** an optional provider-neutral family-location service can ingest an authorized Life360 bridge/feed, show family markers in a dedicated God’s Eye surface, display update freshness/sharing state, and follow a selected member as newer authorized updates arrive. Jarvis does not scrape Life360 private endpoints.
 - **External account access:** an explicit account registry can hold user-authorized GitHub, Google, YouTube, and generic provider grants. Credentials are resolved at runtime and are never persisted by this layer.
 - **GitHub repository integration:** an authorized GitHub grant can request a repository fork through the GitHub API, with write confirmation and token checks.
 - **Windows maintenance:** guarded PC diagnostics, identification of eligible idle/high-memory user applications, verified process stopping, reversible user-startup prevention, startup restoration, system-file health scans, and explicitly confirmed repair/network-reset operations.
 - **Unified runtime:** `JarvisRuntime.dispatch(...)` is the single capability-aware execution surface for these operations.
+
+## Persistent workflows
+
+Jarvis accepts named routines made from already-supported typed operations. `WorkflowStore` uses atomic local JSON persistence; malformed data is rejected without being overwritten. Workflow names and aliases are matched case-insensitively with whitespace normalization, and ambiguous aliases are not guessed.
+
+Use the command pattern `remember that as <name>` after a supported request to turn the last request into a saved workflow. Run it later with `do my <name>`, `run my <name>`, `do <name>`, or `run <name>`. Stored steps contain operation names and JSON arguments only; arbitrary shell, PowerShell, Python, JavaScript, executable paths, credentials, and browser session data are not accepted as workflow content.
+
+Every workflow execution remains subject to the existing capability policy and confirmation hooks. A protected action is not silently executed merely because it was saved earlier. A failed step stops the routine unless that step was explicitly marked `continue_on_error`.
+
+Set `JARVIS_WORKFLOW_STORE` to choose another local workflow-store path.
+
+## Family locations and God’s Eye
+
+The family feature is provider-neutral. `Life360LocationAdapter` normalizes a caller-supplied authorized payload, while `Life360BridgeProvider` can read JSON from an explicitly configured HTTP(S) bridge using `JARVIS_LIFE360_BRIDGE_URL`.
+
+Supported desktop commands include `where is <family member>`, `show <family member> on God’s Eye`, `show my family`, `follow <family member>`, and `stop following`. A followed marker is recentered only when a newer authorized update arrives. Paused sharing and stale locations are surfaced explicitly instead of being represented as current.
+
+The adapter intentionally does not reverse-engineer Life360 authentication, scrape private endpoints, or bypass sharing controls. Without an authorized bridge/feed, family locations remain unavailable while the rest of Jarvis continues normally.
 
 ## Hand control
 
@@ -54,4 +74,4 @@ Windows maintenance adds another policy boundary: process termination is limited
 
 ## Compatibility
 
-The subsystem is optional. Imports remain safe when Windows-only or browser dependencies are absent, and the core God’s Eye and account-access contracts are testable without network access. Provider/network failures become empty or unavailable results rather than taking down the base agent.
+The subsystem is optional. Imports remain safe when Windows-only or browser dependencies are absent, and the core God’s Eye, workflow, and account-access contracts are testable without network access. Provider/network failures become unavailable results rather than taking down the base agent.
