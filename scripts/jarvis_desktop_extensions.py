@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 import os
 from pathlib import Path
 import re
@@ -11,11 +10,9 @@ import subprocess
 import sys
 from typing import Any
 
-from quality_of_life.capabilities import operation
 from quality_of_life.family_locations import FamilyLocationService, configured_life360_provider
-from quality_of_life.permissions import Capability
 from quality_of_life.planner import PlanError, plan_request
-from quality_of_life.workflows import Workflow, WorkflowService, WorkflowStep, WorkflowStore
+from quality_of_life.workflows import WorkflowService, WorkflowStep, WorkflowStore
 from scripts.jarvis_desktop import JarvisDesktopController
 
 
@@ -32,7 +29,7 @@ class DesktopFeatureResult:
 def _family_command(text: str) -> tuple[str, str | None] | None:
     value = " ".join(text.strip().split())
     match = re.match(r"^where is (.+)$", value, re.IGNORECASE)
-    if match and match.group(1).strip().casefold() not in {"the nearest coffee shop", "the nearest restaurant"}:
+    if match:
         return "where", match.group(1).strip()
     match = re.match(r"^show (.+) on God[’']?s Eye$", value, re.IGNORECASE)
     if match:
@@ -81,7 +78,7 @@ class JarvisExtendedController(JarvisDesktopController):
             return DesktopFeatureResult("The previous task could not be represented by Jarvis's approved operations, so I did not save it.", False)
         try:
             steps = tuple(WorkflowStep(step.operation, step.arguments) for step in plan.steps)
-            workflow = Workflow.new(name, steps=steps)
+            workflow = __import__("quality_of_life.workflows", fromlist=["Workflow"]).Workflow.new(name, steps=steps)
             self.workflow_store.create(workflow)
         except (ValueError, KeyError) as exc:
             return DesktopFeatureResult(f"I couldn't save that workflow: {exc}", False, errors=(str(exc)[:500],))
@@ -103,11 +100,11 @@ class JarvisExtendedController(JarvisDesktopController):
         if command is None:
             return None
         kind, reference = command
+        if self.family_service.provider is None:
+            return DesktopFeatureResult("Family location sharing is not configured. Configure an authorized Life360 bridge before requesting family locations.", False) if kind == "show_all" else None
         if kind == "stop":
             self.family_service.stop_follow()
             return DesktopFeatureResult("Family follow mode stopped.", True, map_state=self.family_service.map_state())
-        if self.family_service.provider is None:
-            return DesktopFeatureResult("Family location sharing is not configured. Configure an authorized Life360 bridge before requesting family locations.", False)
         try:
             self.family_service.refresh()
             if kind == "show_all":
@@ -128,7 +125,6 @@ class JarvisExtendedController(JarvisDesktopController):
         value = text.strip()
         if not value:
             return super().execute_request(value, confirmed=confirmed)
-        lowered = value.casefold()
         remember = re.match(r"^(?:remember|save) (?:that|this) as (.+)$", value, re.IGNORECASE)
         if remember:
             return self._remember_previous(remember.group(1).strip())
@@ -145,7 +141,6 @@ class JarvisExtendedController(JarvisDesktopController):
 
 
 def run_family_window() -> int:
-    """Run the isolated family God’s Eye window requested through the no-console entrypoint."""
     from quality_of_life.family_gods_eye import FamilyGodsEyeSurface
 
     service = FamilyLocationService(configured_life360_provider())
@@ -155,11 +150,3 @@ def run_family_window() -> int:
 
 def is_family_window_request() -> bool:
     return os.environ.get("JARVIS_FAMILY_WINDOW", "0").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def build_extended_host() -> Any:
-    from scripts.jarvis_desktop import FullstackJarvisHost
-
-    controller = JarvisExtendedController()
-    host = FullstackJarvisHost(controller)
-    return host
