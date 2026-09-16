@@ -45,10 +45,19 @@ class FakeRouter:
         return tuple(results)
 
 
+class FakeOrchestrator:
+    def __init__(self):
+        self.actions = {}
+
+    def register(self, action):
+        self.actions[getattr(action, "operation", repr(action))] = action
+
+
 class FakeRuntime:
     def __init__(self, execute_result=None):
         self.execute_result = execute_result
         self.dispatch_calls = []
+        self.orchestrator = FakeOrchestrator()
 
     def dispatch(self, capability, operation, *args, **kwargs):
         self.dispatch_calls.append((capability, operation, args, kwargs))

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .capabilities import OPERATION_CATALOG, operation
+from .tool_broker import UNIVERSAL_OPERATION_SPECS
 
 
 class PlanError(RuntimeError):
@@ -25,9 +26,10 @@ class ExecutionPlan:
     steps: tuple[PlanStep, ...]
 
 
+_MODEL_SPECS = OPERATION_CATALOG + UNIVERSAL_OPERATION_SPECS
 _SAFE_MODEL_OPERATIONS = tuple(
-    spec.name for spec in OPERATION_CATALOG
-    if spec.name not in {"background.start", "scheduler.schedule_once", "self_coding.run"}
+    spec.name for spec in _MODEL_SPECS
+    if spec.name not in {"background.start", "scheduler.schedule_once", "self_coding.run", "tools.invoke"}
 )
 
 _ACCOUNT_OPERATION_PROVIDER = {
@@ -70,6 +72,16 @@ def _normalize_account_step(name: str, args: dict[str, Any]) -> PlanStep:
     return PlanStep("accounts.service_action", normalized)
 
 
+def _spec_for(name: str):
+    try:
+        return operation(name)
+    except KeyError:
+        for spec in UNIVERSAL_OPERATION_SPECS:
+            if spec.name == name:
+                return spec
+        raise PlanError(f"Unsupported operation: {name}")
+
+
 def parse_plan(text: str) -> ExecutionPlan:
     data = _extract_json(text)
     raw_steps = data.get("steps") if isinstance(data, dict) else None
@@ -82,7 +94,7 @@ def parse_plan(text: str) -> ExecutionPlan:
         name = raw["operation"]
         if name not in _SAFE_MODEL_OPERATIONS:
             raise PlanError(f"Unsupported operation: {name}")
-        spec = operation(name)
+        spec = _spec_for(name)
         args = dict(raw.get("arguments", {}))
         if spec.name.endswith(".open_url") and "url" not in args:
             raise PlanError("browser.open_url requires a URL")
@@ -94,7 +106,7 @@ def parse_plan(text: str) -> ExecutionPlan:
 
 
 def planning_prompt(user_text: str) -> str:
-    operations = "\n".join(f"- {spec.name}: {spec.description}" for spec in OPERATION_CATALOG if spec.name in _SAFE_MODEL_OPERATIONS)
+    operations = "\n".join(f"- {spec.name}: {spec.description}" for spec in _MODEL_SPECS if spec.name in _SAFE_MODEL_OPERATIONS)
     return (
         "Return ONLY a JSON object with a 'steps' array. Each step must contain an operation from the allowlist "
         "and an 'arguments' object. Never output shell commands, PowerShell, Python, JavaScript, registry scripts, "

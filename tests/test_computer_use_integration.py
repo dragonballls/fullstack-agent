@@ -13,9 +13,15 @@ class _Router:
         return '{"action":"done","arguments":{}}', "mock"
 
 
+class _Orchestrator:
+    def register(self, action):
+        return None
+
+
 class _Runtime:
     def __init__(self):
         self.confirmation = None
+        self.orchestrator = _Orchestrator()
         self._computer = Mock()
         self._screen = Mock()
         self._screen.capture_png.return_value = b"png"
