@@ -1,33 +1,45 @@
 # Jarvis voice
 
-The preferred high-quality cloud voice for the Jarvis setup is ElevenLabs.
+Jarvis uses an **always-listening local microphone path** with a local wake-word gate. After microphone permission is granted, audio can be monitored locally, but Jarvis does not create a cloud request until the wake word **"Jarvis"** is accepted.
 
-## Default setup
+## Brain and routing
 
-During the `backtalk` setup, choose **ElevenLabs** rather than the built-in Kokoro voice. The backtalk maintainer documents the natural ElevenLabs path and identifies **Tarquin** as the voice used in the project author's videos.
+Jarvis uses **OmniRoute only** as its conversational and agent brain. Claude Code, a Claude subscription, and direct Claude routing are not required and are not valid Jarvis fallbacks. A missing OmniRoute configuration must fail clearly rather than silently switching brains.
 
-Do not store an ElevenLabs API key in this repository. On Windows, provide the key through the supported `ELEVENLABS_API_KEY` environment variable or the credential mechanism supported by the installed backtalk version.
+Defaults:
 
-## Jarvis quality + latency profile
+```text
+JARVIS_VOICE_MODE=open
+JARVIS_WAKE_WORD=jarvis
+JARVIS_WAKE_CONFIDENCE=0.70
+JARVIS_WAKE_POST_WINDOW_SECONDS=6
+JARVIS_VOICE_BRAIN=omniroute
+JARVIS_REQUIRE_OMNIROUTE=true
+JARVIS_ALLOW_CLAUDE=false
+```
 
-Prioritize a natural, consistent speaking voice without adding unnecessary generation latency:
+`JARVIS_ALLOW_CLAUDE=false` is fixed for the Jarvis profile.
 
-- Prefer an ElevenLabs low-latency model supported by the installed backtalk release when it offers the required voice quality.
-- Start around **stability 0.50**, **similarity 0.75**, **style 0**, and **speed 1.0**, then audition and adjust by ear.
-- Keep speaker boost off when the extra similarity is not needed because it adds processing cost; enable it only when the actual voice test benefits.
-- Do not hard-code a voice ID. Look up the requested voice in the account's voice library so stale IDs cannot silently select the wrong voice.
+## Activation behavior
 
-These are starting points, not a claim that one setting is universally optimal. The real speech audition remains the authority for the final configuration.
+- Non-addressed room speech is ignored locally.
+- The optional local wake detector listens continuously for the supported `hey_jarvis` model.
+- A recognized wake event starts a bounded request flow.
+- Accepted speech follows the existing Jarvis orchestration and permission path.
+- Only one active voice session is allowed, and repeated wake events are debounced.
+- Cancel, stop, and speaking interruption remain compatible with existing controls.
+- If safe microphone capture or wake gating cannot be established, Jarvis remains silent.
 
-## Reliability
+## Speech output
 
-The voice setup must:
+The preferred high-quality speech output is ElevenLabs. Never store an ElevenLabs API key in the repository; use the supported `ELEVENLABS_API_KEY` environment variable or credential mechanism. The requested voice must be looked up in the account library and a real speech test must succeed before setup is declared working.
 
-1. Verify the ElevenLabs credential before completing setup.
-2. Select the requested Tarquin voice by looking it up in the ElevenLabs voice library rather than hard-coding an unknown voice ID.
-3. Perform an actual speech test before declaring voice setup complete.
-4. Keep the existing Kokoro voice configured as the automatic fallback so a temporary cloud failure does not make the assistant silent.
-5. Never print the API key or write it into tracked files.
-6. Preserve the existing push-to-talk/open-listening mode selected during setup; orchestration speed improvements must not silently change microphone behavior.
+Kokoro remains the speech-output fallback. Neither ElevenLabs nor Kokoro is an agent brain.
 
-The fullstack-agent installer should read this file before configuring backtalk's voice. It should never claim the Jarvis voice is working until the real speech test succeeds.
+## Privacy
+
+Wake-word detection is local-only. No cloud request is created before wake acceptance. Ambient audio and non-addressed transcripts must not be written to logs.
+
+## Installation
+
+The base QOL dependency set stays unchanged. Windows voice deployments install the optional dependencies from `quality_of_life/voice_requirements.txt` so Linux/Python 3.13 CI does not acquire incompatible local audio packages.
