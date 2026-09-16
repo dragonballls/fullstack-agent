@@ -51,6 +51,7 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("cloud_router", "Ordered cloud-provider failover", "quality_of_life.router.CloudModelRouter"))
     registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
     registry.register(ToolSpec("devices", "Real Android devices through authorized device providers; supports multi-device state, screen, input, apps, and files", "quality_of_life.devices.runtime.DeviceTool"))
+    registry.register(ToolSpec("external_integrations", "Optional bridges for Archify, Hindsight, OpenClaude, science skills, and related projects", "quality_of_life.external_integrations.ExternalSkillRegistry"))
     registry.register(ToolSpec("family_locations", "Authorized family-member locations and God’s Eye follow state", "quality_of_life.family_locations.FamilyLocationService"))
     registry.register(ToolSpec("hand_control", "Optional webcam hand tracking bridged to guarded computer input", "quality_of_life.hand_control.HandControlBridge"))
     registry.register(ToolSpec("hand_control_runtime", "Isolated lifecycle manager for optional webcam hand control", "quality_of_life.hand_control_runtime.HandControlRuntime"))
