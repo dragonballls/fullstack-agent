@@ -1,36 +1,30 @@
 # fullstack-agent
 
-> **Never used Claude Code?** Start at [jaredrhod.com](https://jaredrhod.com): pick your situation and it routes you to the right path.
+> **Jarvis profile:** a cloud-first AI assistant integration layer with memory, voice, face, hands, guarded computer/browser control, self-coding, accounts, and Windows maintenance.
 
-**Runs on:** Claude Code only; the installer itself is a Claude Code wizard. The $20 Pro plan is enough.
+This fork preserves the upstream `fullstack-agent` setup flow, but the **Jarvis profile is the primary product contract for this fork**. Jarvis uses OmniRoute as its conversational/agent brain; Claude Code is not required by the Jarvis profile.
 
-Not an agent that writes full-stack code. **An agent that HAS a full stack: memory, voice, and face, plus an optional set of hands.** This repo assembles my whole setup on your machine in one guided conversation, and when it finishes, your screen is a living circuit board with your agent's name on the chip, and it speaks first:
+**Important distribution boundary:** this repository is a Jarvis integration/source layer, not a standalone native Windows `.exe`. The verified `Jarvis-Source-Bundle.zip` is the supported downloadable source artifact. Target-machine credentials, permissions, microphones, webcams, browsers, and separate upstream components still have to be configured where required. See `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
 
-> "Hello [you], what are we working on today?"
+## What the upstream fullstack-agent stack provides
 
-[![Watch the tour: My Jarvis AI Assistant, free on GitHub](https://img.youtube.com/vi/FiOTrxq9ckM/maxresdefault.jpg)](https://www.youtube.com/watch?v=FiOTrxq9ckM)
+Four pieces, each its own open repo, can still be assembled by the upstream setup flow:
 
-**Nine minutes shows you everything you're about to get** (the voice, the face, the memory, and the hands): the tour video above, straight from my own desk.
+- **The mind: [ai-memory-vault](https://github.com/jaredrhod/ai-memory-vault).** A persistent memory built on plain text files your AI reads and writes.
+- **The mouth: [backtalk](https://github.com/jaredrhod/backtalk).** Voice input/output for the upstream fullstack-agent stack.
+- **The face: [ai-visualizer](https://github.com/jaredrhod/ai-visualizer).** Visualizers for the upstream stack.
+- **The hands: [barehands](https://github.com/jaredrhod/barehands).** Optional webcam hand interaction for the upstream stack.
 
-That's not a demo clip. That's minute one.
-
-## What you get
-
-Four pieces, each its own open repo, each excellent alone, assembled here into one agent:
-
-- **The mind: [ai-memory-vault](https://github.com/jaredrhod/ai-memory-vault).** A real, persistent memory built on plain text files your AI reads and writes. It remembers you, your work, and every lesson, across every session, with no size ceiling.
-- **The mouth: [backtalk](https://github.com/jaredrhod/backtalk).** Hold a key, talk out loud, and your agent answers through your speakers about a second later, with all its tools and its whole personality.
-- **The face: [ai-visualizer](https://github.com/jaredrhod/ai-visualizer).** Full-screen visualizers that idle, listen, think, and speak in sync with the real conversation. Four faces ship, including the living circuit board from my videos.
-- **The hands, the optional extra: [barehands](https://github.com/jaredrhod/barehands).** Move notes and images around your screen with your bare hands through your webcam. No headset, no controllers. Opens in its own window instead of the face. Take it now or add it later by running the same install again.
-
-Every piece is optional. The wizard asks which ones you want and explains each in plain English before you decide.
+Those upstream components remain separate projects. The Jarvis extensions in this repository do not pretend otherwise.
 
 ## Jarvis integration
 
-This fork also ships independent Jarvis extensions without replacing the base stack:
+This fork ships independent Jarvis extensions without replacing the upstream stack:
 
 - **`self_coding/`** is a guarded cloud coding engine. It requires a clean Git tree, uses an isolated branch, verifies changes before committing, and rolls failed passes back to the exact starting point.
 - **`quality_of_life/`** provides guarded computer control, browser automation, location/God's Eye context, account access, multi-AI cloud routing, and Windows maintenance.
+- **Webcam hand control** provides guarded system-wide pointer movement, click/drag/scroll gestures, tracking-loss handling, emergency pause, and an explicit activation boundary.
+- **Background-efficient mode** keeps local voice wake listening available while allowing foreground-only presentation work to suspend when minimized; active hand control remains independently managed. See `docs/jarvis-background-mode.md`.
 
 The Jarvis profile uses **OmniRoute only** as its conversational/agent brain. Claude Code and a Claude subscription are not required by the Jarvis profile and are not valid Jarvis fallbacks.
 
@@ -40,64 +34,59 @@ The preferred high-quality Jarvis speech output is **ElevenLabs**, with **Kokoro
 
 Jarvis also includes a scoped multi-account model for Google, Microsoft, GitHub, YouTube, Instagram, and generic web services. OAuth/user consent, provider scopes, local capability policy, and confirmation gates remain required; account credentials are kept behind a runtime credential broker.
 
-## Install
+## Jarvis installation and download
 
-You need [Claude Code](https://jaredrhod.com/start) with a Claude subscription for the **upstream fullstack-agent setup flow** described by this README. The **Jarvis profile is separate** and uses `JARVIS_SETUP.md`; it does not require Claude Code or a Claude subscription.
+For the Jarvis profile, start with `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
+
+The release workflow validates the source bundle on Ubuntu and Windows with Python 3.11, 3.12, and 3.13; checks dependency consistency; compiles the Python modules; runs the complete regression suite; runs Windows-maintenance tests; and reruns tests from the extracted downloadable bundle.
+
+A semantic-version tag (`vMAJOR.MINOR.PATCH`) publishes the verified `Jarvis-Source-Bundle.zip` automatically as a GitHub Release asset.
+
+### Upstream fullstack-agent installation
+
+The commands below are retained only for the **upstream fullstack-agent setup flow**. They are not the Jarvis installation contract.
 
 Mac and Linux:
 
-```
+```text
 mkdir -p ~/my-agent && cd ~/my-agent && git clone https://github.com/jaredrhod/fullstack-agent && cd fullstack-agent && claude "set me up"
 ```
 
 Windows (PowerShell):
 
-```
+```text
 $d="$env:USERPROFILE\.local\bin"; if (Test-Path "$d\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\my-agent | Out-Null; cd $HOME\my-agent; if (-not (Test-Path fullstack-agent\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
 ```
 
-## Jarvis setup
+## Upstream already-built pieces
 
-Use `JARVIS_SETUP.md` for the Jarvis profile. It is the authoritative Claude-free setup/runtime contract for this fork. `fullstack-agent.md` remains the upstream setup conductor and is not the Jarvis brain.
+The upstream wizard can adopt an existing memory vault, voice line, or visualizer. Those behaviors remain documented here for compatibility with the original project. The Jarvis profile, however, uses the contracts in `JARVIS_SETUP.md`, `JARVIS_VOICE.md`, and `JARVIS_DOWNLOAD.md` rather than the upstream Claude-only setup path.
 
-## Already built some of this?
+## After upstream setup
 
-Then you're exactly who this was designed around. If you set up a memory vault, a voice system, or a visualizer before, including the ones my old prompts had your AI hand-build, the wizard adopts before it installs:
+The original upstream shortcuts and `start.sh` / `start.bat` continue to describe that upstream multi-repository stack. They are **not** the Jarvis runtime launcher. For Jarvis, use the documented source-layer/runtime contract in `JARVIS_SETUP.md` and `JARVIS_DOWNLOAD.md`.
 
-- **Your agent's identity and your vault are yours.** Found, kept, never rebuilt, never moved. No questions you already answered.
-- **Hand-built voice lines and visualizers get honestly replaced**, because these repos carry a year of fixes and keep improving with a `git pull`, while a hand-built version is frozen the day it was written. Your old build stays on disk, untouched. Nothing you made is ever deleted.
-- **Except your visualizer scene, which gets promoted.** If your AI built you a custom scene back then, the wizard copies it into the visualizer's gallery as your own face, sitting right beside mine.
+## Safety and runtime boundaries
 
-## After setup
+- Jarvis must not bypass capability policy, confirmation hooks, emergency stop, cancellation, self-coding safeguards, or browser/domain restrictions.
+- Microphone wake detection stays local until wake acceptance.
+- Webcam hand control is explicitly activated, fails closed on tracking loss, and remains independently stoppable.
+- Background mode reduces foreground presentation work; it does not claim zero CPU/RAM while active microphone or hand tracking is running.
+- Unsupported external operations are reported as unsupported instead of being fabricated.
+- Credentials and refresh tokens are kept behind the runtime credential broker and never stored in tracked configuration or returned to the model.
 
-- **Use your agent:** the wizard leaves three shortcuts on your Desktop, named after your agent. **Chat** opens a typed session, terminal only. **Talk** starts the voice and the face. **Barehands** starts the voice and the hands board (the board is the screen in that mode). Double-click the mood you want; Ctrl-C in the window stops it. (They just run `fullstack-agent/start.sh`, or `start.bat` on Windows, if you ever prefer the terminal.)
-- **Something broken or confusing? Ask your agent to fix it.** Seriously. Open the chat and describe the problem. Every repo here ships a troubleshooting guide written for your agent to read, and your agent is instructed during setup to do the fixing itself. This is the part everyone finds out late: you never have to debug this stack yourself.
-- **Update everything:** `./fullstack-agent/update.sh` on macOS. On Windows, ask your agent: "update everything and tell me what changed." Your files live outside the repos, so updates never touch who your agent is or what it remembers.
-- **Daily habit:** open Claude Code in your agent's folder.
+## Troubleshooting and readiness
 
-## The fine print that matters
+Use `JARVIS_READINESS.md` and `readiness.py` for machine-specific checks. A `READY` result means the required local prerequisites detected by that diagnostic are present. Optional integrations may still report warnings.
 
-- The wizard never deletes, overwrites, or moves anything you built. Replacements retire the old thing in place and say so.
-- Your vault stays wherever it already lives. Pieces connect by configuration paths, not by relocation.
-- Requirements per piece: the voice needs a mic and about 1 GB of local models on first run; the hands need a webcam and Chrome; the mind and face need nothing but Python 3, which ships with macOS and most Linux distributions. **Windows ships none**, and the name `python` there is a Microsoft Store placeholder that passes a check and then exits without running, so the face and the hands each carry a `run.bat` that finds a working interpreter or says plainly that there is not one. Windows notes live in each piece's own README.
-- Cross-piece problems: `TROUBLESHOOTING.md` here. Everything else: each piece's own guide.
+The authoritative Windows/source distribution contract is `JARVIS_DOWNLOAD.md`. `fullstack-agent.md` is retained for the upstream setup flow and is not the Jarvis installer/runtime contract.
 
 ## The rest of it
 
-Everything here is free and open, and there is a whole community using it.
-
-- **The videos.** Free series on all of it: https://youtube.com/@jaredrhod
-- **The Discord.** Thousands of builders, and the fastest place to get unstuck: https://discord.gg/YSdsqMv3V8
-- **Everything else,** free and open: https://jaredrhod.com
-
-## Support
-
-Free to use, and always will be. If this helped you out, you can buy me a coffee:
-
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/img/githubbutton_sm.svg)
+The upstream project remains free and open under AGPL-3.0-or-later. See `LICENSE` for full terms.
 
 ## License
 
 Copyright (c) 2026 Jared Rhodenizer.
 
-Licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). **Use it in your business, commercially, for free.** Run it, change it, build your workflow on top of it, and charge for the work you do with it. The one rule is that it stays open: if you hand it to someone else, or run a modified version as a service other people use, your version ships under this same license with its source available. Credit me when you build on it. Want it inside a closed-source commercial product? Email license@jaredrhod.com. Full terms are in the LICENSE file and at https://www.gnu.org/licenses/agpl-3.0.html
+Licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later).
