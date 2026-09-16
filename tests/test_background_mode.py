@@ -1,10 +1,12 @@
 import unittest
+from unittest.mock import Mock
 
 from quality_of_life.background_mode import (
     BackgroundComponent,
     BackgroundMode,
     BackgroundModeController,
 )
+from quality_of_life.background_runtime import JarvisBackgroundRuntime
 
 
 class BackgroundModeTests(unittest.TestCase):
@@ -72,6 +74,26 @@ class BackgroundModeTests(unittest.TestCase):
         self.assertTrue(controller.enter_foreground())
         self.assertFalse(controller.enter_foreground())
         self.assertEqual(calls, ["bg", "fg"])
+
+    def test_background_runtime_minimize_does_not_stop_services(self) -> None:
+        voice = Mock()
+        voice.running = True
+        voice.last_error = None
+        hand = Mock()
+        hand.status.return_value = {"enabled": True, "state": "active"}
+        runtime = JarvisBackgroundRuntime(voice_listener=voice, hand_control=hand)
+
+        runtime.start()
+        self.assertTrue(runtime.minimize())
+        self.assertEqual(runtime.lifecycle.state, BackgroundMode.BACKGROUND)
+        voice.start.assert_called_once_with()
+        hand.stop.assert_not_called()
+        self.assertTrue(runtime.status()["voice"]["running"])
+        self.assertEqual(runtime.status()["hand_control"]["state"], "active")
+
+        runtime.stop()
+        voice.stop.assert_called_once_with()
+        hand.stop.assert_called_once_with()
 
 
 if __name__ == "__main__":
