@@ -15,7 +15,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 from typing import Any
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
@@ -177,8 +176,9 @@ class HandsAdapter:
 class AutoUpdateController:
     """Poll the verified rolling GitHub release and hand off a replacement safely."""
 
-    def __init__(self, stop_event: threading.Event) -> None:
+    def __init__(self, stop_event: threading.Event, request_exit: callable | None = None) -> None:
         self.stop_event = stop_event
+        self.request_exit = request_exit
         self.thread: threading.Thread | None = None
         self.triggered = False
 
@@ -200,11 +200,10 @@ class AutoUpdateController:
 
     def stop(self) -> None:
         self.stop_event.set()
-        if self.thread is not None and self.thread.is_alive():
+        if self.thread is not None and self.thread.is_alive() and threading.current_thread() is not self.thread:
             self.thread.join(timeout=3)
 
     def _loop(self) -> None:
-        # Let the app finish startup before the first network request.
         self.stop_event.wait(min(30, AUTO_UPDATE_INTERVAL))
         while not self.stop_event.is_set():
             if self._check_once():
@@ -222,8 +221,9 @@ class AutoUpdateController:
             staged = update_dir / f"Jarvis-{release.commit_sha[:12]}.exe"
             stage_update(release.asset_url, release.sha256, staged)
             script_path = Path(tempfile.gettempdir()) / f"Jarvis-update-{os.getpid()}-{release.commit_sha[:12]}.ps1"
+            escaped_script = str(script_path).replace("'", "''")
             script_path.write_text(
-                build_windows_handoff_script(os.getpid(), Path(sys.executable), staged) + f"\nRemove-Item -LiteralPath '{str(script_path).replace(chr(39), chr(39)+chr(39))}' -Force -ErrorAction SilentlyContinue\n",
+                build_windows_handoff_script(os.getpid(), Path(sys.executable), staged) + f"\nRemove-Item -LiteralPath '{escaped_script}' -Force -ErrorAction SilentlyContinue\n",
                 encoding="utf-8",
             )
             subprocess.Popen(
@@ -234,6 +234,8 @@ class AutoUpdateController:
             self.triggered = True
             self.stop_event.set()
             LOGGER.info("verified Jarvis update staged for commit %s; restarting", release.commit_sha)
+            if self.request_exit is not None:
+                self.request_exit()
             return True
         except SelfUpdateError as exc:
             LOGGER.warning("auto-update check failed safely: %s", exc)
@@ -254,7 +256,12 @@ class FullstackJarvisHost:
         self.stopped = False
         self._window: Any | None = None
         self._update_stop = threading.Event()
-        self.updater = AutoUpdateController(self._update_stop)
+        self.updater = AutoUpdateController(self._update_stop, self._exit_for_update)
+
+    @staticmethod
+    def _exit_for_update() -> None:
+        logging.shutdown()
+        os._exit(0)
 
     def start(self) -> None:
         if self.started:
