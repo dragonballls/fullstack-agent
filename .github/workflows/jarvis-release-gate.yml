@@ -79,11 +79,12 @@ jobs:
           python -m PyInstaller --noconfirm --clean --onefile --windowed --name Jarvis --paths . --paths build_vendor\backtalk\source --add-data "build_vendor\backtalk\source;backtalk/source" --add-data "build_vendor\ai-visualizer\source;ai-visualizer/source" --add-data "build_vendor\barehands\source;barehands/source" --add-data "build_vendor\ai-memory-vault\source;ai-memory-vault/source" --collect-submodules quality_of_life --collect-submodules self_coding --collect-submodules windows_maintenance --collect-submodules backtalk --collect-all faster_whisper --collect-all kokoro --collect-submodules webrtcvad --hidden-import sounddevice --hidden-import soundfile --hidden-import pynput scripts/jarvis_desktop.pyw
           if (-not (Test-Path -LiteralPath 'dist/Jarvis.exe')) { throw 'Jarvis.exe was not produced' }
           if ((Get-Item -LiteralPath 'dist/Jarvis.exe').Length -lt 5000000) { throw 'Jarvis.exe is unexpectedly small; embedded runtime/assets are probably missing' }
-      - name: Smoke-test embedded Backtalk source and visualizer
+      - name: Smoke-test embedded Backtalk source, native window dependency, and visualizer
         shell: pwsh
         run: |
           $env:JARVIS_SMOKE = '1'
           $env:JARVIS_SMOKE_VOICE = '1'
+          $env:JARVIS_SMOKE_WEBVIEW = '1'
           $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru
           $deadline = (Get-Date).AddSeconds(20)
           $ready = $false
