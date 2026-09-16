@@ -21,6 +21,15 @@ class SelfCodingError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ToolGap:
+    """Structured description of a missing broker/tool capability."""
+
+    kind: str
+    operation: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class SelfCodingConfig:
     repo: Path
     test_commands: tuple[tuple[str, ...], ...] = ((sys.executable, "-m", "unittest", "discover", "-s", "tests"),)
@@ -69,6 +78,35 @@ class SelfCodingAgent:
             raise SelfCodingError(status.stderr.strip() or "Unable to inspect Git status.")
         if status.stdout.strip():
             raise SelfCodingError("Repository is not clean; refusing to overwrite existing work.")
+
+    def inspect_tool_gap(self, goal: str) -> ToolGap | None:
+        """Detect explicit broker failure language without inferring permissions."""
+        normalized = " ".join(goal.casefold().split())
+        markers = (
+            "unsupported operation",
+            "no adapter is registered",
+            "unknown capability operation",
+            "tool capability is unavailable",
+            "missing adapter",
+        )
+        if any(marker in normalized for marker in markers):
+            return ToolGap("tool_capability", "unknown", goal.strip())
+        return None
+
+    def propose_tool_extension(self, goal: str, gap: ToolGap | None) -> dict[str, object]:
+        """Create a machine-readable repository task; never grants or activates access."""
+        if gap is None:
+            raise SelfCodingError("A concrete tool gap is required before proposing an extension.")
+        return {
+            "kind": "tool_extension",
+            "operation": gap.operation,
+            "reason": gap.reason,
+            "goal": goal.strip(),
+            "adapter_target": "quality_of_life/",
+            "tests_required": True,
+            "verification": "python -m unittest discover -s tests -p 'test_*.py' -v",
+            "activation_requires": ("declared capability", "policy approval", "passing tests"),
+        }
 
     def _new_branch(self) -> tuple[str, str]:
         head = self._git("rev-parse", "HEAD")
