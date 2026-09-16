@@ -6,6 +6,18 @@ from quality_of_life.workflows import Workflow, WorkflowService, WorkflowStep
 
 
 class RuntimeConfirmationTests(unittest.TestCase):
+    def test_unconfirmed_protected_execution_is_not_dispatched(self):
+        runtime = Mock()
+        runtime.policy = CapabilityPolicy(
+            allowed=frozenset({Capability.APP_LAUNCH}),
+            require_confirmation=frozenset({Capability.APP_LAUNCH}),
+        )
+        workflow = Workflow.new("Launch", steps=(WorkflowStep("computer.open_app", {"command": "example"}),))
+        result = WorkflowService.execute(runtime, workflow, confirmed=False)
+        self.assertFalse(result.verified)
+        self.assertTrue(result.needs_confirmation)
+        runtime.dispatch.assert_not_called()
+
     def test_confirmed_execution_passes_confirmation_to_runtime(self):
         runtime = Mock()
         runtime.policy = CapabilityPolicy(
