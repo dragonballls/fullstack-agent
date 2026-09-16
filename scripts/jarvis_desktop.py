@@ -14,7 +14,7 @@ from pathlib import Path
 import threading
 from typing import Any
 
-from quality_of_life.permissions import CapabilityPolicy
+from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.runtime import JarvisRuntime
 
 from scripts.fullstack_assets import embedded_path
@@ -148,7 +148,7 @@ class HandsAdapter:
             LOGGER.info("hand control remains disabled until explicitly enabled")
             return
         try:
-            self.runtime.dispatch(CapabilityPolicy().operation_capability("hand_control.start"), "hand_control.start")
+            self.runtime.dispatch(Capability.MOUSE_CONTROL, "hand_control.start")
             self.started = True
         except Exception:
             LOGGER.exception("hand control could not start")
@@ -157,7 +157,7 @@ class HandsAdapter:
         if not self.started:
             return
         try:
-            self.runtime.dispatch(CapabilityPolicy().operation_capability("hand_control.stop"), "hand_control.stop")
+            self.runtime.dispatch(Capability.MOUSE_CONTROL, "hand_control.stop")
         except Exception:
             LOGGER.exception("hand control could not stop cleanly")
         finally:
