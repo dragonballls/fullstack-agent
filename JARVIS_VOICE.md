@@ -4,9 +4,9 @@ Jarvis uses the embedded Backtalk voice I/O layer as its desktop speech interfac
 
 ## Brain and routing
 
-Jarvis uses **OmniRoute** for conversational and agent routing. Claude Code, a Claude subscription, and direct Claude routing are not Jarvis fallbacks.
+The supported agent brain is **OmniRoute only**. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
 
-A missing or unavailable OmniRoute configuration must fail clearly rather than silently selecting another agent brain.
+Jarvis uses OmniRoute for conversational and agent routing. A missing or unavailable OmniRoute configuration must fail clearly rather than silently selecting another agent brain.
 
 ## Default Backtalk settings
 
@@ -34,7 +34,13 @@ An open-microphone mode is available through the supported Backtalk configuratio
 
 ## Speech output
 
-Kokoro is embedded as a local speech-output option. **ElevenLabs** is supported as an optional externally configured speech-output provider. Both are output engines only; neither becomes an agent planner or tool executor, and neither changes the OmniRoute-only brain boundary.
+Kokoro is embedded as a local speech-output option. **ElevenLabs** is supported as an optional externally configured speech-output provider. When configured remotely, its credential is referenced through the supported secret/credential mechanism; `ELEVENLABS_API_KEY` must not be stored in tracked source, local diagnostic logs, or generated application reports. Never store or save an API key in the voice configuration itself.
+
+Both Kokoro and ElevenLabs are output engines only; neither becomes an agent planner or tool executor, and neither changes the OmniRoute-only brain boundary.
+
+## Real speech test
+
+A **real speech test** is a machine-level verification performed on the target Windows PC after installation. It checks the selected microphone, Windows audio permission, speech recognition model, speaker/output device, and spoken response path. Passing the hosted CI smoke test does not substitute for this physical-device check.
 
 Microphone/speaker access is machine-specific. If audio initialization fails, Jarvis should keep the Fullstack visualizer running and log the degraded voice component rather than terminating the desktop application.
 
