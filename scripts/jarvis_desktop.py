@@ -143,13 +143,7 @@ class VoiceAdapter:
         from backtalk.ears import Ears
         from backtalk.mouth import Mouth
         from backtalk.ptt import PTTListener
-        LOGGER.info(
-            "embedded Backtalk smoke validation passed: %s (%s, %s, %s)",
-            vendor,
-            Ears.__name__,
-            Mouth.__name__,
-            PTTListener.__name__,
-        )
+        LOGGER.info("embedded Backtalk smoke validation passed: %s", vendor)
 
     def start(self) -> None:
         if self._truthy("JARVIS_SMOKE") and self._truthy("JARVIS_SMOKE_VOICE"):
