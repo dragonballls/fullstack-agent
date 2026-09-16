@@ -4,7 +4,7 @@ import time
 import unittest
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
-from quality_of_life.tool_broker import ToolManifest, ToolResult, UniversalToolBroker
+from quality_of_life.tool_broker import ToolManifest, UniversalToolBroker
 
 
 class FakeReadAdapter:
@@ -21,15 +21,6 @@ class FakeWriteAdapter:
 
     def invoke(self, operation, arguments):
         return {"ok": True}
-
-
-class SlowAdapter:
-    def manifest(self):
-        return ToolManifest("slow", "slow adapter", ("web.search",))
-
-    def invoke(self, operation, arguments):
-        time.sleep(0.25)
-        return "late"
 
 
 class UniversalToolBrokerTests(unittest.TestCase):
@@ -57,12 +48,12 @@ class UniversalToolBrokerTests(unittest.TestCase):
 
     def test_result_is_bounded(self):
         policy = CapabilityPolicy(allowed=frozenset({Capability.SYSTEM_DIAGNOSTICS}))
-        broker = UniversalToolBroker(policy=policy, max_result_chars=20)
+        broker = UniversalToolBroker(policy=policy, max_result_chars=1000)
         broker.register(FakeReadAdapter())
-        result = broker.invoke("web.fetch", {"body": "x" * 100})
+        result = broker.invoke("web.fetch", {"body": "x" * 2000})
         self.assertTrue(result.ok)
         self.assertTrue(result.truncated)
-        self.assertLessEqual(len(result.data["body"]), 50)
+        self.assertLessEqual(len(result.data["body"]), 1015)
 
 
 if __name__ == "__main__":
