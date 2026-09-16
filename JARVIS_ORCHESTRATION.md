@@ -26,10 +26,6 @@ OmniRoute remains cloud-only. A missing cloud credential, unavailable provider, 
 
 The orchestration layer emits a local acknowledgement before model work, avoids a second model call for simple requests, parallelizes independent analysis for complex requests, and records end-to-end latency in the result metadata.
 
-## Persistent workflows
-
-Named user workflows are persisted separately from conversational memory. A workflow stores a stable name, ordered capability actions, optional conditions, confirmation requirements, retry policy, and run metadata. Natural-language requests can resolve a saved workflow by name and invoke it through the existing guarded runtime dispatch; workflow execution never bypasses capability policy. Definitions and run history survive process restarts so a workflow created on one day can be invoked on a later day.
-
 ## Machine-only verification
 
-Hosted CI can verify routing, concurrency, policy, workflow persistence, and deterministic dispatch contracts. Actual microphone/speaker playback, ElevenLabs speech quality, screen capture, mouse movement, browser launches, camera permission, and Windows repair effects still require validation on the user's Windows machine.
+Hosted CI can verify routing, concurrency, policy, and deterministic dispatch contracts. Actual microphone/speaker playback, ElevenLabs speech quality, screen capture, mouse movement, browser launches, camera permission, and Windows repair effects still require validation on the user's Windows machine.
