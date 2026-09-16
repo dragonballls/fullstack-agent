@@ -10,6 +10,21 @@ class PlannerTests(unittest.TestCase):
         plan = parse_plan('{"steps":[{"operation":"system.inspect","arguments":{}}]}')
         self.assertEqual(plan.steps[0].operation, "system.inspect")
 
+    def test_normalizes_external_account_write_to_guarded_service_action(self):
+        plan = parse_plan(
+            '{"steps":[{"operation":"youtube.video.upload","arguments":{"file_path":"clip.mp4","title":"Test","privacy":"private"}}]}'
+        )
+        self.assertEqual(plan.steps[0].operation, "accounts.service_action")
+        self.assertEqual(plan.steps[0].arguments["provider"], "youtube")
+        self.assertEqual(plan.steps[0].arguments["operation"], "youtube.video.upload")
+        self.assertEqual(plan.steps[0].arguments["payload"]["file_path"], "clip.mp4")
+
+    def test_account_write_rejects_wrong_provider(self):
+        with self.assertRaises(PlanError):
+            parse_plan(
+                '{"steps":[{"operation":"youtube.video.upload","arguments":{"provider":"google","file_path":"clip.mp4","title":"Test"}}]}'
+            )
+
     def test_rejects_shell_operations(self):
         with self.assertRaises(PlanError):
             parse_plan('{"steps":[{"operation":"powershell.exec","arguments":{"command":"Get-Process"}}]}')
