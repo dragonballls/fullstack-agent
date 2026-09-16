@@ -42,14 +42,20 @@ class JarvisVoiceBridgeTests(TestCase):
         ears = Mock()
         mouth = Mock()
         ptt = Mock()
-        bridge = JarvisVoiceBridge(controller=controller, ears=ears, mouth=mouth, ptt=ptt)
         stopped = threading.Event()
 
-        def wait_press() -> None:
-            while not stopped.wait(0.02):
-                pass
+        def fake_record(_is_held) -> str:
+            stopped.wait()
+            return ""
 
-        ptt.wait_press.side_effect = wait_press
+        bridge = JarvisVoiceBridge(
+            controller=controller,
+            ears=ears,
+            mouth=mouth,
+            ptt=ptt,
+            record_held=fake_record,
+        )
+        ptt.wait_press.side_effect = lambda: None
         old_mode = os.environ.get("JARVIS_MIC_MODE")
         os.environ["JARVIS_MIC_MODE"] = "ptt"
         try:
