@@ -1,8 +1,10 @@
+import unittest
+
 from quality_of_life.hand_control_runtime import HandControlRuntime
 
 
 class FakePyAutoGUI:
-    def mouseUp(self):
+    def mouseUp(self, button="left"):
         return None
 
     def size(self):
@@ -22,17 +24,24 @@ class FakeController:
         return None
 
 
-def test_hand_control_runtime_starts_disabled_and_is_idempotent():
-    runtime = HandControlRuntime(controller=FakeController())
-    assert runtime.enabled is False
-    assert runtime.start() is True
-    assert runtime.enabled is True
-    assert runtime.start() is True
-    runtime.stop()
-    assert runtime.enabled is False
+class HandControlRuntimeTests(unittest.TestCase):
+    def test_starts_disabled_is_idempotent_and_stops(self):
+        runtime = HandControlRuntime(controller=FakeController(), open_browser=False)
+        self.assertFalse(runtime.enabled)
+        self.assertEqual(runtime.status()["state"], "disabled")
+        self.assertTrue(runtime.start())
+        self.assertTrue(runtime.enabled)
+        self.assertEqual(runtime.status()["state"], "active")
+        self.assertTrue(runtime.start())
+        runtime.stop()
+        self.assertFalse(runtime.enabled)
+        self.assertEqual(runtime.status()["state"], "disabled")
+
+    def test_reports_local_tracker_url(self):
+        runtime = HandControlRuntime(controller=FakeController(), open_browser=False)
+        self.assertEqual(runtime.url, "http://127.0.0.1:8795/")
+        self.assertFalse(runtime.enabled)
 
 
-def test_hand_control_runtime_reports_local_tracker_url():
-    runtime = HandControlRuntime(controller=FakeController())
-    assert runtime.url == "http://127.0.0.1:8795/"
-    runtime.stop()
+if __name__ == "__main__":
+    unittest.main()
