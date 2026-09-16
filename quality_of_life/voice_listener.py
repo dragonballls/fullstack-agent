@@ -125,7 +125,6 @@ class LocalWakeWordListener:
             audio = (indata.reshape(-1) * 32767).astype("int16")
             self.process_prediction(model.predict(audio))
 
-        self._stop_event.clear()
         with sounddevice.InputStream(samplerate=self.sample_rate, channels=1, dtype="float32", blocksize=self.block_size, callback=callback):
             while not self._stop_event.wait(0.5):
                 pass
