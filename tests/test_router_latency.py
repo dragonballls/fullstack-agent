@@ -1,3 +1,5 @@
+"""Regression tests for provider-scoped router latency metrics."""
+
 import os
 import unittest
 from unittest.mock import patch
@@ -7,7 +9,10 @@ from quality_of_life.router import CloudModelRouter, ProviderTarget
 
 
 class RouterLatencyTests(unittest.TestCase):
+    """Verify that learned latency remains isolated between providers."""
+
     def test_provider_latency_is_scoped_to_named_target(self) -> None:
+        """Return only the requested provider's learned latency for a shared model."""
         first = ProviderTarget("fast", "https://fast.example.test/v1", "FAST_KEY", "shared-model")
         second = ProviderTarget("slow", "https://slow.example.test/v1", "SLOW_KEY", "shared-model")
         key_first = CloudModelRouter._health_key(first)
