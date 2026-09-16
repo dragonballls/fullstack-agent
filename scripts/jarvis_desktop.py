@@ -204,6 +204,7 @@ class FullstackJarvisHost:
     def run_window(self) -> None:
         """Create the native visualizer window on the foreground thread."""
         if os.environ.get("JARVIS_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}:
+            threading.Event().wait()
             return
         try:
             import webview
