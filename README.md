@@ -1,10 +1,10 @@
 # fullstack-agent
 
-> **Jarvis profile:** a cloud-first AI assistant integration layer with memory, voice, face, hands, guarded computer/browser control, self-coding, accounts, and Windows maintenance.
+> **Jarvis profile:** a cloud-first AI assistant integration layer with memory, voice, face, hands, guarded computer/browser control, self-coding, accounts, Windows maintenance, persistent workflows, family God’s Eye, and optional external agent skills.
 
 This fork preserves the upstream `fullstack-agent` setup flow, but the **Jarvis profile is the primary product contract for this fork**. Jarvis uses OmniRoute as its conversational/agent brain; Claude Code is not required by the Jarvis profile.
 
-**Important distribution boundary:** this repository is a Jarvis integration/source layer, not a standalone native Windows `.exe`. The verified `Jarvis-Source-Bundle.zip` is the supported downloadable source artifact. Target-machine credentials, permissions, microphones, webcams, browsers, and separate upstream components still have to be configured where required. See `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
+**Important distribution boundary:** this repository is a Jarvis integration/source layer, not a standalone native Windows `.exe`. The verified native Windows build is produced by the release gate; target-machine credentials, permissions, microphones, webcams, browsers, and optional external services still have to be configured where required. See `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
 
 ## What the upstream fullstack-agent stack provides
 
@@ -23,6 +23,7 @@ This fork ships independent Jarvis extensions without replacing the upstream sta
 
 - **`self_coding/`** is a guarded cloud coding engine. It requires a clean Git tree, uses an isolated branch, verifies changes before committing, and rolls failed passes back to the exact starting point.
 - **`quality_of_life/`** provides guarded computer control, browser automation, persistent named workflows, authorized family-location/God's Eye context, account access, multi-AI cloud routing, and Windows maintenance.
+- **Optional external integrations** are cataloged in `quality_of_life.external_integrations`: Archify for verified architecture maps, Hindsight for optional long-term memory, OpenClaude for an optional coding-agent harness, go-modern-guidelines for Go work, and scientific-agent-skills for optional science workflows. They are dependency-free at startup and fail closed when not configured. See `docs/JARVIS_EXTERNAL_INTEGRATIONS.md`.
 - **Webcam hand control** provides guarded system-wide pointer movement, click/drag/scroll gestures, tracking-loss handling, emergency pause, and an explicit activation boundary.
 - **Background-efficient mode** keeps local voice wake listening available while allowing foreground-only presentation work to suspend when minimized; active hand control remains independently managed. See `docs/jarvis-background-mode.md`.
 
@@ -44,9 +45,9 @@ The upstream `start.bat` remains available for the separate fullstack-agent stac
 
 For the Jarvis profile, start with `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
 
-The release workflow validates the source bundle on Ubuntu and Windows with Python 3.11, 3.12, and 3.13; checks dependency consistency; compiles the Python modules; runs the complete regression suite; runs Windows-maintenance tests; and reruns tests from the extracted downloadable bundle.
+The release workflow validates the source bundle on Ubuntu and Windows with Python 3.11, 3.12, and 3.13; checks dependency consistency; compiles the Python modules; runs the complete regression suite; runs Windows-maintenance tests; builds the native Windows `Jarvis.exe`; and smoke-tests the embedded visualizer before uploading the executable artifact.
 
-A semantic-version tag (`vMAJOR.MINOR.PATCH`) publishes the verified `Jarvis-Source-Bundle.zip` automatically as a GitHub Release asset.
+A semantic-version tag (`vMAJOR.MINOR.PATCH`) publishes the verified release automatically as a GitHub Release asset.
 
 ### Upstream fullstack-agent installation
 
@@ -61,7 +62,7 @@ mkdir -p ~/my-agent && cd ~/my-agent && git clone https://github.com/jaredrhod/f
 Windows (PowerShell):
 
 ```text
-$d="$env:USERPROFILE\\.local\\bin"; if (Test-Path "$d\\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\\my-agent | Out-Null; cd $HOME\\my-agent; if (-not (Test-Path fullstack-agent\\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
+$d="$env:USERPROFILE\\.local\\bin"; if (Test-Path "$d\\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\\my-agent | Out-Null; cd $HOME\\my-agent; if (-not (Test-Path fullstack-agent\\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
 ```
 
 ## Upstream already-built pieces
