@@ -17,6 +17,20 @@ The `Jarvis full release gate` workflow is the authoritative CI gate for the sou
 
 See `JARVIS_DOWNLOAD.md` for the complete download/runtime contract.
 
+## Windows launch
+
+For the Jarvis profile, the supported Windows entrypoint is `scripts/start-jarvis.ps1`. It launches `scripts/jarvis_desktop.pyw` through the repository's `.venv\Scripts\pythonw.exe`, so normal operation does not require a persistent PowerShell window.
+
+Before first launch, run:
+
+```text
+python readiness.py
+```
+
+The launcher itself uses `CapabilityPolicy()` and the existing `AgentOrchestrator`; it does not create a second tool-execution path. The small chat bar is only a presentation host over the existing Jarvis runtime.
+
+`start.bat` remains the upstream fullstack-agent launcher and is not the Jarvis runtime launcher.
+
 ## Voice
 
 Jarvis starts an always-listening local wake-word listener after microphone permission is granted. The detailed voice contract is `JARVIS_VOICE.md` and must be read before configuring the voice runtime.
