@@ -21,6 +21,7 @@ from urllib.request import Request, urlopen
 from .account_integrations import (
     AccountIdentity,
     AccountIntegrationError,
+    AuthorizationState,
     OAuthClientConfig,
     OAuthConfigurationError,
     ServiceProvider,
@@ -160,12 +161,16 @@ class OAuthBroker:
         token_store: KeyringTokenStore,
         opener: Callable[..., object] = urlopen,
         time_fn: Callable[[], float] = time,
+        pending_ttl_seconds: float = 300.0,
     ) -> None:
+        if pending_ttl_seconds <= 0:
+            raise ValueError("pending_ttl_seconds must be positive")
         self._configs = dict(configs)
         self._token_store = token_store
         self._opener = opener
         self._time = time_fn
         self._pending: dict[str, OAuthPendingRequest] = {}
+        self._pending_ttl_seconds = pending_ttl_seconds
 
     @staticmethod
     def _pkce_verifier() -> str:
@@ -174,6 +179,26 @@ class OAuthBroker:
     @staticmethod
     def _pkce_challenge(verifier: str) -> str:
         return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+
+    @staticmethod
+    def _validate_redirect_uri(redirect_uri: str) -> None:
+        parsed = urlparse(redirect_uri)
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname != "127.0.0.1"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port is None
+            or not 1 <= parsed.port <= 65535
+            or parsed.fragment
+        ):
+            raise OAuthConfigurationError("desktop OAuth must use an exact 127.0.0.1 loopback redirect")
+
+    def _purge_expired(self) -> None:
+        cutoff = self._time() - self._pending_ttl_seconds
+        for state, pending in tuple(self._pending.items()):
+            if pending.created_at < cutoff:
+                self._pending.pop(state, None)
 
     def begin(
         self,
@@ -186,9 +211,11 @@ class OAuthBroker:
         config = self._configs.get(provider)
         if config is None:
             raise OAuthConfigurationError(f"OAuth is not configured for {provider.value}")
-        if not redirect_uri.startswith("http://127.0.0.1:"):
-            raise OAuthConfigurationError("desktop OAuth must use a 127.0.0.1 loopback redirect")
+        self._validate_redirect_uri(redirect_uri)
+        self._purge_expired()
         actual_state = state or secrets.token_urlsafe(32)
+        if not actual_state.strip():
+            raise OAuthStateError("OAuth state must be non-empty")
         verifier = self._pkce_verifier()
         pending = OAuthPendingRequest(provider, actual_state, verifier, redirect_uri, self._time())
         self._pending[actual_state] = pending
@@ -225,11 +252,15 @@ class OAuthBroker:
         return code
 
     def exchange(self, pending: OAuthPendingRequest, code: str) -> OAuthTokenSet:
+        self._purge_expired()
         config = self._configs.get(pending.provider)
         if config is None:
             raise OAuthConfigurationError(f"OAuth is not configured for {pending.provider.value}")
-        if pending.state not in self._pending:
-            raise OAuthStateError("OAuth request is unknown or already completed")
+        current = self._pending.get(pending.state)
+        if current != pending:
+            raise OAuthStateError("OAuth request is unknown, expired, or already completed")
+        if not code.strip():
+            raise OAuthExchangeError("OAuth authorization code must be non-empty")
         payload = {
             "client_id": os.environ.get(config.client_id_env, ""),
             "code": code,
@@ -288,7 +319,7 @@ class OAuthBroker:
         label = data.get("email") or data.get("userPrincipalName") or data.get("mail") or raw_id
         if not raw_id or not label:
             raise OAuthExchangeError("provider identity response did not contain a stable account identifier")
-        return AccountIdentity(pending.provider, str(raw_id), str(label), state=__import__("quality_of_life.account_integrations", fromlist=["AuthorizationState"]).AuthorizationState.CONNECTED)
+        return AccountIdentity(pending.provider, str(raw_id), str(label), state=AuthorizationState.CONNECTED)
 
     def _post_token(self, config: OAuthClientConfig, payload: dict[str, str]) -> OAuthTokenSet:
         client_id = payload.get("client_id", "")
