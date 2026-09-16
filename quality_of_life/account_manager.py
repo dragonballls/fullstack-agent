@@ -43,6 +43,16 @@ _READ_SCOPE_BY_PROVIDER: dict[ServiceProvider, tuple[tuple[str, str], ...]] = {
 }
 
 
+_WRITE_SCOPE_BY_PROVIDER: dict[ServiceProvider, tuple[tuple[str, str], ...]] = {
+    ServiceProvider.GOOGLE: (("gmail.send", "Send Gmail messages"),),
+    ServiceProvider.YOUTUBE: (
+        ("youtube.upload", "Upload YouTube videos"),
+        ("youtube.force-ssl", "Manage YouTube videos and channel resources"),
+    ),
+    ServiceProvider.MICROSOFT: (("Mail.Send", "Send Microsoft mail"),),
+}
+
+
 class AccountServiceManager:
     """Coordinate persistent identities, OAuth, and guarded service adapters."""
 
@@ -79,11 +89,7 @@ class AccountServiceManager:
         self.register_identity(identity)
         self._grant_default_read_scopes(identity)
         provider_key = AccountProvider(identity.provider.value if identity.provider.value != "generic_web" else "generic")
-        try:
-            self.account_access.enable(provider_key, identity.account_id)
-        except Exception:
-            # A brand-new account has no prior grant yet; _grant_default_read_scopes created it.
-            raise
+        self.account_access.enable(provider_key, identity.account_id)
         self.account_store.save_grants(self.account_access.list_accounts())
         return AccountConnection(identity, AuthorizationState.CONNECTED.value)
 
@@ -111,6 +117,17 @@ class AccountServiceManager:
         grant = self.account_access.add_scope(provider, identity.account_id, AccountScope(scope, description, risk))
         self.account_store.save_grants(self.account_access.list_accounts())
         return grant
+
+    def grant_write_scope(self, identity: AccountIdentity, scope: str | None = None) -> AccountGrant | tuple[AccountGrant, ...]:
+        """Enable a supported mutation scope explicitly; writes remain confirmation-gated."""
+        available = _WRITE_SCOPE_BY_PROVIDER.get(identity.provider, ())
+        if not available:
+            raise ValueError(f"no direct write scopes are configured for {identity.provider.value}")
+        selected = tuple(item for item in available if scope is None or item[0] == scope)
+        if scope is not None and not selected:
+            raise ValueError(f"unsupported write scope for {identity.provider.value}: {scope}")
+        grants = tuple(self.grant_scope(identity, name, description, risk=AccountRisk.WRITE) for name, description in selected)
+        return grants[0] if len(grants) == 1 else grants
 
     def service_action(
         self,
