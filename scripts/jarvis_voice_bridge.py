@@ -7,13 +7,25 @@ import os
 from pathlib import Path
 import sys
 import threading
-import time
 from typing import Any, Callable
 
 
 APP_DIR = Path.home() / "AppData" / "Local" / "Jarvis"
 SIGNALS_DIR = APP_DIR / "signals"
 BACKTALK_CONFIG = APP_DIR / "backtalk.json"
+
+
+DEFAULT_CONFIG: dict[str, Any] = {
+    "name": "JARVIS",
+    "ptt_key": "home",
+    "mic_mode": "ptt",
+    "voice": "bm_lewis",
+    "stt_model": "small.en",
+    "stt_device": "auto",
+    "stt_compute": "int8",
+    "greeting": "Hello. I'm online and ready.",
+    "greeting_open_mic": "",
+}
 
 
 def _configure_vendor() -> Path:
@@ -28,19 +40,16 @@ def _configure_vendor() -> Path:
         BACKTALK_CONFIG.write_text(
             json.dumps(
                 {
-                    "agent_dir": str(APP_DIR),
-                    "name": os.environ.get("JARVIS_NAME", "JARVIS"),
-                    "permission_mode": "ask",
-                    "ptt_key": os.environ.get("JARVIS_PTT_KEY", "home"),
-                    "mic_mode": os.environ.get("JARVIS_MIC_MODE", "ptt"),
-                    "voice": os.environ.get("JARVIS_VOICE", "bm_lewis"),
-                    "stt_model": os.environ.get("JARVIS_STT_MODEL", "small.en"),
-                    "stt_device": os.environ.get("JARVIS_STT_DEVICE", "auto"),
-                    "stt_compute": os.environ.get("JARVIS_STT_COMPUTE", "int8"),
+                    **DEFAULT_CONFIG,
+                    "name": os.environ.get("JARVIS_NAME", DEFAULT_CONFIG["name"]),
+                    "ptt_key": os.environ.get("JARVIS_PTT_KEY", DEFAULT_CONFIG["ptt_key"]),
+                    "mic_mode": os.environ.get("JARVIS_MIC_MODE", DEFAULT_CONFIG["mic_mode"]),
+                    "voice": os.environ.get("JARVIS_VOICE", DEFAULT_CONFIG["voice"]),
+                    "stt_model": os.environ.get("JARVIS_STT_MODEL", DEFAULT_CONFIG["stt_model"]),
+                    "stt_device": os.environ.get("JARVIS_STT_DEVICE", DEFAULT_CONFIG["stt_device"]),
+                    "stt_compute": os.environ.get("JARVIS_STT_COMPUTE", DEFAULT_CONFIG["stt_compute"]),
                     "signals_dir": str(SIGNALS_DIR),
                     "thinking_sound": "",
-                    "greeting": "Hello. I'm online and ready.",
-                    "greeting_open_mic": "",
                     "elevenlabs": {"enabled": False, "voice_id": ""},
                 },
                 indent=2,
@@ -71,12 +80,22 @@ class JarvisVoiceBridge:
         self.thread: threading.Thread | None = None
         self.stop_event = threading.Event()
         self.stopped = False
-        self.config: dict[str, Any] = {}
+        self.config: dict[str, Any] = dict(DEFAULT_CONFIG)
 
     def _load_components(self) -> None:
-        _configure_vendor()
-        from backtalk.config import CFG
-        self.config = CFG
+        needs_vendor = self.ears is None or self.mouth is None or (
+            os.environ.get("JARVIS_MIC_MODE", self.config.get("mic_mode", "ptt")) != "open"
+            and self.ptt is None
+        )
+        if needs_vendor:
+            _configure_vendor()
+            try:
+                from backtalk.config import CFG
+                self.config = dict(CFG)
+            except Exception:
+                self.config = dict(DEFAULT_CONFIG)
+        else:
+            self.config = dict(DEFAULT_CONFIG)
 
         if self.ears is None:
             from backtalk.ears import Ears
@@ -104,7 +123,8 @@ class JarvisVoiceBridge:
         self._load_components()
         self.stop_event.clear()
         self.stopped = False
-        greeting_key = "greeting_open_mic" if os.environ.get("JARVIS_MIC_MODE", "ptt").strip().lower() == "open" else "greeting"
+        mode = os.environ.get("JARVIS_MIC_MODE", str(self.config.get("mic_mode", "ptt"))).strip().lower()
+        greeting_key = "greeting_open_mic" if mode == "open" else "greeting"
         greeting = str(self.config.get(greeting_key) or self.config.get("greeting") or "")
         greeting = greeting.replace("{ptt_key}", str(self.config.get("ptt_key", "home")))
         if greeting:
