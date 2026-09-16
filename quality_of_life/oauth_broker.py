@@ -123,6 +123,33 @@ class KeyringTokenStore:
             raise TokenStoreError("OS credential store could not delete token") from exc
 
 
+_USERINFO_URLS: dict[ServiceProvider, str] = {
+    ServiceProvider.GOOGLE: "https://openidconnect.googleapis.com/v1/userinfo",
+    ServiceProvider.YOUTUBE: "https://openidconnect.googleapis.com/v1/userinfo",
+    ServiceProvider.MICROSOFT: "https://graph.microsoft.com/v1.0/me",
+}
+
+_SCOPE_ALIASES: dict[str, set[str]] = {
+    "gmail.metadata": {"gmail.metadata", "https://www.googleapis.com/auth/gmail.metadata", "https://www.googleapis.com/auth/gmail.readonly"},
+    "calendar.events.readonly": {"calendar.events.readonly", "https://www.googleapis.com/auth/calendar.events.readonly", "https://www.googleapis.com/auth/calendar.readonly"},
+    "drive.readonly": {"drive.readonly", "https://www.googleapis.com/auth/drive.readonly"},
+    "youtube.readonly": {"youtube.readonly", "https://www.googleapis.com/auth/youtube.readonly"},
+    "User.Read": {"User.Read", "https://graph.microsoft.com/User.Read"},
+    "Mail.Read": {"Mail.Read", "https://graph.microsoft.com/Mail.Read"},
+    "Calendars.Read": {"Calendars.Read", "https://graph.microsoft.com/Calendars.Read"},
+    "Files.Read": {"Files.Read", "https://graph.microsoft.com/Files.Read"},
+}
+
+
+def scope_matches(required_scope: str, granted_scopes: str | None) -> bool:
+    """Accept friendly Jarvis scope names and their provider-canonical OAuth forms."""
+    if not granted_scopes:
+        return True
+    granted = set(granted_scopes.split())
+    accepted = _SCOPE_ALIASES.get(required_scope, {required_scope})
+    return bool(granted & accepted)
+
+
 class OAuthBroker:
     """Desktop OAuth coordinator using PKCE and a secure token store."""
 
@@ -243,6 +270,26 @@ class OAuthBroker:
     def save_initial(self, identity: AccountIdentity, token_set: OAuthTokenSet) -> None:
         self._token_store.save(identity, token_set)
 
+    def user_identity(self, pending: OAuthPendingRequest, token_set: OAuthTokenSet) -> AccountIdentity:
+        url = _USERINFO_URLS.get(pending.provider)
+        if url is None:
+            raise OAuthConfigurationError(f"user identity lookup is not configured for {pending.provider.value}")
+        request = Request(
+            url,
+            method="GET",
+            headers={"Authorization": f"Bearer {token_set.access_token}", "Accept": "application/json", "User-Agent": "fullstack-agent-jarvis"},
+        )
+        try:
+            with self._opener(request, timeout=20) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise OAuthExchangeError("OAuth identity lookup failed") from exc
+        raw_id = data.get("sub") or data.get("id") or data.get("userPrincipalName") or data.get("mail")
+        label = data.get("email") or data.get("userPrincipalName") or data.get("mail") or raw_id
+        if not raw_id or not label:
+            raise OAuthExchangeError("provider identity response did not contain a stable account identifier")
+        return AccountIdentity(pending.provider, str(raw_id), str(label), state=__import__("quality_of_life.account_integrations", fromlist=["AuthorizationState"]).AuthorizationState.CONNECTED)
+
     def _post_token(self, config: OAuthClientConfig, payload: dict[str, str]) -> OAuthTokenSet:
         client_id = payload.get("client_id", "")
         if not client_id:
@@ -282,10 +329,8 @@ class SecureTokenBroker(TokenBroker):
         token_set = self._store.load(identity)
         if token_set is None:
             raise TokenStoreError("no OAuth token is connected for this account")
-        if required_scope and token_set.scope:
-            granted = set(token_set.scope.split())
-            if required_scope not in granted:
-                raise TokenStoreError("connected OAuth token does not include the requested scope")
+        if not scope_matches(required_scope, token_set.scope):
+            raise TokenStoreError("connected OAuth token does not include the requested scope")
         if token_set.is_expired():
             token_set = self._oauth.refresh(identity)
         return token_set.access_token
