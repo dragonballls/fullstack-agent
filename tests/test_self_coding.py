@@ -28,16 +28,11 @@ class SelfCodingTests(unittest.TestCase):
 
     def test_failed_verification_rolls_back_changes(self) -> None:
         root = self.make_repo()
-        config = SelfCodingConfig(
-            repo=root,
-            test_commands=((sys.executable, "-c", "raise SystemExit(1)"),),
-        )
+        config = SelfCodingConfig(repo=root, test_commands=((sys.executable, "-c", "raise SystemExit(1)"),))
         agent = SelfCodingAgent(config)
         agent._invoke_backend = lambda goal: (root / "generated.txt").write_text("must disappear\n", encoding="utf-8")  # type: ignore[method-assign]
-
         with self.assertRaises(SelfCodingError):
             agent.run("make a safe change")
-
         self.assertFalse((root / "generated.txt").exists())
         status = subprocess.run(("git", "status", "--porcelain"), cwd=root, check=True, capture_output=True, text=True)
         self.assertEqual(status.stdout, "")
@@ -55,18 +50,31 @@ class SelfCodingTests(unittest.TestCase):
 
     def test_successful_pass_is_committed(self) -> None:
         root = self.make_repo()
-        config = SelfCodingConfig(
-            repo=root,
-            test_commands=((sys.executable, "-c", "print('ok')"),),
-        )
+        config = SelfCodingConfig(repo=root, test_commands=((sys.executable, "-c", "print('ok')"),))
         agent = SelfCodingAgent(config)
         agent._invoke_backend = lambda goal: (root / "verified.txt").write_text("verified\n", encoding="utf-8")  # type: ignore[method-assign]
-
         branch = agent.run("make a verified change")
         self.assertTrue(branch.startswith("agent/self-code/"))
         self.assertEqual((root / "verified.txt").read_text(encoding="utf-8"), "verified\n")
         log = subprocess.run(("git", "log", "-1", "--pretty=%s"), cwd=root, check=True, capture_output=True, text=True)
         self.assertEqual(log.stdout.strip(), "agent: verified self-coding change")
+
+    def test_inspect_tool_gap_returns_structured_gap_for_missing_adapter(self) -> None:
+        root = self.make_repo()
+        agent = SelfCodingAgent(SelfCodingConfig(repo=root))
+        gap = agent.inspect_tool_gap("the requested tool returned an unsupported operation because no adapter is registered")
+        self.assertIsNotNone(gap)
+        self.assertEqual(gap.kind, "tool_capability")
+        self.assertEqual(gap.operation, "unknown")
+
+    def test_propose_tool_extension_is_machine_readable(self) -> None:
+        root = self.make_repo()
+        agent = SelfCodingAgent(SelfCodingConfig(repo=root))
+        gap = agent.inspect_tool_gap("the requested tool returned an unsupported operation because no adapter is registered")
+        proposal = agent.propose_tool_extension("connect the missing provider", gap)
+        self.assertEqual(proposal["kind"], "tool_extension")
+        self.assertEqual(proposal["tests_required"], True)
+        self.assertIn("operation", proposal)
 
 
 if __name__ == "__main__":
