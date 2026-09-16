@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from scripts.jarvis_desktop import FullstackJarvisHost, JarvisDesktopController, build_runtime
+from scripts.jarvis_desktop import FullstackJarvisHost, JarvisDesktopController, VoiceAdapter, build_runtime
 
 
 class JarvisDesktopTests(unittest.TestCase):
@@ -43,7 +43,6 @@ class JarvisDesktopTests(unittest.TestCase):
         controller = Mock()
         controller.runtime = Mock()
         visualizer = Mock()
-        visualizer.start.return_value = None
         voice = Mock()
         voice.start.side_effect = RuntimeError("Backtalk audio device unavailable")
         hands = Mock()
@@ -64,3 +63,17 @@ class JarvisDesktopTests(unittest.TestCase):
 
         host.stop()
         visualizer.stop.assert_called_once_with()
+
+    def test_frozen_backtalk_smoke_mode_validates_embedded_modules_without_audio_hardware(self):
+        controller = Mock()
+        adapter = VoiceAdapter(controller)
+        fake_vendor = "/tmp/embedded-backtalk"
+        with patch.dict("os.environ", {"JARVIS_SMOKE": "1", "JARVIS_SMOKE_VOICE": "1"}), patch(
+            "scripts.jarvis_desktop.embedded_path", return_value=fake_vendor
+        ), patch("builtins.__import__") as imported:
+            # Smoke validation should import the three upstream contracts and stop
+            # before constructing microphone/speaker objects.
+            adapter.start()
+            imported.assert_any_call("backtalk.ears", fromlist=["Ears"])
+            imported.assert_any_call("backtalk.mouth", fromlist=["Mouth"])
+            imported.assert_any_call("backtalk.ptt", fromlist=["PTTListener"])
