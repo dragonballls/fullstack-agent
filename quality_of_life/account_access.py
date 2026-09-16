@@ -105,6 +105,24 @@ class AccountAccessRegistry:
             raise ValueError(f"account grant already registered: {grant.provider.value}:{grant.account_id}")
         self._grants[key] = grant
 
+    def add_scope(self, provider: AccountProvider, account_id: str, scope: AccountScope) -> AccountGrant:
+        """Add or replace one explicitly authorized scope without exposing credentials."""
+        key = (provider, account_id)
+        current = self._grants.get(key)
+        if current is None:
+            updated = AccountGrant(provider, account_id, (scope,), True)
+        else:
+            scopes = tuple(item for item in current.scopes if item.name != scope.name) + (scope,)
+            updated = AccountGrant(provider, account_id, scopes, current.enabled)
+        self._grants[key] = updated
+        return updated
+
+    def disable(self, provider: AccountProvider, account_id: str) -> AccountGrant:
+        grant = self.get(provider, account_id)
+        disabled = AccountGrant(grant.provider, grant.account_id, grant.scopes, False)
+        self._grants[(provider, account_id)] = disabled
+        return disabled
+
     def get(self, provider: AccountProvider, account_id: str) -> AccountGrant:
         try:
             grant = self._grants[(provider, account_id)]
