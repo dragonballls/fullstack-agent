@@ -2,7 +2,7 @@ name: Jarvis full release gate
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/persistent-workflows]
     tags: ['v*.*.*']
   pull_request:
     branches: [main]
@@ -116,7 +116,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path -LiteralPath 'dist/Jarvis.exe')) { throw 'Jarvis.exe was not produced' }
           if ((Get-Item -LiteralPath 'dist/Jarvis.exe').Length -lt 5000000) { throw 'Jarvis.exe is unexpectedly small; embedded runtime/assets are probably missing' }
-      - name: Verify native DLLs are present in the PyInstaller package table
+      - name: Verify PyInstaller toolchain version
         shell: pwsh
         run: |
           $info = python -m PyInstaller --version
