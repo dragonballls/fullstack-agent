@@ -71,9 +71,10 @@ class ExternalIntegrationTests(unittest.TestCase):
     def test_launcher_never_uses_shell(self):
         launcher = OptionalAgentLauncher("openclaude")
         completed = type("Completed", (), {"stdout": "1.2.3\n", "stderr": ""})()
-        with patch.object(launcher, "available", True), patch(
+        with patch("quality_of_life.external_integrations.shutil.which", return_value="openclaude"), patch(
             "quality_of_life.external_integrations.subprocess.run", return_value=completed
         ) as run:
+            self.assertTrue(launcher.available)
             self.assertEqual(launcher.version(), "1.2.3")
         kwargs = run.call_args.kwargs
         self.assertFalse(kwargs["shell"])
