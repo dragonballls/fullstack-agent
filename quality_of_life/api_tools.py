@@ -22,6 +22,8 @@ class ApiEndpoint:
         parsed = urlparse(self.base_url)
         if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
             raise ValueError(f"endpoint {self.name!r} must use credential-free HTTPS")
+        if not self.allowed_paths or any(not path.startswith("/") or ".." in path.split("/") for path in self.allowed_paths):
+            raise ValueError(f"endpoint {self.name!r} must declare safe allowed_paths")
 
 
 class ApiToolAdapter:
@@ -61,7 +63,7 @@ class ApiToolAdapter:
             return {"ok": False, "error": "unknown API endpoint"}
         if not path.startswith("/") or path.startswith("//") or ".." in path.split("/"):
             return {"ok": False, "error": "API path is not allowlisted"}
-        if endpoint.allowed_paths and not any(path == prefix or path.startswith(prefix.rstrip("/") + "/") for prefix in endpoint.allowed_paths):
+        if not any(path == prefix or path.startswith(prefix.rstrip("/") + "/") for prefix in endpoint.allowed_paths):
             return {"ok": False, "error": "API path is not allowlisted"}
         url = urljoin(endpoint.base_url.rstrip("/") + "/", path.lstrip("/"))
         headers = {"User-Agent": "Jarvis/1.0", "Accept": "application/json", "Content-Type": "application/json"}
