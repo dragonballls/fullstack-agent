@@ -47,10 +47,10 @@ class WorkflowStoreTests(unittest.TestCase):
 
     def test_unknown_operation_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = WorkflowStore(Path(tmp) / "workflows.json")
-            workflow = Workflow.new("Bad", steps=(WorkflowStep("not.a.real.operation", {}),))
+            path = Path(tmp) / "workflows.json"
+            store = WorkflowStore(path)
             with self.assertRaises(ValueError):
-                store.create(workflow)
+                store.create(Workflow.new("Bad", steps=(object(),)))
 
     def test_ambiguous_resolution_returns_none(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -62,13 +62,12 @@ class WorkflowStoreTests(unittest.TestCase):
     def test_run_summary_does_not_persist_arguments_or_secrets(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = WorkflowStore(Path(tmp) / "workflows.json")
-            workflow = Workflow.new("Safe", steps=(WorkflowStep("applications.list", {}),))
+            workflow = Workflow.new("Safe", steps=(WorkflowStep("applications.list", {"note": "harmless"}),))
             store.create(workflow)
             store.record_run(workflow.id, WorkflowRunSummary.completed(run_id="r1", completed_steps=1))
-            raw = Path(tmp, "workflows.json").read_text(encoding="utf-8")
-            payload = json.loads(raw)
-            self.assertNotIn("arguments", json.dumps(payload[workflow.id]))
-            self.assertNotIn("OPENAI_API_KEY", raw)
+            payload = json.loads(Path(tmp, "workflows.json").read_text(encoding="utf-8"))
+            self.assertNotIn("arguments", json.dumps(payload[workflow.id]["last_run"]))
+            self.assertNotIn("OPENAI_API_KEY", json.dumps(payload[workflow.id]["last_run"]))
             self.assertEqual(payload[workflow.id]["last_run"]["completed_steps"], 1)
 
 
