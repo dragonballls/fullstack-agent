@@ -162,7 +162,7 @@ jobs:
         with:
           name: Jarvis-Windows-Exe
           path: dist
-      - uses: softprops/action-github-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           files: dist/Jarvis.exe
           generate_release_notes: true
