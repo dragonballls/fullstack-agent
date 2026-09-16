@@ -12,11 +12,16 @@ class WebToolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             adapter.fetch("https://not-example.invalid/")
 
+    def test_rejects_empty_allowlist(self):
+        adapter = WebToolAdapter(allowed_hosts=set())
+        with self.assertRaises(ValueError):
+            adapter.fetch("https://example.com/")
+
     def test_parse_response_marks_oversized_body(self):
-        adapter = WebToolAdapter(allowed_hosts={"example.com"}, max_bytes=10)
-        parsed = adapter._parse_response("x" * 25)
+        adapter = WebToolAdapter(allowed_hosts={"example.com"}, max_bytes=1024)
+        parsed = adapter._parse_response("x" * 2048)
         self.assertTrue(parsed["truncated"])
-        self.assertEqual(len(parsed["body"]), 10)
+        self.assertEqual(len(parsed["body"]), 1024)
 
     def test_search_requires_configuration(self):
         adapter = WebToolAdapter(allowed_hosts={"example.com"})
