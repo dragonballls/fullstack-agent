@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install -r quality_of_life/requirements.txt
-          python -m pip install pyinstaller faster-whisper kokoro pynput sounddevice soundfile webrtcvad-wheels numpy httpx
+          python -m pip install pyinstaller faster-whisper kokoro pynput sounddevice soundfile webrtcvad-wheels webrtcvad numpy httpx
           python -m pip check
       - name: Verify embedded upstream imports before packaging
         shell: pwsh
