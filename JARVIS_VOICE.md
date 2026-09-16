@@ -1,45 +1,53 @@
 # Jarvis voice
 
-Jarvis uses an **always-listening local microphone path** with a local wake-word gate. After microphone permission is granted, audio can be monitored locally, but Jarvis does not create a cloud request until the wake word **"Jarvis"** is accepted.
+Jarvis uses the embedded Backtalk voice I/O layer as its desktop speech interface. Backtalk handles microphone capture, speech recognition, push-to-talk/listening behavior, and speech output; the Jarvis runtime remains the only planner and tool-execution brain.
 
 ## Brain and routing
 
-Jarvis uses **OmniRoute only** as its conversational and agent brain. Claude Code, a Claude subscription, and direct Claude routing are not required and are not valid Jarvis fallbacks. A missing OmniRoute configuration must fail clearly rather than silently switching brains.
+Jarvis uses **OmniRoute** for conversational and agent routing. Claude Code, a Claude subscription, and direct Claude routing are not Jarvis fallbacks.
 
-Defaults:
+A missing or unavailable OmniRoute configuration must fail clearly rather than silently selecting another agent brain.
+
+## Default Backtalk settings
+
+On first normal startup Jarvis creates `%LOCALAPPDATA%\\Jarvis\\backtalk.json` when it does not already exist. The current defaults are:
 
 ```text
-JARVIS_VOICE_MODE=open
-JARVIS_WAKE_WORD=jarvis
-JARVIS_WAKE_CONFIDENCE=0.70
-JARVIS_WAKE_POST_WINDOW_SECONDS=6
-JARVIS_VOICE_BRAIN=omniroute
-JARVIS_REQUIRE_OMNIROUTE=true
-JARVIS_ALLOW_CLAUDE=false
+name=JARVIS
+ptt_key=home
+mic_mode=ptt
+voice=bm_lewis
+stt_model=small.en
+stt_device=auto
+stt_compute=int8
 ```
 
-`JARVIS_ALLOW_CLAUDE=false` is fixed for the Jarvis profile.
+The exact active values are loaded from the local Backtalk configuration and supported `JARVIS_*` environment settings.
 
 ## Activation behavior
 
-- Non-addressed room speech is ignored locally.
-- The optional local wake detector listens continuously for the supported `hey_jarvis` model.
-- A recognized wake event starts a bounded request flow.
-- Accepted speech follows the existing Jarvis orchestration and permission path.
-- Only one active voice session is allowed, and repeated wake events are debounced.
-- Cancel, stop, and speaking interruption remain compatible with existing controls.
-- If safe microphone capture or wake gating cannot be established, Jarvis remains silent.
+The default desktop configuration uses Backtalk push-to-talk behavior. When an active voice session is running, the voice bridge passes recognized speech into the existing `JarvisDesktopController`, which routes the request through the normal Jarvis orchestration and capability policy.
+
+Mutating requests are still confirmation-gated. Voice input cannot bypass confirmation, permissions, cancellation, or the deny-by-default capability policy.
+
+An open-microphone mode is available through the supported Backtalk configuration. It still routes accepted transcripts through the same Jarvis brain and policy boundary.
 
 ## Speech output
 
-The preferred high-quality speech output is ElevenLabs. Never store an ElevenLabs API key in the repository; use the supported `ELEVENLABS_API_KEY` environment variable or credential mechanism. The requested voice must be looked up in the account library and a real speech test must succeed before setup is declared working.
+Kokoro is embedded as a local speech-output option. Other configured speech providers are output engines only. They do not become agent planners or tool executors.
 
-Kokoro remains the speech-output fallback. Neither ElevenLabs nor Kokoro is an agent brain.
+Microphone/speaker access is machine-specific. If audio initialization fails, Jarvis should keep the Fullstack visualizer running and log the degraded voice component rather than terminating the desktop application.
 
-## Privacy
+## Frozen-build verification
 
-Wake-word detection is local-only. No cloud request is created before wake acceptance. Ambient audio and non-addressed transcripts must not be written to logs.
+The Windows release gate explicitly embeds `backtalk/source` inside the PyInstaller bundle and runs a frozen-EXE smoke validation that resolves that embedded path and imports the Backtalk `Ears`, `Mouth`, and `PTTListener` contracts without requiring real microphone/speaker hardware.
+
+That smoke check proves the packaged source/import contract. It does not prove a particular PC's audio hardware, Windows privacy settings, microphone permissions, or speech quality.
+
+## Privacy and logging
+
+The voice bridge must not write ambient room audio or non-addressed speech into Jarvis diagnostic logs. Voice errors may be recorded as bounded exception messages. Credentials and provider tokens must never be included in voice logs.
 
 ## Installation
 
-The base QOL dependency set stays unchanged. Windows voice deployments install the optional dependencies from `quality_of_life/voice_requirements.txt` so Linux/Python 3.13 CI does not acquire incompatible local audio packages.
+The base Jarvis Windows product is the single `Jarvis.exe` release asset. End users do not install a separate Backtalk repository. Development/build environments may install the optional voice dependencies needed to produce the executable.
