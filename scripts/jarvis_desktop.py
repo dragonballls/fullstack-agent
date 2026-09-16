@@ -131,8 +131,31 @@ class VoiceAdapter:
         self.controller = controller
         self.bridge: Any | None = None
 
+    @staticmethod
+    def _truthy(name: str) -> bool:
+        return os.environ.get(name, "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _smoke_validate_embedded_backtalk(self) -> None:
+        vendor = embedded_path("backtalk/source")
+        vendor_text = str(vendor)
+        if vendor_text not in sys.path:
+            sys.path.insert(0, vendor_text)
+        from backtalk.ears import Ears
+        from backtalk.mouth import Mouth
+        from backtalk.ptt import PTTListener
+        LOGGER.info(
+            "embedded Backtalk smoke validation passed: %s (%s, %s, %s)",
+            vendor,
+            Ears.__name__,
+            Mouth.__name__,
+            PTTListener.__name__,
+        )
+
     def start(self) -> None:
-        if os.environ.get("JARVIS_DISABLE_VOICE", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        if self._truthy("JARVIS_SMOKE") and self._truthy("JARVIS_SMOKE_VOICE"):
+            self._smoke_validate_embedded_backtalk()
+            return
+        if self._truthy("JARVIS_DISABLE_VOICE"):
             LOGGER.info("voice disabled by configuration")
             return
         from scripts.jarvis_voice_bridge import JarvisVoiceBridge
