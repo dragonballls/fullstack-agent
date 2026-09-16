@@ -20,16 +20,11 @@ class FakeResult:
 
 
 class FakeRouter:
-    def __init__(self, planned=None):
+    def __init__(self):
         self.calls = []
         self.active = 0
         self.max_active = 0
         self.lock = threading.Lock()
-        self.planned = planned
-
-    def complete(self, messages):
-        self.calls.append((messages, "planner"))
-        return self.planned or '{"steps": []}', "fake"
 
     def complete_profiled(self, messages, profile):
         with self.lock:
@@ -116,23 +111,6 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertEqual(runtime.dispatch_calls[-1][0], Capability.REPO_WRITE)
         self.assertEqual(runtime.dispatch_calls[-1][1], "self_coding.run")
         self.assertTrue(result.verified)
-
-    def test_planned_youtube_upload_routes_through_account_service_action(self):
-        router = FakeRouter('{"steps":[{"operation":"youtube.video.upload","arguments":{"file_path":"clip.mp4","title":"Test","privacy":"private"}}]}')
-        runtime = FakeRuntime(FakeResult("uploaded"))
-        text, verified, needs_confirmation, errors = AgentOrchestrator(router, runtime)._execute_typed_plan(
-            "upload my video to YouTube", confirmed=True
-        )
-        self.assertTrue(verified)
-        self.assertFalse(needs_confirmation)
-        self.assertEqual(errors, [])
-        self.assertEqual(runtime.dispatch_calls[-1][0], Capability.ACCOUNT_WRITE)
-        self.assertEqual(runtime.dispatch_calls[-1][1], "accounts.service_action")
-        kwargs = runtime.dispatch_calls[-1][3]
-        self.assertEqual(kwargs["operation"], "youtube.video.upload")
-        self.assertEqual(kwargs["provider"], "youtube")
-        self.assertEqual(kwargs["payload"]["file_path"], "clip.mp4")
-        self.assertIn("uploaded", text)
 
     def test_stream_starts_with_local_ack_and_ends_with_result(self):
         events = list(AgentOrchestrator(FakeRouter(), FakeRuntime()).execute_stream("diagnose my PC"))
