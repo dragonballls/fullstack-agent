@@ -7,9 +7,8 @@ from quality_of_life.account_integrations import AccountIdentity, ServiceProvide
 from quality_of_life.oauth_broker import (
     KeyringTokenStore,
     OAuthBroker,
-    OAuthPendingRequest,
-    OAuthTokenSet,
     OAuthStateError,
+    OAuthTokenSet,
     SecureTokenBroker,
     build_default_oauth_configs,
     scope_matches,
@@ -28,20 +27,6 @@ class FakeKeyring:
 
     def delete_password(self, service, username):
         self.values.pop((service, username), None)
-
-
-class FakeResponse:
-    def __init__(self, payload):
-        self.payload = payload
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-    def read(self):
-        return json.dumps(self.payload).encode("utf-8")
 
 
 class OAuthBrokerTests(unittest.TestCase):
@@ -65,43 +50,35 @@ class OAuthBrokerTests(unittest.TestCase):
         with self.assertRaises(OAuthStateError):
             OAuthBroker.validate_callback("http://127.0.0.1:1234/callback?code=abc&state=wrong", "expected")
 
-    def test_initial_token_is_stored_without_being_returned_by_broker(self):
+    def test_initial_token_is_stored(self):
         broker = OAuthBroker(dict((c.provider, c) for c in build_default_oauth_configs()), token_store=self.store)
         broker.save_initial(self.identity, OAuthTokenSet("access-secret", "refresh-secret", 9999999999, scope="openid https://www.googleapis.com/auth/gmail.readonly"))
-        self.assertEqual(self.store.load(self.identity).access_token, "access-secret")
-        self.assertNotIn("access-secret", json.dumps({"account_id": self.identity.account_id, "label": self.identity.label}))
+        stored = self.store.load(self.identity)
+        self.assertEqual(stored.access_token, "access-secret")
+        self.assertEqual(stored.refresh_token, "refresh-secret")
 
     def test_scope_alias_accepts_canonical_provider_scope(self):
         self.assertTrue(scope_matches("gmail.metadata", "https://www.googleapis.com/auth/gmail.readonly"))
         self.assertTrue(scope_matches("User.Read", "User.Read Mail.Read"))
         self.assertFalse(scope_matches("youtube.readonly", "openid email"))
 
-    def test_secure_broker_refreshes_expired_token(self):
-        os.environ["JARVIS_GOOGLE_CLIENT_ID"] = "client-id-123"
-        now = 1000.0
-        refreshed = OAuthTokenSet("new-access", "refresh-secret", 2000.0, scope="https://www.googleapis.com/auth/gmail.readonly")
-        self.store.save(self.identity, OAuthTokenSet("old-access", "refresh-secret", 900.0, scope="https://www.googleapis.com/auth/gmail.readonly"))
+    def test_secure_broker_refreshes_expired_token_and_persists_result(self):
+        self.store.save(
+            self.identity,
+            OAuthTokenSet("old-access", "refresh-secret", 0.0, scope="https://www.googleapis.com/auth/gmail.readonly"),
+        )
+        refreshed = OAuthTokenSet("new-access", "refresh-secret-2", 9999999999, scope="https://www.googleapis.com/auth/gmail.readonly")
 
         class FakeOAuth:
+            def __init__(self, store):
+                self.store = store
             def refresh(self, identity):
-                self.identity = identity
+                self.store.save(identity, refreshed)
                 return refreshed
 
-        # Use a fake store + fake OAuth to verify refresh behavior independently of network.
-        original = self.store.load(self.identity)
-        class Broker(SecureTokenBroker):
-            pass
-        class FakeStore:
-            def __init__(self, token):
-                self.token = token
-            def load(self, identity):
-                return self.token
-
-        broker = Broker(FakeOAuth(), FakeStore(original))
-        # Expiration uses wall clock, so use a token with no expiry to verify the direct path below.
-        self.store.save(self.identity, OAuthTokenSet("live-access", "refresh-secret", None, scope="https://www.googleapis.com/auth/gmail.readonly"))
-        live = SecureTokenBroker(FakeOAuth(), self.store)
-        self.assertEqual(live.get_access_token(self.identity, "gmail.metadata"), "live-access")
+        token = SecureTokenBroker(FakeOAuth(self.store), self.store).get_access_token(self.identity, "gmail.metadata")
+        self.assertEqual(token, "new-access")
+        self.assertEqual(self.store.load(self.identity).refresh_token, "refresh-secret-2")
 
     def tearDown(self):
         os.environ.pop("JARVIS_GOOGLE_CLIENT_ID", None)
