@@ -4,6 +4,7 @@ from .account_integrations import AccountIdentity, AccountSelector, Authorizatio
 from .account_manager import AccountServiceManager
 from .agent_orchestrator import AgentOrchestrator, OrchestrationEvent, OrchestrationResult
 from .background_mode import BackgroundComponent, BackgroundMode, BackgroundModeController
+from .background_runtime import JarvisBackgroundRuntime
 from .capabilities import OPERATION_CATALOG, OperationRisk, OperationSpec, operation, operations_for
 from .computer_use import ComputerUseAction, ComputerUseAgent, ComputerUseResult, RouterComputerUsePlanner, ScreenObserver
 from .gods_eye import GeoPoint, GodsEye, LocationSnapshot, Place
@@ -45,6 +46,7 @@ __all__ = [
     "HealthMonitor",
     "HealthSnapshot",
     "Intent",
+    "JarvisBackgroundRuntime",
     "JarvisRuntime",
     "JarvisVoiceRuntime",
     "LocalWakeWordListener",
