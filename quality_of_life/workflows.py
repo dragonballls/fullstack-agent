@@ -37,6 +37,11 @@ def _json_safe(value: Any) -> None:
         raise ValueError("workflow arguments must be JSON-compatible") from exc
 
 
+def _safe_error(exc: Exception) -> str:
+    message = str(exc).replace("OPENAI_API_KEY", "[secret]")
+    return message[:500]
+
+
 @dataclass(frozen=True)
 class WorkflowStep:
     operation: str
@@ -48,7 +53,10 @@ class WorkflowStep:
             raise ValueError("workflow step operation is required")
         if not isinstance(self.arguments, dict):
             raise ValueError("workflow step arguments must be an object")
-        operation(self.operation.strip())
+        try:
+            operation(self.operation.strip())
+        except KeyError as exc:
+            raise ValueError(f"unknown workflow operation: {self.operation.strip()}") from exc
         _json_safe(self.arguments)
         object.__setattr__(self, "operation", self.operation.strip())
         object.__setattr__(self, "arguments", dict(self.arguments))
@@ -190,11 +198,14 @@ class Workflow:
         raw_steps = value.get("steps", [])
         if not isinstance(raw_steps, list):
             raise ValueError("workflow steps must be an array")
+        raw_aliases = value.get("aliases", ())
+        if not isinstance(raw_aliases, (list, tuple)):
+            raise ValueError("workflow aliases must be an array")
         last_run = value.get("last_run")
         return cls(
             id=str(value.get("id", "")),
             name=str(value.get("name", "")),
-            aliases=tuple(str(item) for item in value.get("aliases", ()) if isinstance(item, str)),
+            aliases=tuple(str(item) for item in raw_aliases if isinstance(item, str)),
             steps=tuple(WorkflowStep.from_dict(item) for item in raw_steps),
             enabled=bool(value.get("enabled", True)),
             created_at=str(value.get("created_at", "")),
@@ -303,3 +314,64 @@ class WorkflowStore:
         workflows[workflow_id] = updated
         self._write(workflows)
         return updated
+
+
+@dataclass(frozen=True)
+class WorkflowExecutionResult:
+    run_id: str
+    verified: bool
+    needs_confirmation: bool
+    completed_steps: int
+    outputs: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+
+
+class WorkflowService:
+    """Execute stored workflow steps exclusively through the runtime dispatcher."""
+
+    @staticmethod
+    def execute(runtime: Any, workflow: Workflow, *, confirmed: bool = False, store: WorkflowStore | None = None) -> WorkflowExecutionResult:
+        run_id = str(uuid4())
+        started = _now()
+        errors: list[str] = []
+        outputs: list[str] = []
+        completed = 0
+        needs_confirmation = False
+        verified = True
+
+        for step in workflow.steps:
+            spec = operation(step.operation)
+            if not confirmed and runtime.policy.needs_confirmation(spec.capability):
+                needs_confirmation = True
+                verified = False
+                errors.append(f"confirmation required: {step.operation}")
+                break
+            try:
+                result = runtime.dispatch(spec.capability, step.operation, **dict(step.arguments))
+                outputs.append(f"{step.operation}: {result}")
+                completed += 1
+            except PermissionError as exc:
+                verified = False
+                errors.append(f"{step.operation}: {_safe_error(exc)}")
+                if "confirmation" in str(exc).casefold() and not confirmed:
+                    needs_confirmation = True
+                if not step.continue_on_error:
+                    break
+            except Exception as exc:
+                verified = False
+                errors.append(f"{step.operation}: {_safe_error(exc)}")
+                if not step.continue_on_error:
+                    break
+
+        summary = WorkflowRunSummary(
+            run_id=run_id,
+            started_at=started,
+            ended_at=_now(),
+            success=bool(verified and completed == len(workflow.steps)),
+            completed_steps=completed,
+            errors=tuple(errors[:8]),
+            needs_confirmation=needs_confirmation,
+        )
+        if store is not None:
+            store.record_run(workflow.id, summary)
+        return WorkflowExecutionResult(run_id, summary.success, needs_confirmation, completed, tuple(outputs[:32]), summary.errors)
