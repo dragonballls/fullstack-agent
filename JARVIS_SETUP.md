@@ -1,64 +1,61 @@
 # Jarvis setup
 
-This is the authoritative setup contract for the Jarvis profile in this repository.
+This is the authoritative setup contract for the Jarvis Windows desktop product.
 
-## Runtime requirements
+## Windows product
 
-- The conversational/agent brain is **OmniRoute only**.
-- Claude Code and a Claude subscription are not required.
-- `JARVIS_ALLOW_CLAUDE` is always false for the Jarvis profile.
-- ElevenLabs and Kokoro are speech-output engines, not agent brains.
+The supported end-user product is a single signed/release-published `Jarvis.exe`. Normal use does not require Python, a virtual environment, a source checkout, a separate Fullstack Agent checkout, or a persistent PowerShell window.
 
-## Installation and distribution
+Download the `Jarvis.exe` asset from the verified GitHub `latest` release. Double-clicking that executable is the normal Windows launch path.
 
-The repository's `Jarvis-Source-Bundle.zip` is a verified source distribution for the Jarvis integration layer. This repository is not a standalone native Windows `.exe`: some upstream fullstack components remain separate projects, and live services, credentials, user permissions, and hardware are necessarily configured on the target machine.
+The executable contains the Jarvis runtime plus the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters, not a second agent brain.
 
-The `Jarvis full release gate` workflow is the authoritative CI gate for the source bundle. It tests Ubuntu and Windows on Python 3.11–3.13, checks dependency consistency, compiles the Python modules, runs the complete test suite, tests Windows maintenance, and executes the test suite again from the extracted downloadable bundle.
+## What first launch may create
 
-See `JARVIS_DOWNLOAD.md` for the complete download/runtime contract.
+Jarvis may create these machine-local files under `%LOCALAPPDATA%\\Jarvis`:
 
-## Windows launch
+- `logs\\desktop.log` for startup/runtime diagnostics
+- `logs\\voice-bridge.log` for voice adapter errors without ambient-audio transcripts
+- `backtalk.json` for local voice configuration
+- `signals\\` for the local visualizer signal bus
+- `updates\\` for verified staged self-updates
 
-For the Jarvis profile, the supported Windows entrypoint is `scripts/start-jarvis.ps1`. It launches `scripts/jarvis_desktop.pyw` through the repository's `.venv\Scripts\pythonw.exe`, so normal operation does not require a persistent PowerShell window.
+These files are runtime state and are not source dependencies for the application.
 
-Before first launch, run:
+## Runtime and cloud configuration
 
-```text
-python readiness.py
-```
+Jarvis uses OmniRoute as its conversational/agent routing layer. Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
 
-The launcher itself uses `CapabilityPolicy()` and the existing `AgentOrchestrator`; it does not create a second tool-execution path. The small chat bar is only a presentation host over the existing Jarvis runtime.
+Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor.
 
-`start.bat` remains the upstream fullstack-agent launcher and is not the Jarvis runtime launcher.
+Live cloud requests still require the configured gateway/provider credential. Credentials and refresh tokens must stay behind the existing credential broker or supported environment mechanism and must never be placed in tracked configuration.
 
 ## Voice
 
-Jarvis starts an always-listening local wake-word listener after microphone permission is granted. The detailed voice contract is `JARVIS_VOICE.md` and must be read before configuring the voice runtime.
+The native desktop build embeds the pinned Backtalk source and the Jarvis voice bridge. Default Backtalk settings are configured in `%LOCALAPPDATA%\\Jarvis\\backtalk.json` and can be changed through supported Jarvis configuration/environment settings.
 
-1. Install the optional voice dependencies from `quality_of_life/voice_requirements.txt` on supported Windows Python versions.
-2. Run the local `LocalWakeWordListener` with the `hey_jarvis` wake model.
-3. Keep wake detection local; do not upload microphone frames before wake acceptance.
-4. After wake detection, pass the resulting speech transcript into `JarvisVoiceRuntime.route(...)`.
-5. `JarvisVoiceRuntime` rejects non-addressed speech and routes accepted requests only through the existing OmniRoute router.
-6. Keep a single active voice session and debounce repeated wake detections.
-7. If microphone or wake-word dependencies are unavailable, fail closed and keep Jarvis silent.
+Microphone and speaker access are machine-specific. A missing device, denied permission, or unavailable audio dependency must not prevent the Fullstack visualizer from opening; Jarvis records the degraded voice state and keeps the main desktop interface available.
 
-The current repository contains the wake detector and OmniRoute routing boundary. An end-to-end speech-to-text adapter is intentionally a separate component so the microphone/wake layer cannot silently become a second brain.
+See `JARVIS_VOICE.md` for the current voice/I/O contract.
 
-## Accounts and services
+## Fullstack interface
 
-Use the unified account layer for external identities. OAuth consent belongs to the user; passwords must never be requested by Jarvis.
+At startup Jarvis brings up the embedded Fullstack visualizer on loopback port `8790` and opens it in the native pywebview window. The old 640-by-118 Tk chat bar is not the Jarvis product UI.
 
-Multiple identities can coexist for Google, Microsoft, GitHub, YouTube, Instagram, and generic web services. Account grants and provider scopes remain the source of authorization. Writes, destructive actions, financial actions, and security-sensitive actions require confirmation by default.
+The visualizer is started before heavier Jarvis initialization so the presentation surface can become available even when core/cloud initialization takes longer on first launch.
 
-Credentials and refresh tokens stay behind the runtime credential broker and are never stored in tracked configuration or returned to the model.
+## Self-update
 
-Official provider APIs should be used when they expose the requested operation. Browser automation is only a bounded fallback behind the existing browser and permission controls. Jarvis must report unsupported operations instead of pretending they are available.
+The executable checks the verified rolling GitHub `latest` release periodically. An update is considered available only when the release commit differs from the embedded build commit. Jarvis downloads only the `Jarvis.exe` release asset from GitHub, verifies the release-provided SHA-256 digest, then uses a hidden handoff process to replace the running executable and restart it.
 
-## Existing safety contracts
+An update failure leaves the currently running Jarvis instance in place. Normal operation does not restart for every repository commit; only a newly published release with a different embedded commit is eligible for the update path.
 
-Do not bypass the capability policy, confirmation hooks, emergency stop, cancellation, self-coding safeguards, or browser/domain restrictions when an action originates from voice or an external account.
+## Optional capabilities
 
-## Installation separation
+Hand control, browser/device integrations, account connections, location features, and Windows maintenance remain behind their existing capability and confirmation policies. Optional capability failure must degrade the specific feature rather than take down the desktop visualizer.
 
-`fullstack-agent.md` is retained for the upstream fullstack-agent setup flow. It is **not** the Jarvis installer or runtime contract. The Jarvis profile uses this document plus the verified source-bundle/runtime contract in `JARVIS_DOWNLOAD.md`.
+Hosted CI can verify source contracts, imports, routing, packaging, and the frozen visualizer/Backtalk startup path. It cannot certify a particular PC's microphone, speakers, camera, provider credentials, OAuth grants, or hardware-specific behavior.
+
+## Developer-only build path
+
+Repository development uses Python and the project build scripts. That build environment is not required by end users. The authoritative release artifact is the one-file `dist\\Jarvis.exe` produced by the `Jarvis full release gate` workflow after regression, packaging, and frozen startup checks pass.
