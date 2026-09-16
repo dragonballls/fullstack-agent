@@ -11,7 +11,7 @@ This is the authoritative setup contract for the Jarvis profile in this reposito
 
 ## Voice
 
-Jarvis starts an always-listening local wake-word listener after microphone permission is granted.
+Jarvis starts an always-listening local wake-word listener after microphone permission is granted. The detailed voice contract is `JARVIS_VOICE.md` and must be read before configuring the voice runtime.
 
 1. Install the optional voice dependencies from `quality_of_life/voice_requirements.txt` on supported Windows Python versions.
 2. Run the local `LocalWakeWordListener` with the `hey_jarvis` wake model.
