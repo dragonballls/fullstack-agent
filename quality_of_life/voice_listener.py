@@ -87,16 +87,19 @@ class LocalWakeWordListener:
             self._last_activation = now
         self.on_wake(WakeEvent(self.model_name, score))
 
+    def process_prediction(self, prediction: dict[str, float]) -> None:
+        """Process one local wake-model prediction without creating any network request."""
+        score = self._score(prediction, self.model_name)
+        if score >= self.threshold:
+            self._emit_wake(score)
+
     def run_forever(self) -> None:
         """Continuously monitor the local microphone; no network call is made here."""
         sounddevice, model = self._load_dependencies()
 
         def callback(indata: Any, _frames: int, _stream_time: Any, _status: Any) -> None:
             audio = (indata.reshape(-1) * 32767).astype("int16")
-            prediction = model.predict(audio)
-            score = self._score(prediction, self.model_name)
-            if score >= self.threshold:
-                self._emit_wake(score)
+            self.process_prediction(model.predict(audio))
 
         with sounddevice.InputStream(
             samplerate=self.sample_rate,
