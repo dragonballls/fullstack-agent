@@ -21,6 +21,8 @@ class AccountProvider(str, Enum):
     GITHUB = "github"
     GOOGLE = "google"
     YOUTUBE = "youtube"
+    MICROSOFT = "microsoft"
+    INSTAGRAM = "instagram"
     GENERIC = "generic"
 
 
