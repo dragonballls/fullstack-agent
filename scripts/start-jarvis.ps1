@@ -1,14 +1,10 @@
 $ErrorActionPreference = 'Stop'
 
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$PythonW = Join-Path $Root '.venv\Scripts\pythonw.exe'
-$Entry = Join-Path $Root 'scripts\jarvis_desktop.pyw'
+$Exe = Join-Path $Root 'dist\Jarvis.exe'
 
-if (-not (Test-Path -LiteralPath $PythonW)) {
-    throw "Jarvis Python runtime is missing: $PythonW"
-}
-if (-not (Test-Path -LiteralPath $Entry)) {
-    throw "Jarvis desktop launcher is missing: $Entry"
+if (-not (Test-Path -LiteralPath $Exe)) {
+    throw "Jarvis.exe is missing: $Exe. Download the verified Jarvis-Windows artifact or build it with scripts\build-jarvis-exe.ps1."
 }
 
-Start-Process -FilePath $PythonW -ArgumentList @($Entry) -WorkingDirectory $Root
+Start-Process -FilePath $Exe -WorkingDirectory $Root
