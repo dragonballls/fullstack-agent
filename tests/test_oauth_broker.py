@@ -3,7 +3,7 @@ import os
 import unittest
 from urllib.parse import parse_qs, urlparse
 
-from quality_of_life.account_integrations import AccountIdentity, ServiceProvider
+from quality_of_life.account_integrations import AccountIdentity, ServiceProvider, OAuthConfigurationError
 from quality_of_life.oauth_broker import (
     KeyringTokenStore,
     OAuthBroker,
@@ -45,6 +45,33 @@ class OAuthBrokerTests(unittest.TestCase):
         self.assertTrue(params["code_challenge"][0])
         self.assertEqual(pending.redirect_uri, "http://127.0.0.1:48123/oauth/callback")
         self.assertNotIn("client_secret", params)
+
+    def test_begin_rejects_non_loopback_redirect(self):
+        os.environ["JARVIS_GOOGLE_CLIENT_ID"] = "client-id-123"
+        broker = OAuthBroker(dict((c.provider, c) for c in build_default_oauth_configs()), token_store=self.store)
+        for redirect_uri in (
+            "http://127.0.0.1:48123@evil.example/oauth/callback",
+            "http://localhost:48123/oauth/callback",
+            "https://127.0.0.1:48123/oauth/callback",
+            "http://127.0.0.1:48123/oauth/callback#fragment",
+        ):
+            with self.subTest(redirect_uri=redirect_uri):
+                with self.assertRaises(OAuthConfigurationError):
+                    broker.begin(ServiceProvider.GOOGLE, redirect_uri=redirect_uri)
+
+    def test_stale_oauth_state_is_rejected(self):
+        os.environ["JARVIS_GOOGLE_CLIENT_ID"] = "client-id-123"
+        now = [1000.0]
+        broker = OAuthBroker(
+            dict((c.provider, c) for c in build_default_oauth_configs()),
+            token_store=self.store,
+            time_fn=lambda: now[0],
+            pending_ttl_seconds=300.0,
+        )
+        _, pending = broker.begin(ServiceProvider.GOOGLE, redirect_uri="http://127.0.0.1:48123/oauth/callback")
+        now[0] = 1301.0
+        with self.assertRaises(OAuthStateError):
+            broker.exchange(pending, "authorization-code")
 
     def test_callback_rejects_wrong_state(self):
         with self.assertRaises(OAuthStateError):
