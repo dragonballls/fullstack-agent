@@ -31,6 +31,8 @@ class VoiceContractTests(unittest.TestCase):
         self.assertIn("Kokoro", readme)
         self.assertIn("OmniRoute only", readme)
         self.assertIn("Claude Code and a Claude subscription are not required", readme)
+        self.assertIn("The Jarvis profile is the primary product contract", readme)
+        self.assertNotIn("Runs on: Claude Code only", readme)
 
 
 if __name__ == "__main__":
