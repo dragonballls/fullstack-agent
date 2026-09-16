@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .account_access import AccountAccessRegistry, AccountGrant, AccountProvider, AccountRisk, AccountScope
+from .account_access import AccountAccessError, AccountAccessRegistry, AccountGrant, AccountProvider, AccountRisk, AccountScope
 from .account_integrations import (
     AccountIdentity,
     AccountSelector,
@@ -18,7 +18,7 @@ from .account_integrations import (
 from .account_store import AccountStore
 from .oauth_broker import KeyringTokenStore, OAuthBroker, SecureTokenBroker, build_default_oauth_configs
 from .oauth_desktop import connect_in_browser
-from .service_adapters import GoogleAdapter, MicrosoftAdapter, ServiceResult, YouTubeAdapter
+from .service_adapters import GoogleAdapter, MicrosoftAdapter, ServiceResult, YouTubeAdapter, service_operation
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,16 @@ _READ_SCOPE_BY_PROVIDER: dict[ServiceProvider, tuple[tuple[str, str], ...]] = {
         ("Calendars.Read", "Read Microsoft calendar"),
         ("Files.Read", "Read Microsoft files"),
     ),
+}
+
+
+_WRITE_SCOPE_BY_PROVIDER: dict[ServiceProvider, tuple[tuple[str, str], ...]] = {
+    ServiceProvider.GOOGLE: (("gmail.send", "Send Gmail messages"),),
+    ServiceProvider.YOUTUBE: (
+        ("youtube.upload", "Upload YouTube videos"),
+        ("youtube.force-ssl", "Manage YouTube videos and channel resources"),
+    ),
+    ServiceProvider.MICROSOFT: (("Mail.Send", "Send Microsoft mail"),),
 }
 
 
@@ -79,11 +89,7 @@ class AccountServiceManager:
         self.register_identity(identity)
         self._grant_default_read_scopes(identity)
         provider_key = AccountProvider(identity.provider.value if identity.provider.value != "generic_web" else "generic")
-        try:
-            self.account_access.enable(provider_key, identity.account_id)
-        except Exception:
-            # A brand-new account has no prior grant yet; _grant_default_read_scopes created it.
-            raise
+        self.account_access.enable(provider_key, identity.account_id)
         self.account_store.save_grants(self.account_access.list_accounts())
         return AccountConnection(identity, AuthorizationState.CONNECTED.value)
 
@@ -112,6 +118,17 @@ class AccountServiceManager:
         self.account_store.save_grants(self.account_access.list_accounts())
         return grant
 
+    def grant_write_scope(self, identity: AccountIdentity, scope: str | None = None) -> AccountGrant | tuple[AccountGrant, ...]:
+        """Enable a supported mutation scope explicitly; writes remain confirmation-gated."""
+        available = _WRITE_SCOPE_BY_PROVIDER.get(identity.provider, ())
+        if not available:
+            raise ValueError(f"no direct write scopes are configured for {identity.provider.value}")
+        selected = tuple(item for item in available if scope is None or item[0] == scope)
+        if scope is not None and not selected:
+            raise ValueError(f"unsupported write scope for {identity.provider.value}: {scope}")
+        grants = tuple(self.grant_scope(identity, name, description, risk=AccountRisk.WRITE) for name, description in selected)
+        return grants[0] if len(grants) == 1 else grants
+
     def service_action(
         self,
         operation: str,
@@ -123,6 +140,19 @@ class AccountServiceManager:
         confirmed: bool = False,
     ) -> ServiceResult:
         identity = self.select_account(provider, account_id=account_id, label=label)
+        spec = service_operation(operation)
+        if spec.provider is not provider:
+            return ServiceResult(False, provider, operation, error="service operation provider does not match selected account")
+        if spec.risk != "read" and not confirmed:
+            return ServiceResult(False, provider, operation, error="confirmation required before the external account write")
+        if spec.risk != "read":
+            provider_key = AccountProvider(provider.value if provider.value != "generic_web" else "generic")
+            try:
+                grant = self.account_access.get(provider_key, identity.account_id)
+            except AccountAccessError:
+                grant = None
+            if grant is None or not grant.enabled or not grant.allows(spec.scope):
+                self.grant_scope(identity, spec.scope, f"Authorized by confirmed {operation}", risk=AccountRisk.WRITE)
         adapter = {
             ServiceProvider.GOOGLE: GoogleAdapter,
             ServiceProvider.MICROSOFT: MicrosoftAdapter,
@@ -131,6 +161,10 @@ class AccountServiceManager:
         if adapter is None:
             raise ValueError(f"no API adapter is registered for {provider.value}")
         return adapter(self._secure_token_broker(), self.account_access).execute(operation, identity, payload, confirmed=confirmed)
+
+    def list_account_grants(self):
+        """Return non-secret local account grants for diagnostics."""
+        return self.account_access.list_accounts()
 
     def _secure_oauth(self) -> OAuthBroker:
         if self._oauth_broker is None:
@@ -147,4 +181,7 @@ class AccountServiceManager:
 
     def _grant_default_read_scopes(self, identity: AccountIdentity) -> None:
         for scope, description in _READ_SCOPE_BY_PROVIDER.get(identity.provider, ()):
-            self.grant_scope(identity, scope, description, risk=AccountRisk.READ)
+            try:
+                self.grant_scope(identity, scope, description, risk=AccountRisk.READ)
+            except ValueError:
+                continue
