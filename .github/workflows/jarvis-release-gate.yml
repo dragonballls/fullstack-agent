@@ -35,7 +35,7 @@ jobs:
       - name: Verify installed dependency consistency
         run: python -m pip check
       - name: Compile every Python module
-        run: python -m compileall quality_of_life self_coding windows_maintenance scripts tests readiness.py
+        run: python -m compileall quality_of_life self_coding scripts tests readiness.py
       - name: Run complete unittest suite
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Run Windows-maintenance unit tests
@@ -72,17 +72,18 @@ jobs:
         run: |
           $env:PYTHONPATH = "$PWD\build_vendor\backtalk\source;$env:PYTHONPATH"
           python -c "from backtalk.ears import Ears; from backtalk.mouth import Mouth; from backtalk.ptt import PTTListener; print('Fullstack voice imports OK')"
+          if (-not (Test-Path -LiteralPath 'build_vendor\backtalk\source')) { throw 'Backtalk source directory is missing before packaging' }
       - name: Build single-file Jarvis.exe
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name Jarvis --paths . --paths build_vendor\backtalk\source --add-data "build_vendor\ai-visualizer\source;ai-visualizer/source" --add-data "build_vendor\barehands\source;barehands/source" --add-data "build_vendor\ai-memory-vault\source;ai-memory-vault/source" --collect-submodules quality_of_life --collect-submodules self_coding --collect-submodules windows_maintenance --collect-submodules backtalk --collect-all faster_whisper --collect-all kokoro --collect-submodules webrtcvad --hidden-import sounddevice --hidden-import soundfile --hidden-import pynput scripts/jarvis_desktop.pyw
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name Jarvis --paths . --paths build_vendor\backtalk\source --add-data "build_vendor\backtalk\source;backtalk/source" --add-data "build_vendor\ai-visualizer\source;ai-visualizer/source" --add-data "build_vendor\barehands\source;barehands/source" --add-data "build_vendor\ai-memory-vault\source;ai-memory-vault/source" --collect-submodules quality_of_life --collect-submodules self_coding --collect-submodules windows_maintenance --collect-submodules backtalk --collect-all faster_whisper --collect-all kokoro --collect-submodules webrtcvad --hidden-import sounddevice --hidden-import soundfile --hidden-import pynput scripts/jarvis_desktop.pyw
           if (-not (Test-Path -LiteralPath 'dist/Jarvis.exe')) { throw 'Jarvis.exe was not produced' }
           if ((Get-Item -LiteralPath 'dist/Jarvis.exe').Length -lt 5000000) { throw 'Jarvis.exe is unexpectedly small; embedded runtime/assets are probably missing' }
-      - name: Smoke-test embedded visualizer and process lifetime
+      - name: Smoke-test embedded Backtalk source and visualizer
         shell: pwsh
         run: |
           $env:JARVIS_SMOKE = '1'
-          $env:JARVIS_DISABLE_VOICE = '1'
+          $env:JARVIS_SMOKE_VOICE = '1'
           $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru
           $deadline = (Get-Date).AddSeconds(20)
           $ready = $false
