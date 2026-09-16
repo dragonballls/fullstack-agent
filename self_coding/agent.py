@@ -35,6 +35,7 @@ class SelfCodingConfig:
     test_commands: tuple[tuple[str, ...], ...] = ((sys.executable, "-m", "unittest", "discover", "-s", "tests"),)
     timeout_seconds: int = 900
     push_branch: bool = False
+    publish_main: bool = False
     max_passes: int = 1
     backend: str = "auto"
 
@@ -120,6 +121,25 @@ class SelfCodingAgent:
             raise SelfCodingError(created.stderr.strip() or "Unable to create self-coding branch.")
         return branch, baseline
 
+    def _publish_main(self, baseline: str, branch: str) -> None:
+        fetched = self._git("fetch", "origin", "main")
+        if fetched.returncode != 0:
+            raise SelfCodingError(fetched.stderr.strip() or "Unable to fetch remote main")
+        remote = self._git("rev-parse", "refs/remotes/origin/main")
+        if remote.returncode != 0:
+            raise SelfCodingError(remote.stderr.strip() or "Unable to inspect remote main")
+        if remote.stdout.strip() != baseline:
+            raise SelfCodingError("remote main changed after self-coding started; refusing to publish")
+        switched = self._git("switch", "main")
+        if switched.returncode != 0:
+            raise SelfCodingError(switched.stderr.strip() or "Unable to switch to main")
+        merged = self._git("merge", "--ff-only", branch)
+        if merged.returncode != 0:
+            raise SelfCodingError(merged.stderr.strip() or "Unable to fast-forward main")
+        pushed = self._git("push", "origin", "main")
+        if pushed.returncode != 0:
+            raise SelfCodingError(pushed.stderr.strip() or "Unable to publish verified self-coding change to main")
+
     @staticmethod
     def _prompt(goal: str) -> str:
         return f"""You are the implementation agent for this repository.
@@ -191,11 +211,13 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             raise SelfCodingError("Rollback verification failed: repository is still dirty.")
 
     def run(self, goal: str) -> str:
-        """Implement one or more safe passes and return the resulting branch."""
+        """Implement one or more safe passes and optionally publish to main."""
         if not goal.strip():
             raise SelfCodingError("A non-empty coding goal is required.")
         if self.config.max_passes < 1:
             raise SelfCodingError("max_passes must be at least 1.")
+        if self.config.publish_main and self.config.push_branch:
+            raise SelfCodingError("publish_main and push_branch cannot be combined")
 
         self.validate_repo()
         branch, baseline = self._new_branch()
@@ -214,10 +236,13 @@ Implement the goal directly, then leave the repository in a clean, testable stat
                 if committed.returncode != 0:
                     raise SelfCodingError(committed.stderr.strip() or "Unable to commit verified changes.")
 
+            if self.config.publish_main:
+                self._publish_main(baseline, branch)
+                return "main"
             if self.config.push_branch:
                 pushed = self._git("push", "-u", "origin", branch)
                 if pushed.returncode != 0:
-                    raise SelfCodingError(pushed.stderr.strip() or "Unable to push self-coding branch.")
+                    raise SelfCodingError(pushed.stderr.strip() or "Unable to push self-coding branch")
             return branch
         except Exception:
             self._rollback(baseline)
