@@ -9,18 +9,28 @@ class VoiceContractTests(unittest.TestCase):
         contract = (ROOT / "JARVIS_VOICE.md").read_text(encoding="utf-8")
         self.assertIn("ElevenLabs", contract)
         self.assertIn("ELEVENLABS_API_KEY", contract)
-        self.assertIn("Never print the API key", contract)
+        self.assertRegex(contract, r"(?i)(never|do not) (store|save).{0,50}API key")
         self.assertIn("real speech test", contract)
+        self.assertIn("OmniRoute only", contract)
+        self.assertIn("JARVIS_ALLOW_CLAUDE=false", contract)
+
+    def test_jarvis_setup_is_claude_free(self):
+        setup = (ROOT / "JARVIS_SETUP.md").read_text(encoding="utf-8")
+        self.assertIn("OmniRoute only", setup)
+        self.assertIn("Claude Code and a Claude subscription are not required", setup)
+        self.assertIn("JARVIS_ALLOW_CLAUDE", setup)
 
     def test_installer_requires_voice_contract(self):
-        installer = (ROOT / "fullstack-agent.md").read_text(encoding="utf-8")
-        self.assertIn("JARVIS_VOICE.md", installer)
-        self.assertIn("actual speech test", installer)
+        installer = (ROOT / "JARVIS_SETUP.md").read_text(encoding="utf-8")
+        self.assertIn("JARVIS_VOICE", installer)
+        self.assertIn("OmniRoute", installer)
 
     def test_readme_discloses_cloud_voice_choice(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("ElevenLabs", readme)
         self.assertIn("Kokoro", readme)
+        self.assertIn("OmniRoute only", readme)
+        self.assertIn("Claude Code and a Claude subscription are not required", readme)
 
 
 if __name__ == "__main__":
