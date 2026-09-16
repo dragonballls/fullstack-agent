@@ -1,3 +1,4 @@
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -33,6 +34,24 @@ class VoiceListenerTests(unittest.TestCase):
         listener = LocalWakeWordListener(on_wake=events.append, threshold=0.70)
         listener.process_prediction({"hey_jarvis": 0.70})
         self.assertEqual(events[0].model, "hey_jarvis")
+
+    def test_start_is_idempotent_and_stop_ends_listener_thread(self):
+        ready = threading.Event()
+        stopped = threading.Event()
+        listener = LocalWakeWordListener()
+
+        def fake_run_forever():
+            ready.set()
+            listener._stop_event.wait()
+            stopped.set()
+
+        listener.run_forever = fake_run_forever
+        self.assertTrue(listener.start())
+        self.assertTrue(ready.wait(1.0))
+        self.assertFalse(listener.start())
+        listener.stop()
+        self.assertTrue(stopped.is_set())
+        self.assertFalse(listener.running)
 
 
 if __name__ == "__main__":
