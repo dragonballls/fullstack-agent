@@ -49,9 +49,9 @@ class HandControlIntegrationTests(unittest.TestCase):
             for event in interpreter.interpret(sample, timestamp=timestamp / 10):
                 self.assertTrue(bridge.dispatch(event))
 
-        self.assertIn(("move", 480, 324), controller.calls)
-        self.assertIn(("down", "left"), controller.pyautogui.calls)
-        self.assertIn(("up", "left"), controller.pyautogui.calls)
+        self.assertIn(("move", 384, 324), controller.calls)
+        self.assertIn(("move", 480, 378), controller.calls)
+        self.assertIn(("click", "left", 1), controller.calls)
 
     def test_disabled_bridge_never_dispatches_input(self):
         controller = FakeController()
