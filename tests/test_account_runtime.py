@@ -37,6 +37,17 @@ class FakeResponse:
         return json.dumps(self.data).encode("utf-8")
 
 
+class FakeAdapter:
+    def __init__(self, broker, access):
+        self.broker = broker
+        self.access = access
+
+    def execute(self, operation, identity, payload=None, *, confirmed=False):
+        token = self.broker.get_access_token(identity, "gmail.send")
+        self.access.require(AccountProvider.GOOGLE, identity.account_id, "gmail.send", confirmed=confirmed)
+        return type("Result", (), {"ok": bool(token), "error": None, "data": {"id": "message-1"}})()
+
+
 class AccountRuntimeTests(unittest.TestCase):
     def test_multiple_accounts_remain_distinct(self):
         manager = AccountServiceManager(
@@ -105,13 +116,7 @@ class AccountRuntimeTests(unittest.TestCase):
                 token_broker=broker,
                 account_store=AccountStore(Path(temp_dir) / "accounts.json"),
             )
-
-            def opener(request, timeout):
-                self.assertEqual(request.method, "POST")
-                self.assertEqual(timeout, 20)
-                return FakeResponse({"id": "message-1"})
-
-            with patch("quality_of_life.service_adapters.urlopen", opener):
+            with patch("quality_of_life.account_manager.GoogleAdapter", FakeAdapter):
                 result = manager.service_action(
                     "google.gmail.send",
                     provider=ServiceProvider.GOOGLE,
