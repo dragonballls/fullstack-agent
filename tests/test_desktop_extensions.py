@@ -3,22 +3,27 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 
-from quality_of_life.family_locations import FamilyLocationService
-from quality_of_life.permissions import Capability, CapabilityPolicy
+from quality_of_life.family_locations import FamilyLocation, FamilyLocationService
+from quality_of_life.permissions import Capability, CapabilityPolicy, CapabilityDenied
 from quality_of_life.workflows import Workflow, WorkflowStep, WorkflowStore
 from scripts.jarvis_desktop_extensions import JarvisExtendedController, _family_command
 
 
 class FakeRuntime:
-    def __init__(self):
-        self.policy = CapabilityPolicy(allowed=frozenset({Capability.APP_READ}), require_confirmation=frozenset())
+    def __init__(self, allowed=None):
+        self.policy = CapabilityPolicy(allowed=frozenset(allowed or {Capability.APP_READ}), require_confirmation=frozenset())
         self.calls = []
 
     def dispatch(self, capability, operation, *args, **kwargs):
         self.calls.append((capability, operation, args, kwargs))
         return "ok"
+
+
+class StubFamilyProvider:
+    def fetch(self):
+        from datetime import datetime, timezone
+        return (FamilyLocation("a", "Alex", 34.1, -117.9, None, "fixture", datetime.now(timezone.utc), "on"),)
 
 
 class DesktopExtensionTests(unittest.TestCase):
@@ -45,6 +50,14 @@ class DesktopExtensionTests(unittest.TestCase):
         controller = object.__new__(JarvisExtendedController)
         controller.family_service = FamilyLocationService(provider=None)
         self.assertIsNone(controller._family_request("where is the nearest coffee shop"))
+
+    def test_family_location_requires_dedicated_capability(self):
+        runtime = FakeRuntime(allowed={Capability.APP_READ})
+        controller = JarvisExtendedController.__new__(JarvisExtendedController)
+        controller.runtime = runtime
+        controller.family_service = FamilyLocationService(StubFamilyProvider())
+        with self.assertRaises(CapabilityDenied):
+            controller._family_request("where is Alex")
 
 
 if __name__ == "__main__":
