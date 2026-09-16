@@ -50,6 +50,7 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("hand_control", "Optional webcam hand tracking bridged to guarded computer input", "quality_of_life.hand_control.HandControlBridge"))
     registry.register(ToolSpec("hand_control_runtime", "Isolated lifecycle manager for optional webcam hand control", "quality_of_life.hand_control_runtime.HandControlRuntime"))
     registry.register(ToolSpec("hand_control_server", "Loopback-only webcam hand-control bridge", "quality_of_life.hand_control_server.HandControlHandler"))
+    registry.register(ToolSpec("voice_listener", "Local always-listening wake-word microphone listener", "quality_of_life.voice_listener.LocalWakeWordListener"))
     registry.register(ToolSpec("files", "Guarded filesystem read and mutation operations", "quality_of_life.files.FileController"))
     registry.register(ToolSpec("gods_eye", "Location search, current-location context, routing, and in-app map state", "quality_of_life.gods_eye.GodsEye"))
     registry.register(ToolSpec("locations", "Persistent user-named locations backed by a local JSON store", "quality_of_life.location_memory.SavedLocationStore"))
