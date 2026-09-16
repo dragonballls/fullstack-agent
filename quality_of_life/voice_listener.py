@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import importlib
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,6 +30,7 @@ class LocalWakeWordListener:
         threshold: float = 0.70,
         sample_rate: int = 16000,
         block_size: int = 1280,
+        cooldown_seconds: float = 2.0,
         on_wake: Callable[[WakeEvent], None] | None = None,
         sounddevice_module: Any | None = None,
         wakeword_model: Any | None = None,
@@ -36,9 +39,12 @@ class LocalWakeWordListener:
         self.threshold = max(0.0, min(1.0, threshold))
         self.sample_rate = sample_rate
         self.block_size = block_size
+        self.cooldown_seconds = max(0.0, cooldown_seconds)
         self.on_wake = on_wake
         self._sounddevice = sounddevice_module
         self._wakeword_model = wakeword_model
+        self._activation_lock = threading.Lock()
+        self._last_activation = 0.0
 
     def _load_dependencies(self) -> tuple[Any, Any]:
         sounddevice = self._sounddevice
@@ -71,6 +77,16 @@ class LocalWakeWordListener:
         matching = [float(value) for name, value in prediction.items() if model_name in name]
         return max(matching, default=0.0)
 
+    def _emit_wake(self, score: float) -> None:
+        if self.on_wake is None:
+            return
+        now = time.monotonic()
+        with self._activation_lock:
+            if now - self._last_activation < self.cooldown_seconds:
+                return
+            self._last_activation = now
+        self.on_wake(WakeEvent(self.model_name, score))
+
     def run_forever(self) -> None:
         """Continuously monitor the local microphone; no network call is made here."""
         sounddevice, model = self._load_dependencies()
@@ -79,8 +95,8 @@ class LocalWakeWordListener:
             audio = (indata.reshape(-1) * 32767).astype("int16")
             prediction = model.predict(audio)
             score = self._score(prediction, self.model_name)
-            if score >= self.threshold and self.on_wake is not None:
-                self.on_wake(WakeEvent(self.model_name, score))
+            if score >= self.threshold:
+                self._emit_wake(score)
 
         with sounddevice.InputStream(
             samplerate=self.sample_rate,
