@@ -105,24 +105,22 @@ class AccountRuntimeTests(unittest.TestCase):
                 token_broker=broker,
                 account_store=AccountStore(Path(temp_dir) / "accounts.json"),
             )
-            seen = {}
 
             def opener(request, timeout):
-                seen["method"] = request.method
+                self.assertEqual(request.method, "POST")
+                self.assertEqual(timeout, 20)
                 return FakeResponse({"id": "message-1"})
 
-            result = manager.service_action(
-                "google.gmail.send",
-                provider=ServiceProvider.GOOGLE,
-                account_id="g1",
-                payload={"to": "person@example.com", "subject": "Hello", "body": "Body"},
-                confirmed=True,
-            )
-            self.assertFalse(result.ok)
-            self.assertIn("credential authorization", result.error)
-
-            # The manager must have added the requested local grant, without creating
-            # unrelated account permissions. The real OAuth token still controls access.
+            with patch("quality_of_life.service_adapters.urlopen", opener):
+                result = manager.service_action(
+                    "google.gmail.send",
+                    provider=ServiceProvider.GOOGLE,
+                    account_id="g1",
+                    payload={"to": "person@example.com", "subject": "Hello", "body": "Body"},
+                    confirmed=True,
+                )
+            self.assertTrue(result.ok)
+            self.assertEqual(broker.requested, [("g1", "gmail.send")])
             grant = manager.account_access.get(AccountProvider.GOOGLE, "g1")
             self.assertTrue(grant.allows("gmail.send"))
             self.assertFalse(grant.allows("drive.readonly"))
