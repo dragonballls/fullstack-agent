@@ -81,16 +81,25 @@ class BackgroundModeTests(unittest.TestCase):
         voice.last_error = None
         hand = Mock()
         hand.status.return_value = {"enabled": True, "state": "active"}
-        runtime = JarvisBackgroundRuntime(voice_listener=voice, hand_control=hand)
+        ui_events: list[str] = []
+        runtime = JarvisBackgroundRuntime(
+            voice_listener=voice,
+            hand_control=hand,
+            on_ui_background=lambda: ui_events.append("bg"),
+            on_ui_foreground=lambda: ui_events.append("fg"),
+        )
 
         runtime.start()
         self.assertTrue(runtime.minimize())
         self.assertEqual(runtime.lifecycle.state, BackgroundMode.BACKGROUND)
         voice.start.assert_called_once_with()
         hand.stop.assert_not_called()
+        self.assertEqual(ui_events, ["bg"])
         self.assertTrue(runtime.status()["voice"]["running"])
         self.assertEqual(runtime.status()["hand_control"]["state"], "active")
 
+        self.assertTrue(runtime.restore())
+        self.assertEqual(ui_events, ["bg", "fg"])
         runtime.stop()
         voice.stop.assert_called_once_with()
         hand.stop.assert_called_once_with()
