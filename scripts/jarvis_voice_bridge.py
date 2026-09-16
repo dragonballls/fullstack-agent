@@ -71,12 +71,14 @@ class JarvisVoiceBridge:
         mouth: Any | None = None,
         ptt: Any | None = None,
         confirmation: Callable[[str], bool] | None = None,
+        record_held: Callable[[Callable[[], bool]], str] | None = None,
     ) -> None:
         self.controller = controller
         self.ears = ears
         self.mouth = mouth
         self.ptt = ptt
         self.confirmation = confirmation or self._native_confirmation
+        self.record_held = record_held
         self.thread: threading.Thread | None = None
         self.stop_event = threading.Event()
         self.stopped = False
@@ -108,6 +110,10 @@ class JarvisVoiceBridge:
         if mode != "open" and self.ptt is None:
             from backtalk.ptt import PTTListener
             self.ptt = PTTListener(os.environ.get("JARVIS_PTT_KEY", str(self.config.get("ptt_key", "home"))))
+
+        if mode != "open" and self.record_held is None:
+            from backtalk.ears import record_held
+            self.record_held = record_held
 
     @staticmethod
     def _native_confirmation(text: str) -> bool:
@@ -171,8 +177,6 @@ class JarvisVoiceBridge:
                 self.stop_event.wait(1.0)
 
     def _run_ptt(self) -> None:
-        from backtalk.ears import record_held
-
         while not self.stop_event.is_set():
             try:
                 self.ptt.wait_press()
@@ -180,7 +184,10 @@ class JarvisVoiceBridge:
                     break
                 if getattr(self.mouth, "speaking", False):
                     self.mouth.shut_up()
-                text = record_held(self.ptt.is_held)
+                recorder = self.record_held
+                if recorder is None:
+                    raise RuntimeError("Fullstack push-to-talk recorder is unavailable")
+                text = recorder(self.ptt.is_held)
                 if text:
                     self.handle_transcript(text)
             except Exception as exc:
