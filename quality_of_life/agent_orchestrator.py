@@ -40,6 +40,13 @@ _MUTATING_MARKERS = (
     "enable ", "repair ", "fix ", "write ", "commit ", "push ", "modify ",
 )
 
+_ACCOUNT_OPERATION_PROVIDER = {
+    "google.gmail.send": "google",
+    "microsoft.mail.send": "microsoft",
+    "youtube.video.upload": "youtube",
+    "youtube.video.update": "youtube",
+}
+
 
 class AgentOrchestrator:
     """Coordinate cloud-model calls without bypassing runtime policy."""
@@ -106,7 +113,23 @@ class AgentOrchestrator:
         for step in plan.steps:
             try:
                 spec = operation(step.operation)
-                result = self.runtime.dispatch(spec.capability, step.operation, **step.arguments)
+                if step.operation in _ACCOUNT_OPERATION_PROVIDER:
+                    args = dict(step.arguments)
+                    provider = str(args.pop("provider", _ACCOUNT_OPERATION_PROVIDER[step.operation]))
+                    account_id = args.pop("account_id", None)
+                    label = args.pop("label", None)
+                    result = self.runtime.dispatch(
+                        Capability.ACCOUNT_WRITE,
+                        "accounts.service_action",
+                        operation=step.operation,
+                        provider=provider,
+                        account_id=str(account_id) if account_id is not None else None,
+                        label=str(label) if label is not None else None,
+                        payload=args,
+                        confirmed=confirmed,
+                    )
+                else:
+                    result = self.runtime.dispatch(spec.capability, step.operation, **step.arguments)
                 results.append(f"{step.operation}: {result}")
             except Exception as exc:
                 verified = False
@@ -258,93 +281,3 @@ class AgentOrchestrator:
         result = self.runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal=text)
         branch = str(result)
         return f"Self-coding completed on verified branch: {branch}", bool(branch)
-
-    @staticmethod
-    def _synthesis_prompt(plan: OrchestrationPlan, results: Iterable[ProviderResult], deterministic_context: str = "") -> str:
-        findings: list[str] = []
-        if deterministic_context:
-            findings.append("Deterministic result (authoritative; report faithfully): " + deterministic_context)
-        for index, result in enumerate(results, start=1):
-            if result.ok and result.text:
-                findings.append(f"Specialist {index}: {result.text}")
-            elif result.error:
-                findings.append(f"Specialist {index}: unavailable ({result.error})")
-        context = "\n\n".join(findings) or "No specialist findings were available."
-        return (
-            "Act as the primary Jarvis response model. Synthesize the findings below into one accurate, concise response. "
-            "Do not claim an action was performed unless a deterministic tool result is supplied. Preserve safety boundaries.\n\n"
-            f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
-        )
-
-    def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
-        started = time.monotonic()
-        plan = build_plan(text)
-        errors: list[str] = []
-        providers: list[str] = []
-        deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
-        errors.extend(deterministic_errors)
-        if not deterministic_context and not needs_confirmation and self._looks_like_computer_goal(text) and not plan.parallel_tasks:
-            computer_context, computer_verified, computer_confirmation, computer_errors, computer_provider = self._computer_goal_context(text, confirmed)
-            if computer_context:
-                deterministic_context = computer_context
-                deterministic_verified = computer_verified
-                needs_confirmation = computer_confirmation
-                errors.extend(computer_errors)
-                if computer_provider:
-                    providers.append(computer_provider)
-        if not deterministic_context and not needs_confirmation and not plan.parallel_tasks and plan.primary.profile is not RequestProfile.CODING:
-            typed_context, typed_verified, typed_confirmation, typed_errors = self._execute_typed_plan(text, confirmed)
-            if typed_context:
-                deterministic_context, deterministic_verified, needs_confirmation = typed_context, typed_verified, typed_confirmation
-            errors.extend(typed_errors)
-        parallel_completed = 0
-        if plan.primary.profile is RequestProfile.CODING and any(word in text.casefold() for word in ("implement", "fix", "modify", "code")):
-            coding_context, coding_verified = self._coding_context(text, confirmed)
-            deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
-            deterministic_verified = coding_verified
-            if not confirmed:
-                needs_confirmation = True
-        if plan.parallel_tasks:
-            specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
-            parallel_completed = sum(1 for result in specialist_results if result.ok and result.text)
-            for result in specialist_results:
-                if result.target_name:
-                    providers.append(result.target_name)
-                if result.error:
-                    errors.append(result.error)
-            synthesis_prompt = self._synthesis_prompt(plan, specialist_results, deterministic_context)
-        else:
-            synthesis_prompt = self._synthesis_prompt(plan, (), deterministic_context)
-        if deterministic_context and (deterministic_verified or needs_confirmation) and not plan.parallel_tasks:
-            synthesis_text = deterministic_context
-            provider = providers[-1] if providers else "deterministic"
-        else:
-            synthesis_text, provider = self.router.complete_profiled(self._messages(synthesis_prompt), plan.primary.profile)
-        providers.append(provider)
-        verified = bool(synthesis_text.strip()) and (deterministic_verified or not deterministic_context)
-        if needs_confirmation:
-            verified = False
-        return OrchestrationResult(synthesis_text, plan.primary.profile.value, verified, needs_confirmation, parallel_completed, tuple(dict.fromkeys(providers)), int((time.monotonic() - started) * 1000), tuple(errors))
-
-    def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:
-        ack = OrchestrationEvent("ack", "Certainly. I'm working on that now.")
-        if on_event:
-            on_event(ack)
-        yield ack
-        plan = build_plan(text)
-        progress = OrchestrationEvent("progress", f"Running {len(plan.parallel_tasks)} specialist checks in parallel." if plan.parallel_tasks else "Using the fastest suitable cloud model or guarded computer-use loop.")
-        if on_event:
-            on_event(progress)
-        yield progress
-        try:
-            result = self.execute(text, confirmed=confirmed)
-        except Exception as exc:
-            event = OrchestrationEvent("result", "The request could not be completed safely.", {"error": str(exc)})
-            if on_event:
-                on_event(event)
-            yield event
-            return
-        event = OrchestrationEvent("result", result.text, {"profile": result.profile, "verified": result.verified, "needs_confirmation": result.needs_confirmation, "parallel_tasks_completed": result.parallel_tasks_completed, "providers": result.providers, "latency_ms": result.latency_ms, "errors": result.errors})
-        if on_event:
-            on_event(event)
-        yield event
