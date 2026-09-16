@@ -156,11 +156,23 @@ class HandGestureInterpreter:
 
 
 class HandControlBridge:
-    """Map approved hand events through the existing computer controller."""
+    """Map approved hand events through desktop or physical-device input."""
 
-    def __init__(self, *, enabled: bool = False, controller: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        enabled: bool = False,
+        controller: Any | None = None,
+        device_adapter: Any | None = None,
+        target_device_id: str | None = None,
+    ) -> None:
         self.enabled = enabled
         self.controller = controller
+        self.device_adapter = device_adapter
+        self.target_device_id = target_device_id
+
+    def set_device_target(self, device_id: str | None) -> None:
+        self.target_device_id = device_id
 
     def enable(self) -> None:
         self.enabled = True
@@ -186,7 +198,16 @@ class HandControlBridge:
         if event.kind == "pause":
             self.disable()
             return True
-        if not self.enabled or self.controller is None:
+        if not self.enabled:
+            return False
+        if self.target_device_id is not None:
+            if self.device_adapter is None:
+                return False
+            result = self.device_adapter.route_hand_event(
+                self.target_device_id, event, confirmed=True
+            )
+            return bool(getattr(result, "ok", False))
+        if self.controller is None:
             return False
         if event.kind == "move":
             width, height = self.controller.pyautogui.size()
