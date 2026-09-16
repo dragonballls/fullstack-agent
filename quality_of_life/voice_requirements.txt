@@ -1,0 +1,4 @@
+# Optional Windows voice runtime dependencies.
+# The base QOL test matrix intentionally does not install these.
+openwakeword==0.6.0; platform_system == "Windows" and python_version < "3.14"
+sounddevice>=0.5.0
