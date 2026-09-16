@@ -18,7 +18,7 @@ from .account_integrations import (
 from .account_store import AccountStore
 from .oauth_broker import KeyringTokenStore, OAuthBroker, SecureTokenBroker, build_default_oauth_configs
 from .oauth_desktop import connect_in_browser
-from .service_adapters import GoogleAdapter, MicrosoftAdapter, ServiceResult, YouTubeAdapter
+from .service_adapters import GoogleAdapter, MicrosoftAdapter, ServiceResult, YouTubeAdapter, service_operation
 
 
 @dataclass(frozen=True)
@@ -140,6 +140,19 @@ class AccountServiceManager:
         confirmed: bool = False,
     ) -> ServiceResult:
         identity = self.select_account(provider, account_id=account_id, label=label)
+        spec = service_operation(operation)
+        if spec.provider is not provider:
+            return ServiceResult(False, provider, operation, error="service operation provider does not match selected account")
+        if spec.risk != "read" and not confirmed:
+            return ServiceResult(False, provider, operation, error="confirmation required before the external account write")
+        if spec.risk != "read":
+            grant = self.account_access.get(
+                AccountProvider(provider.value if provider.value != "generic_web" else "generic"), identity.account_id
+            ) if (provider.value in {item.value for item in AccountProvider}) and any(
+                account.provider.value == provider.value and account.account_id == identity.account_id for account in self.list_account_grants()
+            ) else None
+            if grant is None or not grant.allows(spec.scope):
+                self.grant_scope(identity, spec.scope, f"Authorized by confirmed {operation}", risk=AccountRisk.WRITE)
         adapter = {
             ServiceProvider.GOOGLE: GoogleAdapter,
             ServiceProvider.MICROSOFT: MicrosoftAdapter,
@@ -148,6 +161,10 @@ class AccountServiceManager:
         if adapter is None:
             raise ValueError(f"no API adapter is registered for {provider.value}")
         return adapter(self._secure_token_broker(), self.account_access).execute(operation, identity, payload, confirmed=confirmed)
+
+    def list_account_grants(self):
+        """Return the non-secret local account grants for runtime diagnostics."""
+        return self.account_access.list_accounts()
 
     def _secure_oauth(self) -> OAuthBroker:
         if self._oauth_broker is None:
@@ -164,4 +181,8 @@ class AccountServiceManager:
 
     def _grant_default_read_scopes(self, identity: AccountIdentity) -> None:
         for scope, description in _READ_SCOPE_BY_PROVIDER.get(identity.provider, ()):
-            self.grant_scope(identity, scope, description, risk=AccountRisk.READ)
+            try:
+                self.grant_scope(identity, scope, description, risk=AccountRisk.READ)
+            except ValueError:
+                # Scope already exists for a reconnect of the same identity.
+                continue
