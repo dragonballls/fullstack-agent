@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import base64
+import http.client
 import json
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from .account_integrations import AccountIdentity, ServiceProvider, TokenBroker, UnconfiguredTokenBroker
@@ -87,6 +89,41 @@ def _json_request(url: str, token: str, method: str, payload: dict[str, Any] | N
     return Request(url, data=body, method=method, headers=headers)
 
 
+def _stream_put_file(url: str, token: str, mime_type: str, path: Path, timeout: int, *, chunk_size: int = 8 * 1024 * 1024) -> Any:
+    """Upload a file without reading the whole file into memory."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        raise ServiceAdapterError("provider upload URL is invalid")
+    if parsed.scheme == "https":
+        connection = http.client.HTTPSConnection(parsed.hostname, parsed.port, timeout=timeout)
+    else:
+        connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=timeout)
+    target = parsed.path or "/"
+    if parsed.query:
+        target += "?" + parsed.query
+    try:
+        size = path.stat().st_size
+        connection.putrequest("PUT", target)
+        connection.putheader("Authorization", f"Bearer {token}")
+        connection.putheader("Content-Type", mime_type)
+        connection.putheader("Content-Length", str(size))
+        connection.putheader("User-Agent", "fullstack-agent-jarvis")
+        connection.endheaders()
+        with path.open("rb") as handle:
+            while True:
+                chunk = handle.read(chunk_size)
+                if not chunk:
+                    break
+                connection.send(chunk)
+        response = connection.getresponse()
+        raw = response.read().decode("utf-8")
+        if response.status >= 400:
+            raise HTTPError(url, response.status, response.reason, response.headers, None)
+        return json.loads(raw) if raw else None
+    finally:
+        connection.close()
+
+
 class ApiServiceAdapter:
     """Small HTTP adapter that requires both local grant authorization and an OAuth token."""
 
@@ -95,10 +132,12 @@ class ApiServiceAdapter:
         token_broker: TokenBroker | None = None,
         account_access: AccountAccessRegistry | None = None,
         opener: Callable[..., object] = urlopen,
+        stream_uploader: Callable[..., Any] | None = None,
     ) -> None:
         self._token_broker = token_broker or UnconfiguredTokenBroker()
         self._account_access = account_access or AccountAccessRegistry()
         self._opener = opener
+        self._stream_uploader = stream_uploader or _stream_put_file
 
     def execute(
         self,
@@ -221,21 +260,9 @@ class ApiServiceAdapter:
                 upload_url = response.headers.get("Location")
                 if not upload_url:
                     return ServiceResult(False, spec.provider, operation, error="youtube upload session URL was not returned")
-            upload_request = Request(
-                upload_url,
-                data=path.read_bytes(),
-                method="PUT",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": mime,
-                    "Content-Length": str(path.stat().st_size),
-                    "User-Agent": "fullstack-agent-jarvis",
-                },
-            )
-            with self._opener(upload_request, timeout=max(60, min(900, int(path.stat().st_size / 100_000) + 60))) as response:
-                raw = response.read().decode("utf-8")
-                data = json.loads(raw) if raw else None
-        except (HTTPError, URLError, OSError, ValueError) as exc:
+            timeout = max(60, min(900, int(path.stat().st_size / 100_000) + 60))
+            data = self._stream_uploader(upload_url, token, mime, path, timeout)
+        except (HTTPError, URLError, OSError, ValueError, ServiceAdapterError) as exc:
             return ServiceResult(False, spec.provider, operation, error=f"youtube upload failed: {type(exc).__name__}")
         return ServiceResult(True, identity.provider, operation, data=data)
 
