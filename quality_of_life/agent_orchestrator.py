@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import time
 from typing import Any, Callable, Iterable, Iterator
 
+from .api_tools import ApiToolAdapter
 from .capabilities import operation
 from .computer_use import ComputerUseAgent, RouterComputerUsePlanner, ScreenObserver
 from .intents import parse_intent
@@ -13,6 +14,8 @@ from .orchestration import OrchestrationPlan, RequestProfile, build_plan
 from .permissions import Capability
 from .planner import PlanError, plan_request
 from .router import CloudModelRouter, ProviderResult
+from .tool_broker import ToolResult, UNIVERSAL_OPERATION_SPECS, UniversalToolBroker
+from .web_tools import WebToolAdapter
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,23 @@ class AgentOrchestrator:
         self.router = router
         self.runtime = runtime
         self.max_parallel = max_parallel
+        self._universal_tool_broker = UniversalToolBroker(getattr(runtime, "policy", None))
+        web_hosts = {host.strip().lower() for host in __import__("os").environ.get("JARVIS_WEB_ALLOWED_HOSTS", "").split(",") if host.strip()}
+        if web_hosts:
+            self._universal_tool_broker.register(WebToolAdapter(web_hosts))
+        try:
+            self._universal_tool_broker.register(ApiToolAdapter.from_environment())
+        except (ValueError, KeyError, TypeError):
+            pass
+        from .orchestrator import Action
+        if web_hosts:
+            self.runtime.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "web.fetch", lambda url: self._universal_tool_broker.invoke("web.fetch", {"url": url})))
+            self.runtime.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "web.search", lambda query, limit=5: self._universal_tool_broker.invoke("web.search", {"query": query, "limit": limit})))
+        self.runtime.orchestrator.register(Action(Capability.ACCOUNT_READ, "api.request.read", lambda endpoint, path: self._universal_tool_broker.invoke("api.request.read", {"endpoint": endpoint, "path": path})))
+        self.runtime.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "api.request.write", lambda endpoint, path, json=None, confirmed=False: self._universal_tool_broker.invoke("api.request.write", {"endpoint": endpoint, "path": path, "json": json}, confirmed=confirmed)))
+        self.runtime.orchestrator.register(Action(Capability.CLOUD_ROUTING, "tools.list", lambda: self._universal_tool_broker.invoke("tools.list", {})))
+        self.runtime.orchestrator.register(Action(Capability.CLOUD_ROUTING, "tools.describe", lambda name: self._universal_tool_broker.invoke("tools.describe", {"name": name})))
+        self.runtime.orchestrator.register(Action(Capability.CLOUD_ROUTING, "tools.invoke", lambda operation, arguments=None, confirmed=False: self._universal_tool_broker.invoke("tools.invoke", {"operation": operation, "arguments": arguments or {}}, confirmed=confirmed)))
 
     @staticmethod
     def _needs_confirmation(text: str) -> bool:
@@ -80,13 +100,7 @@ class AgentOrchestrator:
 
     def _specialist_requests(self, plan: OrchestrationPlan, deterministic_context: str = "") -> list[tuple[list[dict[str, str]], RequestProfile]]:
         context = f"\n\nAuthoritative deterministic result:\n{deterministic_context}" if deterministic_context else ""
-        return [
-            (
-                self._messages(f"{task.prompt}\n\nUser request:\n{plan.primary.prompt}{context}\n\nReturn concise findings only; do not execute anything."),
-                task.profile,
-            )
-            for task in plan.parallel_tasks
-        ]
+        return [(self._messages(f"{task.prompt}\n\nUser request:\n{plan.primary.prompt}{context}\n\nReturn concise findings only; do not execute anything."), task.profile) for task in plan.parallel_tasks]
 
     def _execute_typed_plan(self, text: str, confirmed: bool) -> tuple[str, bool, bool, list[str]]:
         if not hasattr(self.router, "complete"):
@@ -100,13 +114,22 @@ class AgentOrchestrator:
         needs_confirmation = self._needs_confirmation(text) and not confirmed
         if needs_confirmation:
             return "This request requires confirmation before I make changes or interact with external applications.", False, True, []
+        universal_names = {spec.name for spec in UNIVERSAL_OPERATION_SPECS}
         results: list[str] = []
         errors: list[str] = []
         verified = True
         for step in plan.steps:
             try:
+                if step.operation in universal_names:
+                    result = self._universal_tool_broker.invoke(step.operation, step.arguments, confirmed=confirmed)
+                    if not result.ok:
+                        raise RuntimeError(result.error or "universal tool operation failed")
+                    results.append(f"{step.operation}: {result.data}")
+                    continue
                 spec = operation(step.operation)
                 result = self.runtime.dispatch(spec.capability, step.operation, **step.arguments)
+                if isinstance(result, ToolResult) and not result.ok:
+                    raise RuntimeError(result.error or "tool operation failed")
                 results.append(f"{step.operation}: {result}")
             except Exception as exc:
                 verified = False
@@ -213,17 +236,6 @@ class AgentOrchestrator:
             return str(result), True, [], False
         if intent.kind == "route":
             query = str(intent.arguments["query"])
-            if query.casefold().startswith("my "):
-                name = query[3:].strip()
-                saved = self.runtime.dispatch(Capability.LOCATION_READ, "locations.get", name=name)
-                if saved is not None:
-                    snapshot = self.runtime.dispatch(Capability.LOCATION_READ, "locations.current")
-                    if not snapshot.permitted or snapshot.point is None:
-                        return "Current location is unavailable; enable location access before routing.", False, [], False
-                    eye = self.runtime._tool("gods_eye")
-                    from .gods_eye import Place
-                    destination = Place(saved.name, saved.point, None, saved.source)
-                    return str(eye.route(snapshot.point, destination)), True, [], False
             result = self.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.route_to", query=query)
             return str(result), True, [], False
         if intent.kind == "computer_action":
@@ -239,12 +251,7 @@ class AgentOrchestrator:
         try:
             computer = self.runtime._tool("computer")
             screen = self.runtime._tool("screen")
-            agent = ComputerUseAgent(
-                RouterComputerUsePlanner(self.router),
-                computer,
-                ScreenObserver(screen),
-                max_steps=max(1, min(int(self.max_parallel or 10), 10)),
-            )
+            agent = ComputerUseAgent(RouterComputerUsePlanner(self.router), computer, ScreenObserver(screen), max_steps=max(1, min(int(self.max_parallel or 10), 10)))
             result = agent.run(text)
         except Exception as exc:
             return "", False, False, [f"computer goal: {exc}"], None
@@ -270,11 +277,7 @@ class AgentOrchestrator:
             elif result.error:
                 findings.append(f"Specialist {index}: unavailable ({result.error})")
         context = "\n\n".join(findings) or "No specialist findings were available."
-        return (
-            "Act as the primary Jarvis response model. Synthesize the findings below into one accurate, concise response. "
-            "Do not claim an action was performed unless a deterministic tool result is supplied. Preserve safety boundaries.\n\n"
-            f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
-        )
+        return "Act as the primary Jarvis response model. Synthesize the findings below into one accurate, concise response. Do not claim an action was performed unless a deterministic tool result is supplied. Preserve safety boundaries.\n\n" + f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
 
     def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
         started = time.monotonic()
