@@ -82,23 +82,43 @@ jobs:
       - name: Smoke-test embedded Backtalk source, native window dependency, and visualizer
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $env:JARVIS_SMOKE = '1'
           $env:JARVIS_SMOKE_VOICE = '1'
           $env:JARVIS_SMOKE_WEBVIEW = '1'
-          $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru
-          $deadline = (Get-Date).AddSeconds(20)
+          $process = $null
           $ready = $false
-          while ((Get-Date) -lt $deadline) {
-            if ($process.HasExited) { throw "Jarvis.exe exited during startup with code $($process.ExitCode)" }
-            try {
-              $response = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8790/faces/board/' -TimeoutSec 2
-              if ($response.StatusCode -eq 200) { $ready = $true; break }
-            } catch { }
-            Start-Sleep -Milliseconds 500
+          try {
+            $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru
+            $deadline = (Get-Date).AddSeconds(20)
+            while ((Get-Date) -lt $deadline) {
+              if ($process.HasExited) { throw "Jarvis.exe exited during startup with code $($process.ExitCode)" }
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8790/faces/board/' -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch { }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $ready) { throw 'Embedded Fullstack visualizer did not become ready on loopback port 8790' }
+            if ($process.HasExited) { throw "Jarvis.exe exited after visualizer became ready with code $($process.ExitCode)" }
           }
-          if (-not $ready) { throw 'Embedded Fullstack visualizer did not become ready on loopback port 8790' }
-          if ($process.HasExited) { throw "Jarvis.exe exited after visualizer became ready with code $($process.ExitCode)" }
-          Stop-Process -Id $process.Id -Force
+          catch {
+            Write-Host '=== Jarvis process diagnostics ==='
+            if ($null -ne $process) {
+              Write-Host ("PID={0} HasExited={1} ExitCode={2}" -f $process.Id, $process.HasExited, $process.ExitCode)
+            }
+            Write-Host '=== Listening socket 8790 ==='
+            Get-NetTCPConnection -LocalPort 8790 -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
+            Write-Host '=== Jarvis desktop log ==='
+            $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
+            if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Raw | Write-Host } else { Write-Host ("Log not found: {0}" -f $log) }
+            Write-Host '=== Recent Jarvis files under LOCALAPPDATA ==='
+            Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA 'Jarvis') -Recurse -Force -ErrorAction SilentlyContinue | Select-Object FullName,Length,LastWriteTime | Format-Table -AutoSize | Out-String | Write-Host
+            throw
+          }
+          finally {
+            if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+          }
       - name: Upload raw Jarvis.exe build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -142,7 +162,7 @@ jobs:
         with:
           name: Jarvis-Windows-Exe
           path: dist
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-github-release@v2
         with:
           files: dist/Jarvis.exe
           generate_release_notes: true
