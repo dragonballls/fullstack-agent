@@ -132,11 +132,15 @@ _USERINFO_URLS: dict[ServiceProvider, str] = {
 
 _SCOPE_ALIASES: dict[str, set[str]] = {
     "gmail.metadata": {"gmail.metadata", "https://www.googleapis.com/auth/gmail.metadata", "https://www.googleapis.com/auth/gmail.readonly"},
+    "gmail.send": {"gmail.send", "https://www.googleapis.com/auth/gmail.send"},
     "calendar.events.readonly": {"calendar.events.readonly", "https://www.googleapis.com/auth/calendar.events.readonly", "https://www.googleapis.com/auth/calendar.readonly"},
     "drive.readonly": {"drive.readonly", "https://www.googleapis.com/auth/drive.readonly"},
     "youtube.readonly": {"youtube.readonly", "https://www.googleapis.com/auth/youtube.readonly"},
+    "youtube.upload": {"youtube.upload", "https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube"},
+    "youtube.force-ssl": {"youtube.force-ssl", "https://www.googleapis.com/auth/youtube.force-ssl", "https://www.googleapis.com/auth/youtube"},
     "User.Read": {"User.Read", "https://graph.microsoft.com/User.Read"},
     "Mail.Read": {"Mail.Read", "https://graph.microsoft.com/Mail.Read"},
+    "Mail.Send": {"Mail.Send", "https://graph.microsoft.com/Mail.Send"},
     "Calendars.Read": {"Calendars.Read", "https://graph.microsoft.com/Calendars.Read"},
     "Files.Read": {"Files.Read", "https://graph.microsoft.com/Files.Read"},
 }
@@ -380,6 +384,7 @@ def build_default_oauth_configs() -> tuple[OAuthClientConfig, ...]:
                 "email",
                 "profile",
                 "https://www.googleapis.com/auth/gmail.readonly",
+                "https://www.googleapis.com/auth/gmail.send",
                 "https://www.googleapis.com/auth/calendar.readonly",
                 "https://www.googleapis.com/auth/drive.readonly",
             ),
@@ -390,7 +395,14 @@ def build_default_oauth_configs() -> tuple[OAuthClientConfig, ...]:
             authorization_url="https://accounts.google.com/o/oauth2/v2/auth",
             token_url="https://oauth2.googleapis.com/token",
             client_id_env="JARVIS_GOOGLE_CLIENT_ID",
-            scopes=("openid", "email", "profile", "https://www.googleapis.com/auth/youtube.readonly"),
+            scopes=(
+                "openid",
+                "email",
+                "profile",
+                "https://www.googleapis.com/auth/youtube.readonly",
+                "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtube.force-ssl",
+            ),
             extra_authorization_params=(("access_type", "offline"), ("prompt", "consent")),
         ),
         OAuthClientConfig(
@@ -398,6 +410,6 @@ def build_default_oauth_configs() -> tuple[OAuthClientConfig, ...]:
             authorization_url="https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
             token_url="https://login.microsoftonline.com/common/oauth2/v2.0/token",
             client_id_env="JARVIS_MICROSOFT_CLIENT_ID",
-            scopes=("openid", "profile", "email", "offline_access", "User.Read", "Mail.Read", "Calendars.Read", "Files.Read"),
+            scopes=("openid", "profile", "email", "offline_access", "User.Read", "Mail.Read", "Mail.Send", "Calendars.Read", "Files.Read"),
         ),
     )
