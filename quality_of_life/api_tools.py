@@ -32,6 +32,22 @@ class ApiToolAdapter:
         self.timeout_seconds = max(0.5, timeout_seconds)
         self.max_bytes = max(1_024, max_bytes)
 
+    @classmethod
+    def from_environment(cls) -> "ApiToolAdapter":
+        raw = os.environ.get("JARVIS_API_ENDPOINTS_JSON", "[]")
+        try:
+            items = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("JARVIS_API_ENDPOINTS_JSON must contain valid JSON") from exc
+        if not isinstance(items, list):
+            raise ValueError("JARVIS_API_ENDPOINTS_JSON must be a JSON array")
+        endpoints: list[ApiEndpoint] = []
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError("each API endpoint configuration must be an object")
+            endpoints.append(ApiEndpoint(str(item["name"]), str(item["base_url"]), str(item["key_env"]) if item.get("key_env") else None, tuple(str(path) for path in item.get("allowed_paths", ()))))
+        return cls(tuple(endpoints))
+
     def manifest(self) -> ToolManifest:
         return ToolManifest("api", "Allowlisted JSON REST APIs with secret-safe authentication", ("api.request.read", "api.request.write"))
 
