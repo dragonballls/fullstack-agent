@@ -132,17 +132,6 @@ class VoiceAdapter:
         self.bridge: Any | None = None
 
     def start(self) -> None:
-        if os.environ.get("JARVIS_SMOKE_VOICE", "0").strip().lower() in {"1", "true", "yes", "on"}:
-            # Verify the exact frozen-runtime resource path and imports without
-            # opening an audio device or downloading a speech/recognition model.
-            from scripts.jarvis_voice_bridge import _configure_vendor
-            _configure_vendor()
-            from backtalk.ears import Ears
-            from backtalk.mouth import Mouth
-            from backtalk.ptt import PTTListener
-            LOGGER.info("embedded Backtalk source/import smoke test passed: %s", embedded_path("backtalk/source"))
-            LOGGER.info("Backtalk classes available: %s, %s, %s", Ears.__name__, Mouth.__name__, PTTListener.__name__)
-            return
         if os.environ.get("JARVIS_DISABLE_VOICE", "0").strip().lower() in {"1", "true", "yes", "on"}:
             LOGGER.info("voice disabled by configuration")
             return
@@ -280,11 +269,16 @@ class FullstackJarvisHost:
         self.visualizer.start()
         try:
             self.voice.start()
+        except Exception:
+            LOGGER.exception("optional voice component could not start; continuing with Fullstack visualizer")
+        try:
             self.hands.start()
+        except Exception:
+            LOGGER.exception("optional hand-control component could not start")
+        try:
             self.updater.start()
         except Exception:
-            self.visualizer.stop()
-            raise
+            LOGGER.exception("auto-update monitor could not start; current Jarvis remains running")
         self.started = True
         self.stopped = False
 
@@ -323,10 +317,6 @@ def main() -> int:
     visualizer = VisualizerAdapter()
     host: FullstackJarvisHost | None = None
     try:
-        # Start the lightweight embedded visualizer before constructing the
-        # heavier Jarvis controller. This guarantees that the presentation
-        # surface is available immediately even when core/cloud initialization
-        # takes time during first launch or after an update.
         visualizer.start()
         controller = JarvisDesktopController()
         host = FullstackJarvisHost(controller, visualizer=visualizer)
