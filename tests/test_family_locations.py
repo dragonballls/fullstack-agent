@@ -16,7 +16,7 @@ class FamilyLocationTests(unittest.TestCase):
                 "latitude": 34.1,
                 "longitude": -117.9,
                 "accuracy_m": 12,
-                "updated_at": "2026-09-16T20:00:00+00:00",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
                 "sharing": "on",
             }]
         })
@@ -37,7 +37,7 @@ class FamilyLocationTests(unittest.TestCase):
                 "name": "Alex",
                 "latitude": 34.1,
                 "longitude": -117.9,
-                "updated_at": "2026-09-16T20:00:00+00:00",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
                 "sharing": "paused",
             }]
         })
@@ -69,16 +69,17 @@ class FamilyLocationTests(unittest.TestCase):
         second = FamilyLocation("x", "Alex", 35.1, -118.9, None, "fixture", datetime(2026, 1, 2, tzinfo=timezone.utc), "on")
         service.apply([first])
         service.follow("x")
-        self.assertFalse(service.following() is None)
+        self.assertIsNotNone(service.following())
         self.assertTrue(service.apply([second]))
         self.assertEqual(service.following().member_id, "x")
         self.assertEqual(service.followed_location().latitude, 35.1)
 
     def test_ambiguous_name_does_not_guess(self):
         service = FamilyLocationService()
+        now = datetime.now(timezone.utc)
         service.apply([
-            FamilyLocation("a", "Alex", 34.1, -117.9, None, "fixture", datetime.now(timezone.utc), "on"),
-            FamilyLocation("b", "Alex", 35.1, -118.9, None, "fixture", datetime.now(timezone.utc), "on"),
+            FamilyLocation("a", "Alex", 34.1, -117.9, None, "fixture", now, "on"),
+            FamilyLocation("b", "Alex", 35.1, -118.9, None, "fixture", now, "on"),
         ])
         with self.assertRaises(ValueError):
             service.get("Alex")
