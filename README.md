@@ -1,57 +1,101 @@
-# Jarvis
+# fullstack-agent
 
-A cloud-routed Jarvis-style agent with local wake-word voice activation, guarded computer control, self-coding, and explicit external-account integrations.
+> **Never used Claude Code?** Start at [jaredrhod.com](https://jaredrhod.com): pick your situation and it routes you to the right path.
 
-## Brain
+**Runs on:** Claude Code only; the installer itself is a Claude Code wizard. The $20 Pro plan is enough.
 
-**OmniRoute only.** Claude Code and a Claude subscription are not required by the Jarvis profile and are not valid fallback brains.
+Not an agent that writes full-stack code. **An agent that HAS a full stack: memory, voice, and face, plus an optional set of hands.** This repo assembles my whole setup on your machine in one guided conversation, and when it finishes, your screen is a living circuit board with your agent's name on the chip, and it speaks first:
 
-## Voice
+> "Hello [you], what are we working on today?"
 
-Jarvis can remain always listening locally after microphone permission is granted. A local wake-word detector listens for the supported `hey_jarvis` model. Ambient speech does not create an AI request. Repeated detections are debounced and only one active voice session is allowed.
+[![Watch the tour: My Jarvis AI Assistant, free on GitHub](https://img.youtube.com/vi/FiOTrxq9ckM/maxresdefault.jpg)](https://www.youtube.com/watch?v=FiOTrxq9ckM)
 
-The conversational path is:
+**Nine minutes shows you everything you're about to get** (the voice, the face, the memory, and the hands): the tour video above, straight from my own desk.
 
-`local microphone -> local wake word -> speech transcript -> Jarvis orchestration -> OmniRoute -> existing tools/permissions -> speech output`
+That's not a demo clip. That's minute one.
 
-ElevenLabs and Kokoro are speech-output engines only.
+## What you get
 
-The base QOL dependencies stay unchanged. Optional Windows voice dependencies are listed in `quality_of_life/voice_requirements.txt`.
+Four pieces, each its own open repo, each excellent alone, assembled here into one agent:
 
-## Accounts & Services
+- **The mind: [ai-memory-vault](https://github.com/jaredrhod/ai-memory-vault).** A real, persistent memory built on plain text files your AI reads and writes. It remembers you, your work, and every lesson, across every session, with no size ceiling.
+- **The mouth: [backtalk](https://github.com/jaredrhod/backtalk).** Hold a key, talk out loud, and your agent answers through your speakers about a second later, with all its tools and its whole personality.
+- **The face: [ai-visualizer](https://github.com/jaredrhod/ai-visualizer).** Full-screen visualizers that idle, listen, think, and speak in sync with the real conversation. Four faces ship, including the living circuit board from my videos.
+- **The hands, the optional extra: [barehands](https://github.com/jaredrhod/barehands).** Move notes and images around your screen with your bare hands through your webcam. No headset, no controllers. Opens in its own window instead of the face. Take it now or add it later by running the same install again.
 
-Jarvis supports a unified, scoped account model for multiple identities per provider. Current service contracts include Google, Microsoft, GitHub, YouTube, Instagram, and generic web services.
+Every piece is optional. The wizard asks which ones you want and explains each in plain English before you decide.
 
-Accounts use explicit OAuth/user consent rather than passwords. Credentials and refresh tokens remain behind a runtime credential broker and are never committed, logged, or returned as model-visible results.
+## Jarvis integration
 
-Read operations can be authorized by scope. Mutating, destructive, financial, and security-sensitive operations require confirmation by default. When more than one account matches, Jarvis must select by explicit account label or ID instead of guessing.
+This fork also ships independent Jarvis extensions without replacing the base stack:
 
-Provider APIs are preferred when they support the requested operation. Browser automation is a bounded fallback behind the existing browser/domain and permission controls. Unsupported operations are reported honestly rather than guessed.
+- **`self_coding/`** is a guarded cloud coding engine. It requires a clean Git tree, uses an isolated branch, verifies changes before committing, and rolls failed passes back to the exact starting point.
+- **`quality_of_life/`** provides guarded computer control, browser automation, location/God's Eye context, account access, multi-AI cloud routing, and Windows maintenance.
 
-See `quality_of_life/README_ACCOUNTS.md` for the current account integration contract.
+The Jarvis profile uses **OmniRoute only** as its conversational/agent brain. Claude Code and a Claude subscription are not required by the Jarvis profile and are not valid Jarvis fallbacks.
 
-## Existing Jarvis capabilities
+The Jarvis voice profile adds local wake-word activation: after microphone permission is granted, wake detection can run locally and Jarvis does not send cloud requests until the wake word is accepted. See `JARVIS_SETUP.md` and `JARVIS_VOICE.md`.
 
-- Guarded Windows mouse/keyboard/window/app control
-- Local webcam hand control
-- Browser automation
-- Screen and clipboard access
-- Saved locations and God’s Eye context
-- Windows diagnostics and maintenance
-- Cloud multi-AI routing through OmniRoute
-- Guarded autonomous self-coding with verification and rollback
-- Multi-account OAuth/service integration
+Jarvis also includes a scoped multi-account model for Google, Microsoft, GitHub, YouTube, Instagram, and generic web services. OAuth/user consent, provider scopes, local capability policy, and confirmation gates remain required; account credentials are kept behind a runtime credential broker.
 
-Capabilities remain deny-by-default where required, and external accounts never bypass local safety policy.
+## Install
 
-## Setup
+You need [Claude Code](https://jaredrhod.com/start) with a Claude subscription for the **upstream fullstack-agent setup flow** described by this README. The **Jarvis profile is separate** and uses `JARVIS_SETUP.md`; it does not require Claude Code or a Claude subscription.
 
-For the Jarvis profile, use `JARVIS_SETUP.md`. The legacy `fullstack-agent.md` file is retained for the upstream fullstack-agent workflow and is not the Jarvis runtime/setup contract.
+Mac and Linux:
 
-## Verification
+```
+mkdir -p ~/my-agent && cd ~/my-agent && git clone https://github.com/jaredrhod/fullstack-agent && cd fullstack-agent && claude "set me up"
+```
 
-The repository uses GitHub Actions for QOL, integration, self-coding, and Windows-maintenance regression gates. Real microphone, speaker, browser-login, OAuth-consent, and third-party account behavior still require testing on the target Windows machine.
+Windows (PowerShell):
+
+```
+$d="$env:USERPROFILE\.local\bin"; if (Test-Path "$d\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\my-agent | Out-Null; cd $HOME\my-agent; if (-not (Test-Path fullstack-agent\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
+```
+
+## Jarvis setup
+
+Use `JARVIS_SETUP.md` for the Jarvis profile. It is the authoritative Claude-free setup/runtime contract for this fork. `fullstack-agent.md` remains the upstream setup conductor and is not the Jarvis brain.
+
+## Already built some of this?
+
+Then you're exactly who this was designed around. If you set up a memory vault, a voice system, or a visualizer before, including the ones my old prompts had your AI hand-build, the wizard adopts before it installs:
+
+- **Your agent's identity and your vault are yours.** Found, kept, never rebuilt, never moved. No questions you already answered.
+- **Hand-built voice lines and visualizers get honestly replaced**, because these repos carry a year of fixes and keep improving with a `git pull`, while a hand-built version is frozen the day it was written. Your old build stays on disk, untouched. Nothing you made is ever deleted.
+- **Except your visualizer scene, which gets promoted.** If your AI built you a custom scene back then, the wizard copies it into the visualizer's gallery as your own face, sitting right beside mine.
+
+## After setup
+
+- **Use your agent:** the wizard leaves three shortcuts on your Desktop, named after your agent. **Chat** opens a typed session, terminal only. **Talk** starts the voice and the face. **Barehands** starts the voice and the hands board (the board is the screen in that mode). Double-click the mood you want; Ctrl-C in the window stops it. (They just run `fullstack-agent/start.sh`, or `start.bat` on Windows, if you ever prefer the terminal.)
+- **Something broken or confusing? Ask your agent to fix it.** Seriously. Open the chat and describe the problem. Every repo here ships a troubleshooting guide written for your agent to read, and your agent is instructed during setup to do the fixing itself. This is the part everyone finds out late: you never have to debug this stack yourself.
+- **Update everything:** `./fullstack-agent/update.sh` on macOS. On Windows, ask your agent: "update everything and tell me what changed." Your files live outside the repos, so updates never touch who your agent is or what it remembers.
+- **Daily habit:** open Claude Code in your agent's folder.
+
+## The fine print that matters
+
+- The wizard never deletes, overwrites, or moves anything you built. Replacements retire the old thing in place and say so.
+- Your vault stays wherever it already lives. Pieces connect by configuration paths, not by relocation.
+- Requirements per piece: the voice needs a mic and about 1 GB of local models on first run; the hands need a webcam and Chrome; the mind and face need nothing but Python 3, which ships with macOS and most Linux distributions. **Windows ships none**, and the name `python` there is a Microsoft Store placeholder that passes a check and then exits without running, so the face and the hands each carry a `run.bat` that finds a working interpreter or says plainly that there is not one. Windows notes live in each piece's own README.
+- Cross-piece problems: `TROUBLESHOOTING.md` here. Everything else: each piece's own guide.
+
+## The rest of it
+
+Everything here is free and open, and there is a whole community using it.
+
+- **The videos.** Free series on all of it: https://youtube.com/@jaredrhod
+- **The Discord.** Thousands of builders, and the fastest place to get unstuck: https://discord.gg/YSdsqMv3V8
+- **Everything else,** free and open: https://jaredrhod.com
+
+## Support
+
+Free to use, and always will be. If this helped you out, you can buy me a coffee:
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/)
 
 ## License
 
-Licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). See `LICENSE` for the complete terms.
+Copyright (c) 2026 Jared Rhodenizer.
+
+Licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). **Use it in your business, commercially, for free.** Run it, change it, build your workflow on top of it, and charge for the work you do with it. The one rule is that it stays open: if you hand it to someone else, or run a modified version as a service other people use, your version ships under this same license with its source available. Credit me when you build on it. Want it inside a closed-source commercial product? Email license@jaredrhod.com. Full terms are in the LICENSE file and at https://www.gnu.org/licenses/agpl-3.0.html
