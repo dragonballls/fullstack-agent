@@ -61,7 +61,6 @@ OPERATION_CATALOG: tuple[OperationSpec, ...] = (
     OperationSpec("accounts.select", Capability.ACCOUNT_READ, OperationRisk.READ, "Select one already-authorized account identity"),
     OperationSpec("accounts.refresh", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Refresh one authorized external account"),
     OperationSpec("accounts.disconnect", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Disconnect one external account"),
-    OperationSpec("accounts.grant_write_scope", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Explicitly enable a supported account write scope"),
     OperationSpec("accounts.service_action", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Run an explicitly authorized external account service action"),
     OperationSpec("accounts.github_fork", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Create a GitHub fork through an authorized account"),
     OperationSpec("google.gmail.send", Capability.ACCOUNT_WRITE, OperationRisk.EXTERNAL, "Send an email through an authorized Google account"),
