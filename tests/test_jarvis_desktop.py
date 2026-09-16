@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+import sys
 import unittest
 from unittest.mock import Mock, patch
 
@@ -68,12 +69,36 @@ class JarvisDesktopTests(unittest.TestCase):
         controller = Mock()
         adapter = VoiceAdapter(controller)
         fake_vendor = "/tmp/embedded-backtalk"
+
+        root = ModuleType("backtalk")
+        ears = ModuleType("backtalk.ears")
+        mouth = ModuleType("backtalk.mouth")
+        ptt = ModuleType("backtalk.ptt")
+
+        class Ears:  # noqa: D101
+            pass
+
+        class Mouth:  # noqa: D101
+            pass
+
+        class PTTListener:  # noqa: D101
+            pass
+
+        ears.Ears = Ears
+        mouth.Mouth = Mouth
+        ptt.PTTListener = PTTListener
+
         with patch.dict("os.environ", {"JARVIS_SMOKE": "1", "JARVIS_SMOKE_VOICE": "1"}), patch(
             "scripts.jarvis_desktop.embedded_path", return_value=fake_vendor
-        ), patch("builtins.__import__") as imported:
-            # Smoke validation should import the three upstream contracts and stop
-            # before constructing microphone/speaker objects.
+        ), patch.dict(
+            sys.modules,
+            {
+                "backtalk": root,
+                "backtalk.ears": ears,
+                "backtalk.mouth": mouth,
+                "backtalk.ptt": ptt,
+            },
+        ):
             adapter.start()
-            imported.assert_any_call("backtalk.ears", fromlist=["Ears"])
-            imported.assert_any_call("backtalk.mouth", fromlist=["Mouth"])
-            imported.assert_any_call("backtalk.ptt", fromlist=["PTTListener"])
+
+        self.assertIsNone(adapter.bridge)
