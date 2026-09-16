@@ -157,22 +157,35 @@ class ServiceAdapterTests(unittest.TestCase):
 
         def opener(request, timeout):
             seen.append((request.method, request.full_url, request.data, dict(request.headers), timeout))
-            if request.method == "POST":
-                return FakeResponse(None, {"Location": "https://upload.example/session"})
-            return FakeResponse({"id": "video-1"})
+            self.assertEqual(request.method, "POST")
+            return FakeResponse(None, {"Location": "https://upload.example/session"})
+
+        uploaded = {}
+
+        def stream_uploader(url, token, mime, path, timeout):
+            uploaded["url"] = url
+            uploaded["token"] = token
+            uploaded["mime"] = mime
+            uploaded["timeout"] = timeout
+            with path.open("rb") as handle:
+                uploaded["data"] = handle.read()
+            return {"id": "video-1"}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             video = Path(temp_dir) / "clip.mp4"
             video.write_bytes(b"video-data")
-            result = YouTubeAdapter(FakeBroker("secret-token"), access, opener).execute(
+            result = YouTubeAdapter(
+                FakeBroker("secret-token"), access, opener, stream_uploader=stream_uploader
+            ).execute(
                 "youtube.video.upload",
                 identity,
                 {"file_path": str(video), "title": "Test", "privacy": "private"},
                 confirmed=True,
             )
         self.assertTrue(result.ok)
-        self.assertEqual([item[0] for item in seen], ["POST", "PUT"])
-        self.assertEqual(seen[1][2], b"video-data")
+        self.assertEqual(uploaded["url"], "https://upload.example/session")
+        self.assertEqual(uploaded["token"], "secret-token")
+        self.assertEqual(uploaded["data"], b"video-data")
         self.assertNotIn("secret-token", repr(result.data))
 
 
