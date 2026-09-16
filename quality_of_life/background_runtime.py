@@ -13,16 +13,18 @@ from .voice_listener import LocalWakeWordListener, WakeEvent
 class JarvisBackgroundRuntime:
     """Coordinate low-overhead background services without keeping a UI hot.
 
-    The desktop host owns the actual window.  It should call ``minimize`` and
-    ``restore`` from its window lifecycle callbacks.  Voice listening remains
-    alive for the application's lifetime; active hand control is independent
-    of presentation state and remains alive while minimized.
+    The desktop host owns the actual window. It should provide the optional UI
+    callbacks and call ``minimize``/``restore`` from its window lifecycle. Voice
+    listening remains alive for the application's lifetime; active hand control
+    is independent of presentation state and remains alive while minimized.
     """
 
     def __init__(
         self,
         *,
         on_wake: Callable[[WakeEvent], None] | None = None,
+        on_ui_background: Callable[[], None] | None = None,
+        on_ui_foreground: Callable[[], None] | None = None,
         voice_listener: LocalWakeWordListener | None = None,
         hand_control: HandControlRuntime | None = None,
         lifecycle: BackgroundModeController | None = None,
@@ -30,16 +32,25 @@ class JarvisBackgroundRuntime:
         self.lifecycle = lifecycle or BackgroundModeController()
         self.voice_listener = voice_listener or LocalWakeWordListener(on_wake=on_wake)
         self.hand_control = hand_control or HandControlRuntime(open_browser=True)
-        self.lifecycle.register(BackgroundComponent("desktop-ui", "foreground_only"))
+        self.lifecycle.register(
+            BackgroundComponent(
+                "desktop-ui",
+                "foreground_only",
+                on_background=on_ui_background,
+                on_foreground=on_ui_foreground,
+            )
+        )
 
     def start(self) -> None:
-        """Start the always-on services; optional dependencies fail closed."""
+        """Start the always-on voice service."""
         self.voice_listener.start()
 
     def stop(self) -> None:
         """Stop background services and disable active hand control."""
-        self.hand_control.stop()
-        self.voice_listener.stop()
+        try:
+            self.hand_control.stop()
+        finally:
+            self.voice_listener.stop()
 
     def minimize(self) -> bool:
         """Enter low-overhead presentation mode without stopping services."""
