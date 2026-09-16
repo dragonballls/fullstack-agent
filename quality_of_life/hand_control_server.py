@@ -138,7 +138,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        server.shutdown()
+        server.interpreter.disable()
+        server.bridge.disable()
         server.server_close()
 
 
