@@ -1,8 +1,10 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from quality_of_life.account_access import AccountAccessRegistry, AccountGrant, AccountProvider, AccountRisk, AccountScope
-from quality_of_life.account_integrations import AccountIdentity, ServiceProvider, TokenBroker
+from quality_of_life.account_integrations import AccountIdentity, ServiceProvider
 from quality_of_life.service_adapters import GoogleAdapter, MicrosoftAdapter, YouTubeAdapter
 
 
@@ -16,9 +18,14 @@ class FakeBroker:
         return self.token
 
 
+class FakeHeaders(dict):
+    pass
+
+
 class FakeResponse:
-    def __init__(self, data):
+    def __init__(self, data=None, headers=None):
         self.data = data
+        self.headers = FakeHeaders(headers or {})
 
     def __enter__(self):
         return self
@@ -27,7 +34,7 @@ class FakeResponse:
         return False
 
     def read(self):
-        return json.dumps(self.data).encode("utf-8")
+        return json.dumps(self.data if self.data is not None else {}).encode("utf-8")
 
 
 class ServiceAdapterTests(unittest.TestCase):
@@ -91,6 +98,82 @@ class ServiceAdapterTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("scope not authorized", result.error)
         self.assertEqual(network_calls, [])
+
+    def test_google_send_requires_confirmation_and_hides_message_token(self):
+        seen = {}
+        access = AccountAccessRegistry([
+            AccountGrant(AccountProvider.GOOGLE, "g1", (AccountScope("gmail.send", "Send Gmail", AccountRisk.WRITE),))
+        ])
+        identity = AccountIdentity(ServiceProvider.GOOGLE, "g1", "Google")
+
+        def opener(request, timeout):
+            seen["body"] = request.data.decode("utf-8")
+            return FakeResponse({"id": "message-1"})
+
+        broker = FakeBroker("secret-token")
+        blocked = GoogleAdapter(broker, access, opener).execute(
+            "google.gmail.send", identity, {"to": "person@example.com", "subject": "Hello", "body": "Body"}
+        )
+        self.assertFalse(blocked.ok)
+        self.assertIn("confirmation required", blocked.error)
+        self.assertEqual(seen, {})
+
+        result = GoogleAdapter(broker, access, opener).execute(
+            "google.gmail.send", identity, {"to": "person@example.com", "subject": "Hello", "body": "Body"}, confirmed=True
+        )
+        self.assertTrue(result.ok)
+        self.assertNotIn("secret-token", repr(result.data))
+        self.assertIn("raw", seen["body"])
+
+    def test_microsoft_send_uses_mail_send_scope(self):
+        seen = {}
+        access = AccountAccessRegistry([
+            AccountGrant(AccountProvider.MICROSOFT, "m1", (AccountScope("Mail.Send", "Send mail", AccountRisk.WRITE),))
+        ])
+        identity = AccountIdentity(ServiceProvider.MICROSOFT, "m1", "Microsoft")
+
+        def opener(request, timeout):
+            seen["method"] = request.method
+            seen["url"] = request.full_url
+            seen["body"] = request.data.decode("utf-8")
+            return FakeResponse(None)
+
+        result = MicrosoftAdapter(FakeBroker(), access, opener).execute(
+            "microsoft.mail.send", identity,
+            {"to": "person@example.com", "subject": "Hello", "body": "Body"},
+            confirmed=True,
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(seen["method"], "POST")
+        self.assertIn("sendMail", seen["url"])
+        self.assertIn("person@example.com", seen["body"])
+
+    def test_youtube_upload_uses_resumable_session_and_never_returns_token(self):
+        seen = []
+        access = AccountAccessRegistry([
+            AccountGrant(AccountProvider.YOUTUBE, "y1", (AccountScope("youtube.upload", "Upload videos", AccountRisk.WRITE),))
+        ])
+        identity = AccountIdentity(ServiceProvider.YOUTUBE, "y1", "YouTube")
+
+        def opener(request, timeout):
+            seen.append((request.method, request.full_url, request.data, dict(request.headers), timeout))
+            if request.method == "POST":
+                return FakeResponse(None, {"Location": "https://upload.example/session"})
+            return FakeResponse({"id": "video-1"})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            video = Path(temp_dir) / "clip.mp4"
+            video.write_bytes(b"video-data")
+            result = YouTubeAdapter(FakeBroker("secret-token"), access, opener).execute(
+                "youtube.video.upload",
+                identity,
+                {"file_path": str(video), "title": "Test", "privacy": "private"},
+                confirmed=True,
+            )
+        self.assertTrue(result.ok)
+        self.assertEqual([item[0] for item in seen], ["POST", "PUT"])
+        self.assertEqual(seen[1][2], b"video-data")
+        self.assertNotIn("secret-token", repr(result.data))
 
 
 if __name__ == "__main__":
