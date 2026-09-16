@@ -34,6 +34,12 @@ The preferred high-quality Jarvis speech output is **ElevenLabs**, with **Kokoro
 
 Jarvis also includes a scoped multi-account model for Google, Microsoft, GitHub, YouTube, Instagram, and generic web services. OAuth/user consent, provider scopes, local capability policy, and confirmation gates remain required; account credentials are kept behind a runtime credential broker.
 
+## Jarvis Windows launch
+
+For the Jarvis profile on Windows, use `scripts/start-jarvis.ps1`. It starts `scripts/jarvis_desktop.pyw` with the repository `.venv\Scripts\pythonw.exe`, giving Jarvis a lightweight chat-bar host without a persistent PowerShell console. Run `python readiness.py` first on a new installation.
+
+The upstream `start.bat` remains available for the separate fullstack-agent stack and is **not** the Jarvis runtime launcher.
+
 ## Jarvis installation and download
 
 For the Jarvis profile, start with `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
@@ -64,7 +70,7 @@ The upstream wizard can adopt an existing memory vault, voice line, or visualize
 
 ## After upstream setup
 
-The original upstream shortcuts and `start.sh` / `start.bat` continue to describe that upstream multi-repository stack. They are **not** the Jarvis runtime launcher. For Jarvis, use the documented source-layer/runtime contract in `JARVIS_SETUP.md` and `JARVIS_DOWNLOAD.md`.
+The original upstream shortcuts and `start.sh` / `start.bat` continue to describe that upstream multi-repository stack. They are **not** the Jarvis runtime launcher. For Jarvis, use `scripts/start-jarvis.ps1` and the documented source-layer/runtime contract in `JARVIS_SETUP.md` and `JARVIS_DOWNLOAD.md`.
 
 ## Safety and runtime boundaries
 
