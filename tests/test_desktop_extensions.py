@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from quality_of_life.family_locations import FamilyLocationService
 from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.workflows import Workflow, WorkflowStep, WorkflowStore
 from scripts.jarvis_desktop_extensions import JarvisExtendedController, _family_command
@@ -33,15 +34,17 @@ class DesktopExtensionTests(unittest.TestCase):
             self.assertTrue(result.verified)
             self.assertEqual(result.completed_steps, 1)
 
-    def test_remember_command_parses_previous_request_name(self):
+    def test_family_commands_parse_as_expected(self):
         self.assertEqual(_family_command("where is Alex"), ("where", "Alex"))
         self.assertEqual(_family_command("show Alex on God’s Eye"), ("show", "Alex"))
         self.assertEqual(_family_command("follow Alex"), ("follow", "Alex"))
         self.assertEqual(_family_command("show my family"), ("show_all", None))
         self.assertEqual(_family_command("stop following"), ("stop", None))
 
-    def test_family_command_detection_does_not_match_unrelated_chat(self):
-        self.assertIsNone(_family_command("where is the nearest coffee shop"))
+    def test_unconfigured_family_location_does_not_hijack_ordinary_place_lookup(self):
+        controller = object.__new__(JarvisExtendedController)
+        controller.family_service = FamilyLocationService(provider=None)
+        self.assertIsNone(controller._family_request("where is the nearest coffee shop"))
 
 
 if __name__ == "__main__":
