@@ -11,7 +11,7 @@ Jarvis supports a lifecycle contract for desktop hosts that want **minimize** to
 Use `BackgroundModeController` from `quality_of_life.background_mode`:
 
 ```python
-from quality_of_life import BackgroundModeController
+from quality_of_life import BackgroundComponent, BackgroundModeController
 
 background = BackgroundModeController()
 
