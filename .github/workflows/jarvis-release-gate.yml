@@ -59,6 +59,13 @@ jobs:
           python -m pip install -r quality_of_life/requirements.txt
           python -m pip install "setuptools==80.9.0" pyinstaller faster-whisper kokoro pynput sounddevice soundfile webrtcvad-wheels webrtcvad numpy httpx
           python -m pip check
+      - name: Write build identity
+        shell: pwsh
+        run: |
+          @"
+          \"\"\"Build identity embedded into the frozen Jarvis executable.\"\"\"
+          BUILD_COMMIT = \"${{ github.sha }}\"
+          "@ | Set-Content -LiteralPath 'quality_of_life/build_info.py' -Encoding UTF8
       - name: Verify embedded upstream imports before packaging
         shell: pwsh
         run: |
@@ -96,6 +103,29 @@ jobs:
           path: dist/Jarvis.exe
           if-no-files-found: error
           retention-days: 14
+
+  latest-release:
+    name: Publish rolling Jarvis latest release
+    if: github.ref == 'refs/heads/main'
+    needs: windows-exe
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Jarvis-Windows-Exe
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Jarvis Latest
+          body: |
+            commit: ${{ github.sha }}
+            This rolling release is generated only after the full Jarvis release gate passes.
+          files: dist/Jarvis.exe
+          overwrite_files: true
+          make_latest: false
 
   tagged-release:
     name: Publish direct Jarvis.exe release
