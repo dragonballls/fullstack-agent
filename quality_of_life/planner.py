@@ -30,6 +30,13 @@ _SAFE_MODEL_OPERATIONS = tuple(
     if spec.name not in {"background.start", "scheduler.schedule_once", "self_coding.run"}
 )
 
+_ACCOUNT_OPERATION_PROVIDER = {
+    "google.gmail.send": "google",
+    "microsoft.mail.send": "microsoft",
+    "youtube.video.upload": "youtube",
+    "youtube.video.update": "youtube",
+}
+
 
 def _extract_json(text: str) -> Any:
     cleaned = text.strip()
@@ -48,6 +55,21 @@ def _extract_json(text: str) -> Any:
             raise PlanError("Planner returned malformed JSON") from exc
 
 
+def _normalize_account_step(name: str, args: dict[str, Any]) -> PlanStep:
+    provider = _ACCOUNT_OPERATION_PROVIDER[name]
+    account_id = args.pop("account_id", None)
+    label = args.pop("label", None)
+    requested_provider = args.pop("provider", provider)
+    if str(requested_provider).strip().lower() != provider:
+        raise PlanError(f"{name} requires provider={provider}")
+    normalized: dict[str, Any] = {"operation": name, "provider": provider, "payload": args}
+    if account_id is not None:
+        normalized["account_id"] = account_id
+    if label is not None:
+        normalized["label"] = label
+    return PlanStep("accounts.service_action", normalized)
+
+
 def parse_plan(text: str) -> ExecutionPlan:
     data = _extract_json(text)
     raw_steps = data.get("steps") if isinstance(data, dict) else None
@@ -64,7 +86,10 @@ def parse_plan(text: str) -> ExecutionPlan:
         args = dict(raw.get("arguments", {}))
         if spec.name.endswith(".open_url") and "url" not in args:
             raise PlanError("browser.open_url requires a URL")
-        steps.append(PlanStep(name, args))
+        if name in _ACCOUNT_OPERATION_PROVIDER:
+            steps.append(_normalize_account_step(name, args))
+        else:
+            steps.append(PlanStep(name, args))
     return ExecutionPlan(tuple(steps))
 
 
@@ -74,7 +99,8 @@ def planning_prompt(user_text: str) -> str:
         "Return ONLY a JSON object with a 'steps' array. Each step must contain an operation from the allowlist "
         "and an 'arguments' object. Never output shell commands, PowerShell, Python, JavaScript, registry scripts, "
         "or arbitrary executable paths. Use the minimum number of steps. If the request cannot be expressed by "
-        "the allowlist, return {\"steps\": []}.\n\n"
+        "the allowlist, return {\"steps\": []}. For account write operations, include account_id or label when "
+        "multiple accounts may exist; never invent an account identity.\n\n"
         f"Allowed operations:\n{operations}\n\nUser request:\n{user_text}"
     )
 
