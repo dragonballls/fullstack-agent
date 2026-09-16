@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .account_access import AccountAccessRegistry, AccountGrant, AccountProvider, AccountRisk, AccountScope
+from .account_access import AccountAccessError, AccountAccessRegistry, AccountGrant, AccountProvider, AccountRisk, AccountScope
 from .account_integrations import (
     AccountIdentity,
     AccountSelector,
@@ -146,12 +146,12 @@ class AccountServiceManager:
         if spec.risk != "read" and not confirmed:
             return ServiceResult(False, provider, operation, error="confirmation required before the external account write")
         if spec.risk != "read":
-            grant = self.account_access.get(
-                AccountProvider(provider.value if provider.value != "generic_web" else "generic"), identity.account_id
-            ) if (provider.value in {item.value for item in AccountProvider}) and any(
-                account.provider.value == provider.value and account.account_id == identity.account_id for account in self.list_account_grants()
-            ) else None
-            if grant is None or not grant.allows(spec.scope):
+            provider_key = AccountProvider(provider.value if provider.value != "generic_web" else "generic")
+            try:
+                grant = self.account_access.get(provider_key, identity.account_id)
+            except AccountAccessError:
+                grant = None
+            if grant is None or not grant.enabled or not grant.allows(spec.scope):
                 self.grant_scope(identity, spec.scope, f"Authorized by confirmed {operation}", risk=AccountRisk.WRITE)
         adapter = {
             ServiceProvider.GOOGLE: GoogleAdapter,
@@ -163,7 +163,7 @@ class AccountServiceManager:
         return adapter(self._secure_token_broker(), self.account_access).execute(operation, identity, payload, confirmed=confirmed)
 
     def list_account_grants(self):
-        """Return the non-secret local account grants for runtime diagnostics."""
+        """Return non-secret local account grants for diagnostics."""
         return self.account_access.list_accounts()
 
     def _secure_oauth(self) -> OAuthBroker:
@@ -184,5 +184,4 @@ class AccountServiceManager:
             try:
                 self.grant_scope(identity, scope, description, risk=AccountRisk.READ)
             except ValueError:
-                # Scope already exists for a reconnect of the same identity.
                 continue
