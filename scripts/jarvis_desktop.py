@@ -132,6 +132,17 @@ class VoiceAdapter:
         self.bridge: Any | None = None
 
     def start(self) -> None:
+        if os.environ.get("JARVIS_SMOKE_VOICE", "0").strip().lower() in {"1", "true", "yes", "on"}:
+            # Verify the exact frozen-runtime resource path and imports without
+            # opening an audio device or downloading a speech/recognition model.
+            from scripts.jarvis_voice_bridge import _configure_vendor
+            _configure_vendor()
+            from backtalk.ears import Ears
+            from backtalk.mouth import Mouth
+            from backtalk.ptt import PTTListener
+            LOGGER.info("embedded Backtalk source/import smoke test passed: %s", embedded_path("backtalk/source"))
+            LOGGER.info("Backtalk classes available: %s, %s, %s", Ears.__name__, Mouth.__name__, PTTListener.__name__)
+            return
         if os.environ.get("JARVIS_DISABLE_VOICE", "0").strip().lower() in {"1", "true", "yes", "on"}:
             LOGGER.info("voice disabled by configuration")
             return
