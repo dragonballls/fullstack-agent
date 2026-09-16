@@ -14,6 +14,12 @@ The bundle is built only after the complete unittest suite, Windows-maintenance 
 
 Tagged releases (`vMAJOR.MINOR.PATCH`) publish the same verified source bundle to the GitHub release automatically.
 
+## Background-efficient desktop behavior
+
+Desktop hosts can use `JarvisBackgroundRuntime` for minimize/restore lifecycle integration. Minimize enters a low-overhead presentation state: foreground-only rendering, animation, timers, and polling can be suspended while local voice wake listening remains alive and an explicitly active hand-control runtime is not stopped. Restore resumes the foreground presentation layer. Quit calls `stop()` and shuts down the background services.
+
+This is **resource reduction, not zero-resource execution**. Active microphone listening and active hand tracking necessarily consume some CPU/RAM. The integration layer exposes these lifecycle semantics without claiming that this source repository contains the final native desktop window implementation.
+
 ## Runtime requirements that cannot be certified by hosted CI
 
 A downloaded bundle still requires the machine-specific pieces that the code intentionally does not fake:
