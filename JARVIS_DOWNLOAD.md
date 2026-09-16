@@ -1,48 +1,29 @@
-# Jarvis download and release contract
+# Jarvis Windows download
 
-## What this repository is
+## The Windows product
 
-`dragonballls/fullstack-agent` contains the Jarvis integration layer: cloud routing, guarded computer/browser/system capabilities, self-coding, accounts, voice contracts, God’s Eye, Windows maintenance, and webcam hand control.
+The supported Windows product is **one file: `Jarvis.exe`**.
 
-The Windows desktop experience is packaged as a native `Jarvis.exe`. The executable is a presentation host around the existing guarded Jarvis runtime; it does not replace or bypass the capability policy, confirmation gates, or orchestrator.
+That executable contains the Jarvis runtime and the embedded Fullstack Agent presentation layer used for the living face and voice experience. The existing guarded Jarvis runtime remains the single planner/tool execution path; the embedded upstream voice and visualizer components do not introduce a second brain.
 
-## Supported downloadable artifacts
+## Download
 
-The `Jarvis full release gate` GitHub Actions workflow verifies the complete test suite and builds a native Windows package on `windows-latest` with PyInstaller. The verified Windows artifact is `Jarvis-Windows.zip`, containing `Jarvis.exe`.
+Use the `Jarvis.exe` asset attached to a verified GitHub Release. There is no Windows ZIP to extract and no source bundle required for normal use.
 
-The same workflow continues to produce `Jarvis-Source-Bundle.zip` for source-based development and recovery.
+## What is inside the executable
 
-Tagged releases (`vMAJOR.MINOR.PATCH`) publish both verified downloads to the GitHub release automatically.
+The release build embeds the pinned Fullstack Agent components used for the face, voice I/O, optional hand-control presentation assets, and memory integration. The build also includes the Jarvis quality-of-life capabilities, self-coding subsystem, account integrations, God’s Eye/location layer, and Windows maintenance layer that are part of this repository.
 
-## Windows runtime
+At startup, Jarvis opens its native Fullstack visualizer window. It must never silently fall back to the old 640-by-118 Tk chat bar.
 
-For the packaged application, extract `Jarvis-Windows.zip` and run `Jarvis.exe`. No persistent PowerShell window is required.
+## Machine-specific setup
 
-For development builds from a local clone, run `scripts\build-jarvis-exe.ps1` to produce `dist\Jarvis.exe`. The supported convenience launcher `scripts\start-jarvis.ps1` starts that packaged executable.
+The executable cannot honestly bundle or pre-authorize things that belong to the user or machine. Live cloud requests still require the configured Jarvis model gateway/credential; microphone, speaker, and camera features require Windows permissions and working hardware; account integrations require the user's provider authorization; and self-coding requires a configured repository/backend.
 
-`start.bat` is retained for the upstream fullstack-agent multi-repository stack and is not the Jarvis runtime launcher.
+Those are runtime capability gates, not reasons to ship a second installer. When an optional device or service is unavailable, Jarvis keeps the main application running and reports the degraded capability instead of replacing the Fullstack interface.
 
-The desktop host intentionally presents only a compact chat bar and delegates requests to the existing guarded `JarvisRuntime` and `AgentOrchestrator`. It does not create a second tool executor or bypass confirmation and capability policy.
+## Development build
 
-## Runtime requirements that cannot be certified by hosted CI
+For repository developers only, `scripts\build-jarvis-exe.ps1` produces the same single-file `dist\Jarvis.exe` layout used by the release pipeline. `scripts\start-jarvis.ps1` launches that executable without opening a persistent PowerShell console.
 
-A packaged executable still depends on machine- and account-specific pieces that the code intentionally does not fake:
-
-- a configured cloud model gateway/credential for live AI requests;
-- user-granted microphone/camera permissions for voice or hand control;
-- the actual Windows desktop/browser environment for computer-control behavior;
-- provider credentials and user consent for account integrations;
-- a configured repository and supported cloud coding backend before self-coding can run;
-- any external browser binaries required by the selected browser automation configuration.
-
-The readiness command remains the authoritative local diagnostic for a source checkout:
-
-```text
-python readiness.py
-```
-
-`READY` means the required local checks passed. Optional integrations may still report `WARN`; those warnings are not silently converted into success.
-
-## What the executable does and does not imply
-
-`Jarvis.exe` means the Windows presentation host and its Python runtime are packaged together. It does **not** mean cloud credentials, user OAuth consent, browser profiles, microphone/camera access, or third-party services have been bundled or pre-authorized.
+The upstream multi-repository `start.bat` remains in the source tree for compatibility with the original project, but it is not the Jarvis Windows product launcher.
