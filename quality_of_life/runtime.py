@@ -17,6 +17,8 @@ from .manifest import default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
 from .permissions import Capability, CapabilityPolicy
 from .router import CloudModelRouter, ProviderTarget
+from .account_access import AccountAccessRegistry
+from .account_integrations import ServiceProvider
 
 
 class JarvisRuntime:
@@ -44,6 +46,8 @@ class JarvisRuntime:
         target = spec.resolve()
         if name == "account_access":
             return lambda: target.from_environment()
+        if name == "account_manager":
+            return lambda: target(account_access=self._tool("account_access"))
         if name in {"computer", "screen", "browser", "clipboard", "windows"}:
             return lambda: target(self.policy)
         if name == "browser_registry":
@@ -170,7 +174,12 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "scheduler.cancel", lambda name: self._tool("scheduler").cancel(name)))
         self.orchestrator.register(Action(Capability.BACKGROUND_JOBS, "scheduler.active", lambda: self._tool("scheduler").active()))
         self.orchestrator.register(Action(Capability.CLOUD_ROUTING, "cloud_router.complete", lambda messages: self._tool("cloud_router").complete(messages)))
-        self.orchestrator.register(Action(Capability.ACCOUNT_READ, "accounts.list", lambda: self._tool("account_access").list_accounts()))
+        self.orchestrator.register(Action(Capability.ACCOUNT_READ, "accounts.list", lambda: self._tool("account_manager").list_accounts()))
+        self.orchestrator.register(Action(Capability.ACCOUNT_READ, "accounts.select", lambda provider, account_id=None, label=None: self._select_account(provider, account_id=account_id, label=label)))
+        self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.connect", lambda provider, login_hint=None: self._connect_account(provider, login_hint=login_hint)))
+        self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.refresh", lambda provider, account_id=None, label=None: self._refresh_account(provider, account_id=account_id, label=label)))
+        self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.disconnect", lambda provider, account_id=None, label=None: self._disconnect_account(provider, account_id=account_id, label=label)))
+        self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.service_action", lambda operation, provider, account_id=None, label=None, payload=None, confirmed=False: self._service_account_action(operation, provider, account_id=account_id, label=label, payload=payload, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.github_fork", lambda repository, account_id="primary", organization=None: self._github_fork(repository, account_id=account_id, organization=organization)))
         self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.run", lambda goal: self._tool("self_coding").run(goal)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.search", lambda query: self._tool("gods_eye").search(query)))
@@ -196,15 +205,39 @@ class JarvisRuntime:
         runtime.stop()
         return {"enabled": False, "url": runtime.url, "stopped": True}
 
+    def _account_provider(self, provider: str | ServiceProvider) -> ServiceProvider:
+        if isinstance(provider, ServiceProvider):
+            return provider
+        try:
+            return ServiceProvider(str(provider).strip().lower())
+        except ValueError as exc:
+            raise ValueError(f"unsupported account provider: {provider}") from exc
+
+    def _select_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
+        identity = self._tool("account_manager").select_account(self._account_provider(provider), account_id=account_id, label=label)
+        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": identity.state.value}
+
+    def _connect_account(self, provider: str | ServiceProvider, *, login_hint: str | None = None) -> dict[str, str]:
+        connection = self._tool("account_manager").connect_account(self._account_provider(provider), login_hint=login_hint)
+        identity = connection.identity
+        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": connection.authorization_state}
+
+    def _refresh_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
+        identity = self._tool("account_manager").refresh_account(self._account_provider(provider), account_id=account_id, label=label)
+        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": identity.state.value, "refreshed": "true"}
+
+    def _disconnect_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
+        normalized = self._account_provider(provider)
+        selected = self._tool("account_manager").select_account(normalized, account_id=account_id, label=label)
+        self._tool("account_manager").disconnect_account(normalized, account_id=selected.account_id)
+        return {"provider": normalized.value, "account_id": selected.account_id, "disconnected": "true"}
+
+    def _service_account_action(self, operation: str, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None, payload: dict[str, Any] | None = None, confirmed: bool = False) -> Any:
+        return self._tool("account_manager").service_action(operation, provider=self._account_provider(provider), account_id=account_id, label=label, payload=payload, confirmed=confirmed)
+
     def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> dict[str, str]:
         from .account_access import GitHubRepositoryClient
-        return GitHubRepositoryClient().fork_repository(
-            repository,
-            account_id=account_id,
-            access=self._tool("account_access"),
-            confirmed=True,
-            organization=organization,
-        )
+        return GitHubRepositoryClient().fork_repository(repository, account_id=account_id, access=self._tool("account_access"), confirmed=True, organization=organization)
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
         eye = self._tool("gods_eye")
