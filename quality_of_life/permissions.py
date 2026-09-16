@@ -14,6 +14,7 @@ class Capability(str, Enum):
     SCREEN_READ = "screen.read"
     LOCATION_READ = "location.read"
     LOCATION_WRITE = "location.write"
+    FAMILY_LOCATION_READ = "family.location.read"
     MOUSE_CONTROL = "mouse.control"
     KEYBOARD_CONTROL = "keyboard.control"
     CLIPBOARD = "clipboard"
