@@ -87,6 +87,19 @@ class UniversalToolBroker:
             return ToolResult(False, operation_name, error=str(exc))
         if spec.risk is not OperationRisk.READ and not confirmed and self.policy.needs_confirmation(spec.capability):
             return ToolResult(False, operation_name, error="confirmation required before this tool operation")
+        if operation_name == "tools.list":
+            return ToolResult(True, operation_name, data=[manifest.__dict__ for manifest in self.list_manifests()])
+        if operation_name == "tools.describe":
+            try:
+                return ToolResult(True, operation_name, data=self.describe(str(arguments["name"])).__dict__)
+            except (KeyError, TypeError) as exc:
+                return ToolResult(False, operation_name, error=self._safe_error(exc))
+        if operation_name == "tools.invoke":
+            nested_operation = str(arguments.get("operation", ""))
+            nested_arguments = arguments.get("arguments", {})
+            if not isinstance(nested_arguments, dict):
+                return ToolResult(False, operation_name, error="nested arguments must be an object")
+            return self.invoke(nested_operation, nested_arguments, confirmed=confirmed)
         tool_name = self._operation_to_tool.get(operation_name)
         if tool_name is None:
             return ToolResult(False, operation_name, error="no adapter is registered for this operation")
