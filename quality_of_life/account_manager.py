@@ -57,7 +57,8 @@ class AccountServiceManager:
         self.account_store = account_store or AccountStore()
         stored = self.account_store.load()
         self._identities = tuple(identities or stored)
-        self.account_access = account_access or AccountAccessRegistry()
+        persisted_grants = self.account_store.load_grants()
+        self.account_access = account_access or AccountAccessRegistry(persisted_grants)
         self._oauth = OAuthAuthorizer(DEFAULT_OAUTH_CONFIGS)
         self._token_broker = token_broker
         self._oauth_broker: OAuthBroker | None = None
@@ -84,6 +85,7 @@ class AccountServiceManager:
         KeyringTokenStore().delete(identity)
         self._identities = tuple(item for item in self._identities if item != identity)
         self.account_store.delete(identity)
+        self.account_access.disable(AccountProvider(identity.provider.value if identity.provider.value != "generic_web" else "generic"), identity.account_id)
 
     def refresh_account(self, provider: ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> AccountIdentity:
         identity = self.select_account(provider, account_id=account_id, label=label)
@@ -99,7 +101,9 @@ class AccountServiceManager:
 
     def grant_scope(self, identity: AccountIdentity, scope: str, description: str, *, risk: AccountRisk = AccountRisk.READ) -> AccountGrant:
         provider = AccountProvider(identity.provider.value if identity.provider.value != "generic_web" else "generic")
-        return self.account_access.add_scope(provider, identity.account_id, AccountScope(scope, description, risk))
+        grant = self.account_access.add_scope(provider, identity.account_id, AccountScope(scope, description, risk))
+        self.account_store.save_grants(self.account_access.list_accounts())
+        return grant
 
     def service_action(
         self,
