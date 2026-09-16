@@ -62,10 +62,10 @@ jobs:
       - name: Write build identity
         shell: pwsh
         run: |
-          $commit = "${{ github.sha }}"
+          $commit = '${{ github.sha }}'
           Set-Content -LiteralPath 'quality_of_life/build_info.py' -Encoding UTF8 -Value @(
             '"""Build identity embedded into the frozen Jarvis executable."""'
-            "BUILD_COMMIT = \"$commit\""
+            ('BUILD_COMMIT = "{0}"' -f $commit)
           )
       - name: Verify embedded upstream imports before packaging
         shell: pwsh
