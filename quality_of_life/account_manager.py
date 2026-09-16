@@ -78,6 +78,13 @@ class AccountServiceManager:
         identity, _token_set = connect_in_browser(self._secure_oauth(), provider, login_hint=login_hint)
         self.register_identity(identity)
         self._grant_default_read_scopes(identity)
+        provider_key = AccountProvider(identity.provider.value if identity.provider.value != "generic_web" else "generic")
+        try:
+            self.account_access.enable(provider_key, identity.account_id)
+        except Exception:
+            # A brand-new account has no prior grant yet; _grant_default_read_scopes created it.
+            raise
+        self.account_store.save_grants(self.account_access.list_accounts())
         return AccountConnection(identity, AuthorizationState.CONNECTED.value)
 
     def disconnect_account(self, provider: ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> None:
