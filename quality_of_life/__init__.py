@@ -8,6 +8,7 @@ from .computer_use import ComputerUseAction, ComputerUseAgent, ComputerUseResult
 from .gods_eye import GeoPoint, GodsEye, LocationSnapshot, Place
 from .health_monitor import HealthMonitor, HealthSnapshot
 from .intents import Intent, parse_intent
+from .jarvis_voice import JarvisVoiceRuntime, VoiceRouteResult
 from .manifest import ToolRegistry, ToolSpec, default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
 from .orchestration import OrchestrationPlan, RequestProfile, SpecialistTask, build_plan, classify_request
@@ -16,6 +17,8 @@ from .readiness import CheckStatus, ReadinessCheck, ReadinessReport, check_readi
 from .router import CloudModelRouter, ProviderResult, ProviderTarget
 from .runtime import JarvisRuntime
 from .service_adapters import SERVICE_OPERATIONS, ServiceOperation, ServiceResult, service_operation
+from .voice_activation import VoiceActivationConfig, VoiceSessionLock, WakeDecision, WakeWordGate
+from .voice_listener import LocalWakeWordListener, VoiceListenerUnavailable, WakeEvent
 
 __all__ = [
     "AccountIdentity",
@@ -39,6 +42,8 @@ __all__ = [
     "HealthSnapshot",
     "Intent",
     "JarvisRuntime",
+    "JarvisVoiceRuntime",
+    "LocalWakeWordListener",
     "LocationSnapshot",
     "OPERATION_CATALOG",
     "OperationRisk",
@@ -62,6 +67,13 @@ __all__ = [
     "SpecialistTask",
     "ToolRegistry",
     "ToolSpec",
+    "VoiceActivationConfig",
+    "VoiceListenerUnavailable",
+    "VoiceRouteResult",
+    "VoiceSessionLock",
+    "WakeDecision",
+    "WakeEvent",
+    "WakeWordGate",
     "build_plan",
     "check_readiness",
     "classify_request",
