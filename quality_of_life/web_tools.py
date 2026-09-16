@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from .tool_broker import ToolManifest
@@ -53,7 +53,7 @@ class WebToolAdapter:
         if not endpoint:
             raise RuntimeError("web search is not configured; set JARVIS_WEB_SEARCH_URL")
         self._validate_url(endpoint)
-        url = endpoint + ("&" if "?" in endpoint else "?") + "q=" + __import__("urllib.parse", fromlist=["quote"]).quote(query) + "&limit=" + str(max(1, min(limit, 10)))
+        url = endpoint + ("&" if "?" in endpoint else "?") + "q=" + quote(query) + "&limit=" + str(max(1, min(limit, 10)))
         request = Request(url, headers={"User-Agent": "Jarvis/1.0", "Accept": "application/json"})
         key_env = os.environ.get("JARVIS_WEB_SEARCH_API_KEY_ENV", "").strip()
         if key_env:
@@ -74,8 +74,10 @@ class WebToolAdapter:
         parsed = urlparse(url)
         if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
             raise ValueError("only credential-free HTTPS URLs are allowed")
+        if not self.allowed_hosts:
+            raise ValueError("web destination is not allowlisted")
         host = parsed.hostname.lower() if parsed.hostname else ""
-        if self.allowed_hosts and not any(host == allowed or host.endswith("." + allowed) for allowed in self.allowed_hosts):
+        if not any(host == allowed or host.endswith("." + allowed) for allowed in self.allowed_hosts):
             raise ValueError("web destination is not allowlisted")
         return parsed
 
