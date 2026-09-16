@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from scripts.jarvis_desktop import JarvisDesktopController, build_runtime
+from scripts.jarvis_desktop import FullstackJarvisHost, JarvisDesktopController, build_runtime
 
 
 class JarvisDesktopTests(unittest.TestCase):
@@ -38,3 +38,29 @@ class JarvisDesktopTests(unittest.TestCase):
         observed = controller.execute_request("remove app", confirmed=False)
         self.assertTrue(observed.needs_confirmation)
         controller.execute_request.assert_called_once_with("remove app", confirmed=False)
+
+    def test_voice_start_failure_does_not_take_down_visualizer(self):
+        controller = Mock()
+        controller.runtime = Mock()
+        visualizer = Mock()
+        visualizer.start.return_value = None
+        voice = Mock()
+        voice.start.side_effect = RuntimeError("Backtalk audio device unavailable")
+        hands = Mock()
+        host = FullstackJarvisHost(
+            controller,
+            visualizer=visualizer,
+            voice=voice,
+            hands=hands,
+        )
+        host.updater = Mock()
+
+        host.start()
+
+        self.assertTrue(host.started)
+        visualizer.start.assert_called_once_with()
+        visualizer.stop.assert_not_called()
+        hands.start.assert_called_once_with()
+
+        host.stop()
+        visualizer.stop.assert_called_once_with()
