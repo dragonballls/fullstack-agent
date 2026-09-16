@@ -59,6 +59,14 @@ class SelfCodingTests(unittest.TestCase):
         log = subprocess.run(("git", "log", "-1", "--pretty=%s"), cwd=root, check=True, capture_output=True, text=True)
         self.assertEqual(log.stdout.strip(), "agent: verified self-coding change")
 
+    def test_publish_main_is_opt_in_and_requires_remote_baseline_match(self) -> None:
+        root = self.make_repo()
+        config = SelfCodingConfig(repo=root, publish_main=True)
+        agent = SelfCodingAgent(config)
+        agent._git = lambda *args: subprocess.CompletedProcess(["git", *args], 0, "different\n", "")  # type: ignore[method-assign]
+        with self.assertRaisesRegex(SelfCodingError, "remote main"):
+            agent._publish_main("seed", "agent/self-code/test")
+
     def test_inspect_tool_gap_returns_structured_gap_for_missing_adapter(self) -> None:
         root = self.make_repo()
         agent = SelfCodingAgent(SelfCodingConfig(repo=root))
