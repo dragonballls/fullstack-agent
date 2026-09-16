@@ -105,7 +105,7 @@ class JarvisRuntimeTests(unittest.TestCase):
 
     def test_account_read_is_reachable_without_write_confirmation(self):
         policy = CapabilityPolicy(frozenset({Capability.ACCOUNT_READ}))
-        runtime = JarvisRuntime(policy, factories={"account_access": FakeAccounts})
+        runtime = JarvisRuntime(policy, factories={"account_manager": FakeAccounts})
         result = runtime.dispatch(Capability.ACCOUNT_READ, "accounts.list")
         self.assertEqual(result[0].provider, AccountProvider.GITHUB)
 
