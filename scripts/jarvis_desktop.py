@@ -11,16 +11,26 @@ import importlib.util
 import logging
 import os
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import threading
+import time
 from typing import Any
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.runtime import JarvisRuntime
+from quality_of_life.self_update import SelfUpdateError, build_windows_handoff_script, fetch_latest_release, is_update_available, stage_update
 
 from scripts.fullstack_assets import embedded_path
+try:
+    from quality_of_life.build_info import BUILD_COMMIT
+except ImportError:
+    BUILD_COMMIT = "dev"
 
 LOG_DIR = Path.home() / "AppData" / "Local" / "Jarvis" / "logs"
 LOG_FILE = LOG_DIR / "desktop.log"
+AUTO_UPDATE_INTERVAL = max(60, int(os.environ.get("JARVIS_AUTO_UPDATE_INTERVAL", "300")))
 
 
 def _logger() -> logging.Logger:
@@ -164,6 +174,74 @@ class HandsAdapter:
             self.started = False
 
 
+class AutoUpdateController:
+    """Poll the verified rolling GitHub release and hand off a replacement safely."""
+
+    def __init__(self, stop_event: threading.Event) -> None:
+        self.stop_event = stop_event
+        self.thread: threading.Thread | None = None
+        self.triggered = False
+
+    @property
+    def enabled(self) -> bool:
+        return (
+            sys.platform == "win32"
+            and bool(getattr(sys, "frozen", False))
+            and os.environ.get("JARVIS_AUTO_UPDATE", "1").strip().lower() not in {"0", "false", "no", "off"}
+            and os.environ.get("JARVIS_SMOKE", "0").strip().lower() not in {"1", "true", "yes", "on"}
+        )
+
+    def start(self) -> None:
+        if not self.enabled or (self.thread and self.thread.is_alive()):
+            return
+        self.thread = threading.Thread(target=self._loop, name="jarvis-auto-updater", daemon=True)
+        self.thread.start()
+        LOGGER.info("auto-update monitor enabled; build=%s interval=%ss", BUILD_COMMIT, AUTO_UPDATE_INTERVAL)
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        if self.thread is not None and self.thread.is_alive():
+            self.thread.join(timeout=3)
+
+    def _loop(self) -> None:
+        # Let the app finish startup before the first network request.
+        self.stop_event.wait(min(30, AUTO_UPDATE_INTERVAL))
+        while not self.stop_event.is_set():
+            if self._check_once():
+                return
+            self.stop_event.wait(AUTO_UPDATE_INTERVAL)
+
+    def _check_once(self) -> bool:
+        if self.triggered:
+            return True
+        try:
+            release = fetch_latest_release()
+            if not is_update_available(BUILD_COMMIT, release.commit_sha):
+                return False
+            update_dir = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Jarvis" / "updates"
+            staged = update_dir / f"Jarvis-{release.commit_sha[:12]}.exe"
+            stage_update(release.asset_url, release.sha256, staged)
+            script_path = Path(tempfile.gettempdir()) / f"Jarvis-update-{os.getpid()}-{release.commit_sha[:12]}.ps1"
+            script_path.write_text(
+                build_windows_handoff_script(os.getpid(), Path(sys.executable), staged) + f"\nRemove-Item -LiteralPath '{str(script_path).replace(chr(39), chr(39)+chr(39))}' -Force -ErrorAction SilentlyContinue\n",
+                encoding="utf-8",
+            )
+            subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(script_path)],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                close_fds=True,
+            )
+            self.triggered = True
+            self.stop_event.set()
+            LOGGER.info("verified Jarvis update staged for commit %s; restarting", release.commit_sha)
+            return True
+        except SelfUpdateError as exc:
+            LOGGER.warning("auto-update check failed safely: %s", exc)
+        except Exception:
+            LOGGER.exception("unexpected auto-update failure; current Jarvis remains running")
+        return False
+
+
 class FullstackJarvisHost:
     """Lifecycle supervisor for the complete Jarvis Fullstack presentation."""
 
@@ -175,6 +253,8 @@ class FullstackJarvisHost:
         self.started = False
         self.stopped = False
         self._window: Any | None = None
+        self._update_stop = threading.Event()
+        self.updater = AutoUpdateController(self._update_stop)
 
     def start(self) -> None:
         if self.started:
@@ -183,6 +263,7 @@ class FullstackJarvisHost:
         try:
             self.voice.start()
             self.hands.start()
+            self.updater.start()
         except Exception:
             self.visualizer.stop()
             raise
@@ -192,6 +273,7 @@ class FullstackJarvisHost:
     def stop(self) -> None:
         if self.stopped:
             return
+        self.updater.stop()
         for component in (self.hands, self.voice, self.visualizer):
             try:
                 component.stop()
