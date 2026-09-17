@@ -1,6 +1,7 @@
 import threading
 import unittest
 
+from quality_of_life.activity import ActivityStatus, ActivityStore
 from quality_of_life.agent_orchestrator import AgentOrchestrator
 from quality_of_life.orchestration import RequestProfile
 from quality_of_life.permissions import Capability
@@ -58,6 +59,10 @@ class FakeRuntime:
         self.execute_result = execute_result
         self.dispatch_calls = []
         self.orchestrator = FakeOrchestrator()
+        self.activity = ActivityStore()
+
+    def activity_store(self):
+        return self.activity
 
     def dispatch(self, capability, operation, *args, **kwargs):
         self.dispatch_calls.append((capability, operation, args, kwargs))
@@ -126,6 +131,21 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertEqual(events[0].kind, "ack")
         self.assertEqual(events[-1].kind, "result")
         self.assertTrue(any(event.kind == "progress" for event in events))
+
+    def test_confirmed_coding_handoff_publishes_completed_activity(self):
+        router = FakeRouter()
+        runtime = FakeRuntime(FakeResult("agent/self-code/verified"))
+
+        result = AgentOrchestrator(router, runtime).execute(
+            "implement the fix and run the tests",
+            confirmed=True,
+        )
+
+        self.assertTrue(result.verified)
+        records = runtime.activity.list()
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].status, ActivityStatus.SUCCEEDED)
+        self.assertEqual(records[0].progress, 100)
 
 
 if __name__ == "__main__":
