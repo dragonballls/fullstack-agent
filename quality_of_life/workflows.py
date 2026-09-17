@@ -39,7 +39,13 @@ def _json_safe(value: Any) -> None:
 
 
 def _safe_error(exc: Exception) -> str:
-    message = str(exc).replace("OPENAI_API_KEY", "[secret]")
+    message = str(exc).replace("\r", " ").replace("\n", " ").strip()
+    message = re.sub(
+        r"(?i)(token|api[_-]?key|authorization|password)\s*[=:]\s*(?:Bearer\s+)?([^\s,;]+)",
+        r"\1=[redacted]",
+        message,
+    )
+    message = message.replace("OPENAI_API_KEY", "[secret]")
     return message[:500]
 
 
