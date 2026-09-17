@@ -156,20 +156,6 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   const style = document.createElement("style");
   style.id = "jarvis-text-resilience-style";
   style.textContent = `
-    #jarvis-hover-zone {
-      position: fixed;
-      z-index: 2147483646;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: min(420px, calc(100vw - 72px));
-      height: min(190px, 28vh);
-      min-width: 280px;
-      min-height: 120px;
-      border-radius: 24px;
-      background: transparent;
-      pointer-events: auto;
-    }
     #jarvis-text-shell {
       width: 0 !important;
       min-width: 0 !important;
@@ -191,13 +177,8 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   `;
   document.head.appendChild(style);
 
-  const zone = document.createElement("div");
-  zone.id = "jarvis-hover-zone";
-  zone.setAttribute("aria-hidden", "true");
-  document.body.appendChild(zone);
-
-  let insideZone = false;
-  let insideShell = false;
+  let centerHovered = false;
+  let shellHovered = false;
   let timer = null;
 
   function active() {
@@ -208,31 +189,35 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   function maybeHide() {
     clearTimeout(timer);
     timer = setTimeout(function () {
-      if (!insideZone && !insideShell && document.activeElement !== input) {
+      if (!centerHovered && !shellHovered && document.activeElement !== input) {
         shell.classList.remove("jarvis-active");
       }
-    }, 120);
+    }, 140);
   }
 
-  zone.addEventListener("mouseenter", function () {
-    insideZone = true;
-    active();
-  });
-  zone.addEventListener("mouseleave", function () {
-    insideZone = false;
-    maybeHide();
-  });
+  // The upstream Jarvis element is canvas-drawn, so detect hover geometrically
+  // around the viewport center instead of overlaying an invisible click target.
+  document.addEventListener("mousemove", function (event) {
+    const dx = event.clientX - (window.innerWidth / 2);
+    const dy = event.clientY - (window.innerHeight / 2);
+    const halfW = Math.min(210, window.innerWidth * 0.18);
+    const halfH = Math.min(95, window.innerHeight * 0.14);
+    const next = Math.abs(dx) <= halfW && Math.abs(dy) <= halfH;
+    if (next !== centerHovered) {
+      centerHovered = next;
+      if (centerHovered) active(); else maybeHide();
+    }
+  }, { passive: true });
+
   shell.addEventListener("mouseenter", function () {
-    insideShell = true;
+    shellHovered = true;
     active();
   });
   shell.addEventListener("mouseleave", function () {
-    insideShell = false;
+    shellHovered = false;
     maybeHide();
   });
-  input.addEventListener("focus", function () {
-    active();
-  });
+  input.addEventListener("focus", active);
   input.addEventListener("blur", maybeHide);
 
   function blockCinematicSpace(event) {
