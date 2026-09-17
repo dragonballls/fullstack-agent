@@ -60,7 +60,7 @@ class JarvisVoiceBridgeTests(TestCase):
         bridge.stop()
 
         mouth.shut_up.assert_called_once_with()
-        mouth.shutdown.assert_not_called()
+        mouth.shutdown.assert_called_once_with()
         mouth._drop_out.assert_called_once_with()
 
     def test_start_is_idempotent_with_injected_components(self):
