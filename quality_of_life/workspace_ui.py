@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from .capabilities import OPERATION_CATALOG
 from .location_providers import LocationProviderRegistry
 from .permissions import Capability
+from .tool_broker import UNIVERSAL_OPERATION_SPECS
 from .workspace import WorkspaceState, WorkspaceType
 
 
@@ -73,6 +75,18 @@ def install(desktop_module: Any) -> None:
 
         def register_gods_eye_provider(self, kind: str, provider: Any) -> None:
             self._location_providers.register(kind, provider)
+
+        def capability_catalog(self) -> list[dict[str, object]]:
+            """Return a read-only catalog so every guarded feature is discoverable."""
+            specs = tuple(OPERATION_CATALOG) + tuple(UNIVERSAL_OPERATION_SPECS)
+            return [
+                {
+                    "name": spec.name,
+                    "risk": spec.risk.value,
+                    "description": spec.description,
+                }
+                for spec in specs
+            ]
 
         def gods_eye_providers(self) -> list[dict[str, object]]:
             location_result = self.gods_eye_status()
@@ -160,6 +174,16 @@ def workspace_script() -> str:
     .jw-activity-row small { color:#6d8580; }
     .jw-activity-cancel { pointer-events:auto; border:1px solid rgba(255,188,188,.16); border-radius:7px; padding:4px 7px; color:#d7a7a7; background:transparent; font-size:8px; cursor:pointer; }
     .jw-chip:hover { color:#dfffee; border-color:rgba(143,232,184,.34); }
+    .jw-brand { cursor:pointer; }
+    #jw-command-index { position:fixed; inset:80px 12%; z-index:2147483645; display:none; pointer-events:auto; }
+    #jw-command-index.active { display:block; }
+    #jw-command-index-card { height:min(70vh,620px); display:flex; flex-direction:column; }
+    #jw-command-index-search { margin:0 14px 10px; padding:10px 12px; border:1px solid rgba(143,232,184,.16); border-radius:9px; color:#e8f4ef; background:rgba(0,0,0,.25); outline:none; font:inherit; font-size:11px; }
+    #jw-command-index-list { overflow:auto; padding:0 14px 14px; display:flex; flex-direction:column; gap:6px; }
+    .jw-index-row { display:grid; grid-template-columns:minmax(130px,1fr) auto; gap:10px; padding:9px 10px; border:1px solid rgba(143,232,184,.08); border-radius:8px; background:rgba(255,255,255,.015); }
+    .jw-index-row b { color:#bfe0d3; font-size:10px; font-weight:500; }
+    .jw-index-row small { color:#6f887f; font-size:9px; }
+    .jw-index-risk { color:#8da89e; font-size:8px; letter-spacing:.12em; }
     @media(max-width:900px){ #jarvis-workspace-top{overflow:auto;} .jw-grid{grid-template-columns:1fr;} .jw-bottom{display:none;} .jw-grid>.jw-card:nth-child(2){display:none;} }
   `;
   document.head.appendChild(style);
@@ -180,6 +204,13 @@ def workspace_script() -> str:
         <div class="jw-card-title">ACTIVITY</div>
         <div id="jw-activity-list"><div class="jw-activity-row"><span>Waiting for activity</span><small>idle</small></div></div>
       </div>
+    <div id="jw-command-index">
+      <div id="jw-command-index-card" class="jw-card">
+        <div class="jw-card-title">COMMAND INDEX — ALL GUARDED CAPABILITIES</div>
+        <input id="jw-command-index-search" type="search" placeholder="Search capabilities…" autocomplete="off" />
+        <div id="jw-command-index-list"></div>
+      </div>
+    </div>
     <div id="jarvis-workspace-content">
       <section class="jw-view active" data-view="home"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">ACTIVE AGENT SHELL</div><h1>Jarvis is ready.</h1><p>The command surface stays available while Jarvis changes workspaces. You can type commands without leaving the active system view.</p><div class="jw-command-hint"><button class="jw-chip" data-command="Open God's Eye">OPEN GOD'S EYE</button><button class="jw-chip" data-command="Show my phone">SHOW MY PHONE</button><button class="jw-chip" data-command="Show my workflows">WORKFLOWS</button><button class="jw-chip" data-command="Check system status">SYSTEM STATUS</button></div></div></div></section>
       <section class="jw-view" data-view="gods-eye"><div class="jw-grid"><div class="jw-card"><div class="jw-card-title">GOD'S EYE / LIVE CONTEXT</div><div class="jw-map"><div class="jw-radar"></div><div class="jw-empty" id="jw-location-empty"><strong>AWAITING AUTHORIZED LOCATION DATA</strong><span>Jarvis will never invent a device or family location.</span></div></div></div><div class="jw-card"><div class="jw-card-title">ENTITIES</div><div class="jw-list" id="jw-entities"><div class="jw-row"><b>Location service</b><small>checking…</small></div><div class="jw-row"><b>Phone</b><small>not connected</small></div><div class="jw-row"><b>Family</b><small>no shared feed</small></div></div></div><div class="jw-bottom"><div class="jw-card jw-stat"><small>WORKSPACE</small><strong>GOD'S EYE</strong></div><div class="jw-card jw-stat"><small>COMMAND LINK</small><strong>ONLINE</strong></div><div class="jw-card jw-stat"><small>LOCATION PRIVACY</small><strong>GUARDED</strong></div></div></div></section>
@@ -190,6 +221,43 @@ def workspace_script() -> str:
     </div>
   `;
   document.body.appendChild(shell);
+
+  const index = document.getElementById("jw-command-index");
+  const indexList = document.getElementById("jw-command-index-list");
+  const indexSearch = document.getElementById("jw-command-index-search");
+  const brand = shell.querySelector(".jw-brand");
+
+  async function refreshCapabilityIndex() {
+    if (!api() || !api().capability_catalog || !indexList) return;
+    try {
+      const catalog = await api().capability_catalog();
+      const render = (filter = "") => {
+        const normalized = String(filter || "").toLowerCase();
+        const rows = (Array.isArray(catalog) ? catalog : []).filter(item =>
+          !normalized ||
+          String(item.name || "").toLowerCase().includes(normalized) ||
+          String(item.description || "").toLowerCase().includes(normalized)
+        );
+        indexList.innerHTML = rows.map(item =>
+          '<div class="jw-index-row"><div><b>' + String(item.name || "").replace(/[<>]/g, "") + '</b><br><small>' + String(item.description || "").replace(/[<>]/g, "") + '</small></div><span class="jw-index-risk">' + String(item.risk || "").toUpperCase() + '</span></div>'
+        ).join("") || '<div class="jw-index-row"><small>No matching capability.</small></div>';
+      };
+      render();
+      indexSearch && indexSearch.addEventListener("input", () => render(indexSearch.value));
+    } catch (_) {
+      if (indexList) indexList.innerHTML = '<div class="jw-index-row"><small>Capability index unavailable; command link remains online.</small></div>';
+    }
+  }
+
+  function toggleCapabilityIndex(force) {
+    if (!index) return;
+    const active = force == null ? !index.classList.contains("active") : !!force;
+    index.classList.toggle("active", active);
+    if (active) {
+      refreshCapabilityIndex();
+      indexSearch && indexSearch.focus();
+    }
+  }
 
   const views = [...shell.querySelectorAll(".jw-view")];
   const tabs = [...shell.querySelectorAll(".jw-tab")];
@@ -252,12 +320,21 @@ def workspace_script() -> str:
   }
 
   tabs.forEach(tab => tab.addEventListener("click", () => setView(tab.dataset.workspace)));
+  brand && brand.addEventListener("click", () => toggleCapabilityIndex());
+  document.addEventListener("keydown", event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      toggleCapabilityIndex();
+    } else if (event.key === "Escape") {
+      toggleCapabilityIndex(false);
+    }
+  });
   shell.querySelectorAll(".jw-chip").forEach(chip => chip.addEventListener("click", () => {
     const input = document.getElementById("jarvis-text-input");
     if (input) { input.value = chip.dataset.command || ""; input.focus(); }
   }));
 
-  window.jarvisWorkspaceState = { setView, refreshLocation, refreshActivity };
+  window.jarvisWorkspaceState = { setView, refreshLocation, refreshActivity, toggleCapabilityIndex };
   const validWorkspace = value => ["home", "gods-eye", "coding", "browser", "system", "workflows"].includes(value);
   let storedWorkspace = null;
   try {
