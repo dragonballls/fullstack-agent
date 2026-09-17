@@ -6,6 +6,7 @@ from .agent_orchestrator import AgentOrchestrator, OrchestrationEvent, Orchestra
 from .background_mode import BackgroundComponent, BackgroundMode, BackgroundModeController
 from .capabilities import OPERATION_CATALOG, OperationRisk, OperationSpec, operation, operations_for
 from .computer_use import ComputerUseAction, ComputerUseAgent, ComputerUseResult, RouterComputerUsePlanner, ScreenObserver
+from .external_integrations import ExternalSkillRegistry, ExternalSkillSpec, HindsightMemoryBridge, OptionalAgentLauncher, external_skill_status
 from .gods_eye import GeoPoint, GodsEye, LocationSnapshot, Place
 from .health_monitor import HealthMonitor, HealthSnapshot
 from .intents import Intent, parse_intent
@@ -40,10 +41,13 @@ __all__ = [
     "ComputerUseAgent",
     "ComputerUseResult",
     "ConfirmationHook",
+    "ExternalSkillRegistry",
+    "ExternalSkillSpec",
     "GeoPoint",
     "GodsEye",
     "HealthMonitor",
     "HealthSnapshot",
+    "HindsightMemoryBridge",
     "Intent",
     "JarvisRuntime",
     "JarvisVoiceRuntime",
@@ -52,6 +56,7 @@ __all__ = [
     "OPERATION_CATALOG",
     "OperationRisk",
     "OperationSpec",
+    "OptionalAgentLauncher",
     "OrchestrationEvent",
     "OrchestrationPlan",
     "OrchestrationResult",
@@ -82,6 +87,7 @@ __all__ = [
     "check_readiness",
     "classify_request",
     "default_registry",
+    "external_skill_status",
     "format_report",
     "operation",
     "operations_for",
