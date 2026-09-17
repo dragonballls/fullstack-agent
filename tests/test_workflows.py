@@ -159,7 +159,7 @@ class WorkflowStoreTests(unittest.TestCase):
 
     def test_workflow_error_summary_redacts_common_secret_patterns(self):
         self.assertEqual(
-            WorkflowService._safe_error(RuntimeError("token=SECRET123 authorization=Bearer SECRET456")),
+            _safe_error(RuntimeError("token=SECRET123 authorization=Bearer SECRET456")),
             "token=[redacted] authorization=[redacted]",
         )
 
