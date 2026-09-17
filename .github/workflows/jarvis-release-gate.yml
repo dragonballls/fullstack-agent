@@ -215,3 +215,5 @@ jobs:
         with:
           files: dist/Jarvis.exe
           generate_release_notes: true
+
+# This comment intentionally changes the workflow revision so GitHub executes this GUI gate on a fresh push.
