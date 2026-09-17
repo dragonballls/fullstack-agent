@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from quality_of_life.workflows import Workflow, WorkflowRunSummary, WorkflowStep, WorkflowStore
+from quality_of_life.workflows import Workflow, WorkflowRunSummary, WorkflowService, WorkflowStep, WorkflowStore
 
 
 class WorkflowStoreTests(unittest.TestCase):
