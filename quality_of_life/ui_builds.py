@@ -192,8 +192,15 @@ class UIBuildStore:
             protected=protected,
         )
 
+    @staticmethod
+    def _safe_build_id(build_id: str) -> str:
+        normalized = str(build_id).strip().lower()
+        if not _BUILD_ID.fullmatch(normalized):
+            raise ValueError("invalid UI build id")
+        return normalized
+
     def _build_dir(self, build_id: str) -> Path:
-        return self.root / build_id
+        return self.root / self._safe_build_id(build_id)
 
     def _manifest_path(self, build_id: str) -> Path:
         return self._build_dir(build_id) / "manifest.json"
@@ -209,12 +216,23 @@ class UIBuildStore:
             css_path = build_dir / "style.css"
             markup_path = build_dir / "index.html"
             script_path = build_dir / "script.js"
+            css = css_path.read_text(encoding="utf-8") if css_path.exists() else ""
+            markup = markup_path.read_text(encoding="utf-8") if markup_path.exists() else ""
+            script = script_path.read_text(encoding="utf-8") if script_path.exists() else ""
+            validated_assets = self._normalize(
+                {
+                    **build.metadata(),
+                    "css": css,
+                    "markup": markup,
+                    "script": script,
+                },
+                protected=build.protected,
+            )
             return UIBuild(
                 **{
-                    **build.payload(),
-                    "css": css_path.read_text(encoding="utf-8") if css_path.exists() else "",
-                    "markup": markup_path.read_text(encoding="utf-8") if markup_path.exists() else "",
-                    "script": script_path.read_text(encoding="utf-8") if script_path.exists() else "",
+                    **validated_assets.payload(),
+                    "created_at": build.created_at,
+                    "updated_at": build.updated_at,
                 }
             )
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
@@ -247,7 +265,11 @@ class UIBuildStore:
     def _ensure_builtins(self) -> None:
         with self._lock:
             for builtin in _BUILTIN_BUILDS:
-                if not self._manifest_path(builtin.id).exists():
+                try:
+                    existing = self._read_build(builtin.id)
+                except (KeyError, ValueError):
+                    existing = None
+                if existing is None or existing.protected != builtin.protected:
                     stamp = self._now()
                     self._write_build(UIBuild(**{**builtin.payload(), "created_at": stamp, "updated_at": stamp}))
             state = self._state()
@@ -270,7 +292,7 @@ class UIBuildStore:
 
     def get(self, build_id: str) -> UIBuild:
         with self._lock:
-            return self._read_build(str(build_id).strip().lower())
+            return self._read_build(self._safe_build_id(build_id))
 
     def active(self) -> UIBuild:
         with self._lock:
@@ -530,7 +552,14 @@ def build_manager_script() -> str:
       await applyPayload(payload);
       refresh();
     } catch (_) {
-      // Default/base Jarvis UI remains authoritative when optional build loading fails.
+      // A broken optional build never remains selected across restarts.
+      try {
+        const fallback = await api().ui_builds_rollback();
+        await applyPayload(fallback);
+        refresh();
+      } catch (_) {
+        // Default/base Jarvis UI remains authoritative even if the optional manager fails.
+      }
     }
   }
 
