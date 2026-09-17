@@ -1,15 +1,39 @@
 import os
+import tempfile
 import threading
 import time
+from pathlib import Path
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from scripts.jarvis_voice_bridge import DEFAULT_CONFIG, JarvisVoiceBridge
+from scripts.jarvis_voice_bridge import DEFAULT_CONFIG, JarvisVoiceBridge, _migrate_legacy_stt_default
 
 
 class JarvisVoiceBridgeTests(TestCase):
     def test_default_stt_device_avoids_gpu_auto_detection(self):
         self.assertEqual(DEFAULT_CONFIG["stt_device"], "cpu")
+        self.assertEqual(DEFAULT_CONFIG["stt_compute"], "int8")
+
+    def test_legacy_auto_and_float16_settings_migrate_to_cpu_int8(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config_path = Path(temp) / "backtalk.json"
+            config_path.write_text('{"stt_device": "auto", "stt_compute": "float16"}\n', encoding="utf-8")
+            with patch("scripts.jarvis_voice_bridge.BACKTALK_CONFIG", config_path), patch.dict(
+                os.environ, {"JARVIS_STT_DEVICE": ""}, clear=False
+            ):
+                migrated = _migrate_legacy_stt_default(
+                    {"stt_device": "auto", "stt_compute": "float16", "voice": "bm_lewis"}
+                )
+            self.assertEqual(migrated["stt_device"], "cpu")
+            self.assertEqual(migrated["stt_compute"], "int8")
+            saved = config_path.read_text(encoding="utf-8")
+            self.assertIn('"stt_device": "cpu"', saved)
+            self.assertIn('"stt_compute": "int8"', saved)
+
+    def test_explicit_stt_device_override_is_respected(self):
+        config = {"stt_device": "cuda", "stt_compute": "float16"}
+        with patch.dict(os.environ, {"JARVIS_STT_DEVICE": "cuda"}, clear=False):
+            self.assertEqual(_migrate_legacy_stt_default(config), config)
 
     def test_transcript_uses_existing_jarvis_controller(self):
         controller = Mock()
