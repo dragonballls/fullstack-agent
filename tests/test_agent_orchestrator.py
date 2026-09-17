@@ -203,6 +203,27 @@ class AgentOrchestratorTests(unittest.TestCase):
             self.assertEqual(len(runtime.dispatch_calls), 1)
             self.assertEqual(runtime.dispatch_calls[0][1], "applications.list")
 
+    def test_corrupt_workflow_store_does_not_block_normal_commands(self):
+        runtime = FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = f"{tmp}/workflows.json"
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("{not valid json")
+            store = WorkflowStore(path)
+            agent = AgentOrchestrator(FakeRouter(), runtime)
+            agent._workflow_store = store
+
+            text, verified, errors, needs_confirmation = agent._deterministic_context(
+                "list processes",
+                confirmed=False,
+            )
+
+            self.assertTrue(verified)
+            self.assertFalse(needs_confirmation)
+            self.assertEqual(errors, [])
+            self.assertEqual(len(runtime.dispatch_calls), 1)
+            self.assertEqual(runtime.dispatch_calls[0][1], "processes.list")
+
 
 if __name__ == "__main__":
     unittest.main()
