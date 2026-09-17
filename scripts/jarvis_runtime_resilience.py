@@ -220,26 +220,24 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   input.addEventListener("focus", active);
   input.addEventListener("blur", maybeHide);
 
-  function blockCinematicSpace(event) {
+  // The visualizer's cinematic shortcut is a bubbling keydown listener.
+  // Stop propagation only from the focused text input, and never cancel the
+  // browser default, so ordinary spaces are inserted into the sentence.
+  input.addEventListener("keydown", function (event) {
     if (event.key === " " || event.code === "Space") {
       event.stopImmediatePropagation();
-      // Do not preventDefault: the focused input must still receive the space.
     }
-  }
-
-  input.addEventListener("keydown", blockCinematicSpace);
-  input.addEventListener("keyup", blockCinematicSpace);
-  input.addEventListener("keypress", blockCinematicSpace);
-  window.addEventListener("keydown", function (event) {
-    if (document.activeElement === input && (event.key === " " || event.code === "Space")) {
+  });
+  input.addEventListener("keyup", function (event) {
+    if (event.key === " " || event.code === "Space") {
       event.stopImmediatePropagation();
     }
-  }, true);
-  window.addEventListener("keyup", function (event) {
-    if (document.activeElement === input && (event.key === " " || event.code === "Space")) {
+  });
+  input.addEventListener("keypress", function (event) {
+    if (event.key === " " || event.code === "Space") {
       event.stopImmediatePropagation();
     }
-  }, true);
+  });
 })();
 '''
 
