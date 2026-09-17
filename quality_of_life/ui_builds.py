@@ -356,10 +356,37 @@ class UIBuildStore:
             self._write_state(DEFAULT_BUILD_ID, [])
             return self.get(DEFAULT_BUILD_ID)
 
+    def _read_metadata(self, build_id: str) -> UIBuild:
+        safe_id = self._safe_build_id(build_id)
+        manifest_path = self._manifest_path(safe_id)
+        if not manifest_path.is_file():
+            raise KeyError(f"unknown UI build: {safe_id}")
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            normalized = self._normalize(manifest, protected=bool(manifest.get("protected", False)))
+            return UIBuild(
+                **{
+                    **normalized.payload(),
+                    "created_at": str(manifest.get("created_at", "") or ""),
+                    "updated_at": str(manifest.get("updated_at", "") or ""),
+                }
+            )
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid UI build '{safe_id}': {type(exc).__name__}") from exc
+
     def catalog(self) -> list[dict[str, object]]:
         with self._lock:
             active_id = self.active().id
-            return [{**build.metadata(), "active": build.id == active_id} for build in self.list()]
+            items: list[dict[str, object]] = []
+            for child in self.root.iterdir():
+                if not child.is_dir() or child.name.startswith("."):
+                    continue
+                try:
+                    build = self._read_metadata(child.name)
+                except (KeyError, ValueError):
+                    continue
+                items.append({**build.metadata(), "active": build.id == active_id})
+            return sorted(items, key=lambda item: (item["id"] != DEFAULT_BUILD_ID, str(item["name"]).casefold()))
 
 
 def build_manager_script() -> str:
