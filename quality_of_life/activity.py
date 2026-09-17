@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, replace
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from threading import RLock
@@ -192,4 +193,6 @@ class ActivityStore:
     def _safe_error(error: str | None) -> str | None:
         if error is None:
             return None
-        return str(error).replace("\\", "/")[:500]
+        text = str(error).replace("\\", "/")
+        text = re.sub(r"(?i)(token|api[_-]?key|authorization|password)\\s*[=:]\\s*([^\\s,;]+)", r"\\1=[redacted]", text)
+        return text[:500]
