@@ -71,9 +71,11 @@ def _patch_mouth_instance(mouth: Any) -> None:
         try:
             original_shutdown()
         finally:
-            # Backtalk's real worker blocks on _q.get() and its public shutdown
-            # intentionally only stops playback. Wake that worker with one
-            # private sentinel so process exit does not leave a live daemon.
+            # The thread can already be blocked inside the Queue.get method that
+            # existed before this lifecycle wrapper was installed. One sentinel
+            # wakes that in-flight call; the second is consumed by the wrapper
+            # on the worker's next loop iteration and terminates it cleanly.
+            q.put(_MOUTH_SENTINEL)
             q.put(_MOUTH_SENTINEL)
             worker_thread = getattr(self, "_worker", None)
             if worker_thread is not None and worker_thread.is_alive() and threading.current_thread() is not worker_thread:
