@@ -65,6 +65,22 @@ class ActivityStoreTests(unittest.TestCase):
         self.assertIsNone(store.get(first.id))
         self.assertEqual([r.title for r in store.list()], ["third", "second"])
 
+    def test_failed_activity_redacts_common_secret_patterns(self):
+        store = ActivityStore()
+        record = store.create("Protected operation")
+        store.update(record.id, status=ActivityStatus.RUNNING)
+
+        failed = store.update(
+            record.id,
+            status=ActivityStatus.FAILED,
+            error="token=SECRET123 authorization=Bearer SECRET456",
+        )
+
+        self.assertNotIn("SECRET123", failed.error)
+        self.assertNotIn("SECRET456", failed.error)
+        self.assertIn("[redacted]", failed.error)
+
+
 
 if __name__ == "__main__":
     unittest.main()
