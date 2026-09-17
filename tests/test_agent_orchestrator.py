@@ -67,6 +67,10 @@ class FakeRuntime:
             def needs_confirmation(self, _capability):
                 return False
 
+        class Policy:
+            def needs_confirmation(self, capability):
+                return capability == Capability.FILE_DELETE
+
         self.policy = Policy()
 
     def activity_store(self):
@@ -162,7 +166,7 @@ class AgentOrchestratorTests(unittest.TestCase):
             workflow = Workflow.new(
                 "System check",
                 aliases=("status check",),
-                steps=(WorkflowStep("applications.list", {}),),
+                steps=(WorkflowStep("files.delete", {"path": "x"}),),
             )
             store.create(workflow)
             agent = AgentOrchestrator(FakeRouter(), runtime)
