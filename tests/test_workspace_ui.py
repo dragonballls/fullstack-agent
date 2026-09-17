@@ -176,6 +176,35 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertIn("COMMAND INDEX", script)
         self.assertNotIn("run_operation", script)
 
+    def test_gods_eye_status_normalizes_existing_location_snapshot(self):
+        from quality_of_life.gods_eye import GeoPoint, LocationSnapshot
+
+        class FakeRuntime:
+            def dispatch(self, capability, operation):
+                return LocationSnapshot(GeoPoint(1.0, 2.0), 10.0, True, "system")
+
+        class FakeController:
+            def __init__(self):
+                self.runtime = FakeRuntime()
+
+        class FakeHost:
+            def __init__(self):
+                self.controller = FakeController()
+
+        desktop = type("Desktop", (), {})()
+        from quality_of_life import workspace_ui
+        base_api = type("BaseApi", (), {"__init__": lambda self, host: setattr(self, "host", host)})
+        desktop.JarvisWebApi = base_api
+        desktop.TEXT_INPUT_SCRIPT = ""
+        workspace_ui.install(desktop)
+        api = desktop.JarvisWebApi(FakeHost())
+
+        result = api.gods_eye_status()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["location"]["point"]["latitude"], 1.0)
+        self.assertEqual(result["location"]["point"]["longitude"], 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()
