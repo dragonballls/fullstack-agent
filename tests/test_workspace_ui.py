@@ -205,6 +205,55 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertEqual(result["location"]["point"]["latitude"], 1.0)
         self.assertEqual(result["location"]["point"]["longitude"], 2.0)
 
+    def test_workspace_api_exposes_saved_workflows_for_discovery(self):
+        from tempfile import TemporaryDirectory
+
+        class FakeRuntime:
+            def activity_snapshot(self, limit=20):
+                return []
+
+            def activity_cancel(self, activity_id):
+                return {"id": activity_id, "status": "running", "cancel_requested": True}
+
+            def dispatch(self, capability, operation):
+                return {"permitted": False}
+
+        class FakeController:
+            def __init__(self):
+                self.runtime = FakeRuntime()
+
+        class FakeHost:
+            def __init__(self):
+                self.controller = FakeController()
+
+        with TemporaryDirectory() as tmp:
+            store = WorkflowStore(f"{tmp}/workflows.json")
+            workflow = Workflow.new("Daily check", aliases=("daily",), steps=(WorkflowStep("applications.list", {}),))
+            store.create(workflow)
+
+            desktop = type("Desktop", (), {})()
+            from quality_of_life import workspace_ui
+            base_api = type("BaseApi", (), {"__init__": lambda self, host: setattr(self, "host", host)})
+            desktop.JarvisWebApi = base_api
+            desktop.TEXT_INPUT_SCRIPT = ""
+            workspace_ui.install(desktop)
+            api = desktop.JarvisWebApi(FakeHost())
+            api._workflow_store = store
+
+            catalog = api.workflow_catalog()
+
+            self.assertEqual(len(catalog), 1)
+            self.assertEqual(catalog[0]["name"], "Daily check")
+            self.assertEqual(catalog[0]["aliases"], ["daily"])
+            self.assertTrue(catalog[0]["enabled"])
+            self.assertIsNone(catalog[0]["last_run"])
+
+    def test_workspace_script_surfaces_saved_workflows_as_command_bar_actions(self):
+        script = workspace_script()
+        self.assertIn("workflow_catalog", script)
+        self.assertIn("run my ", script)
+        self.assertIn("jw-workflows-list", script)
+
 
 if __name__ == "__main__":
     unittest.main()
