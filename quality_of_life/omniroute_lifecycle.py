@@ -34,15 +34,15 @@ class OmniRouteLifecycle:
     def _probe(self) -> bool:
         parsed = urllib.parse.urlparse(self.base_url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        for url in (origin + "/", origin + "/api/monitoring/health"):
+        for url in (origin + "/api/monitoring/health", origin + "/healthz"):
             try:
                 with urllib.request.urlopen(
                     urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET"),
                     timeout=1.5,
-                ):
-                    return True
+                ) as response:
+                    return 200 <= response.status < 500
             except urllib.error.HTTPError as exc:
-                if 200 <= exc.code < 500:
+                if exc.code in {401, 403, 405}:
                     return True
             except (urllib.error.URLError, TimeoutError, OSError):
                 continue
