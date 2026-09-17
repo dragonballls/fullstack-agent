@@ -133,6 +133,8 @@ class UIBuildStoreTests(unittest.TestCase):
             "UI BUILD GALLERY",
             "NEW",
             "ROLLBACK",
+            "ctrlKey",
+            "jarvis-ui-build-toggle",
         ):
             self.assertIn(token, script)
 
