@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Literal, Protocol
 
 
@@ -88,4 +89,5 @@ class LocationProviderRegistry:
 
 def _safe_text(value: object, limit: int) -> str:
     text = str(value or "").replace("\r", " ").replace("\n", " ").strip()
+    text = re.sub(r"(?i)(token|api[_-]?key|authorization|password)\\s*[=:]\\s*([^\\s,;]+)", r"\\1=[redacted]", text)
     return text[:limit]
