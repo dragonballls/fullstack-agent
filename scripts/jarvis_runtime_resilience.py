@@ -3,9 +3,17 @@ from __future__ import annotations
 import importlib
 import os
 import threading
+from types import MethodType
 from typing import Any
 
 from scripts.jarvis_voice_bridge import JarvisVoiceBridge as _JarvisVoiceBridge
+
+
+class _MouthShutdown(BaseException):
+    """Private control exception used only to terminate the Backtalk worker."""
+
+
+_MOUTH_SENTINEL = object()
 
 
 class JarvisResilientWebApi:
@@ -36,8 +44,55 @@ class JarvisResilientWebApi:
                 return {"ok": False, "error": message[:500], "needs_confirmation": False}
 
 
+def _patch_mouth_instance(mouth: Any) -> None:
+    """Make the pinned Backtalk worker terminate synchronously during app exit."""
+    if getattr(mouth, "_jarvis_lifecycle_patched", False):
+        return
+
+    queue = getattr(mouth, "_q", None)
+    worker = getattr(mouth, "_worker", None)
+    original_get = getattr(queue, "get", None)
+    original_shutdown = getattr(mouth, "shutdown", None)
+    if queue is None or worker is None or not callable(original_get) or not callable(original_shutdown):
+        return
+
+    def get_with_shutdown(*args: Any, **kwargs: Any) -> Any:
+        item = original_get(*args, **kwargs)
+        if item is _MOUTH_SENTINEL:
+            raise _MouthShutdown()
+        return item
+
+    queue.get = get_with_shutdown
+
+    def shutdown(self: Any) -> None:
+        if getattr(self, "_jarvis_shutdown_complete", False):
+            return
+        try:
+            original_shutdown()
+        finally:
+            queue.put(_MOUTH_SENTINEL)
+            worker_thread = getattr(self, "_worker", None)
+            if worker_thread is not None and worker_thread.is_alive() and threading.current_thread() is not worker_thread:
+                worker_thread.join(timeout=5)
+            drop_out = getattr(self, "_drop_out", None)
+            if callable(drop_out):
+                try:
+                    drop_out()
+                except Exception:
+                    pass
+            self._jarvis_shutdown_complete = True
+
+    mouth.shutdown = MethodType(shutdown, mouth)
+    mouth._jarvis_lifecycle_patched = True
+
+
 class JarvisResilientVoiceBridge(_JarvisVoiceBridge):
-    """Preflight speech recognition before listening so STT failures degrade voice only."""
+    """Preflight speech recognition and cleanly stop embedded audio workers."""
+
+    def _load_components(self) -> None:
+        super()._load_components()
+        if self.mouth is not None:
+            _patch_mouth_instance(self.mouth)
 
     def _prepare_stt(self) -> bool:
         if os.environ.get("JARVIS_VOICE_PREFLIGHT", "1").strip().lower() in {"0", "false", "no", "off"}:
@@ -63,6 +118,24 @@ class JarvisResilientVoiceBridge(_JarvisVoiceBridge):
         super()._run()
 
 
+def _ensure_omniroute() -> None:
+    """Start an installed local OmniRoute gateway without opening a visible console."""
+    if os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() in {"0", "false", "no", "off"}:
+        return
+    try:
+        from quality_of_life.omniroute_lifecycle import OmniRouteLifecycle
+        from quality_of_life.router import CloudModelRouter
+
+        lifecycle = OmniRouteLifecycle(CloudModelRouter.omniroute_base_url())
+        lifecycle.ensure_available()
+    except Exception as exc:
+        try:
+            from scripts.jarvis_voice_bridge import _log
+            _log(f"OmniRoute startup check failed safely: {type(exc).__name__}: {str(exc)[:400]}")
+        except Exception:
+            pass
+
+
 # Runs after the original Fullstack text-link script so its existing
 # submission/confirmation behavior is preserved and only the interaction
 # contract is changed.
@@ -86,8 +159,8 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      width: min(36vw, 560px);
-      height: min(22vh, 210px);
+      width: min(420px, calc(100vw - 72px));
+      height: min(190px, 28vh);
       min-width: 280px;
       min-height: 120px;
       border-radius: 24px;
@@ -162,6 +235,7 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   function blockCinematicSpace(event) {
     if (event.key === " " || event.code === "Space") {
       event.stopImmediatePropagation();
+      // Do not preventDefault: the focused input must still receive the space.
     }
   }
 
@@ -178,10 +252,6 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
       event.stopImmediatePropagation();
     }
   }, true);
-
-  // The visualizer draws the JARVIS chip into the center canvas, so the
-  // transparent hit zone deliberately tracks that center instead of a HUD
-  // element that sits elsewhere on the screen.
 })();
 '''
 
@@ -195,3 +265,4 @@ def install_desktop_resilience() -> None:
         jarvis_desktop.TEXT_INPUT_SCRIPT + "\n" + TEXT_INPUT_RESILIENCE_SCRIPT
     )
     voice_module.JarvisVoiceBridge = JarvisResilientVoiceBridge
+    threading.Thread(target=_ensure_omniroute, name="jarvis-omniroute-start", daemon=True).start()
