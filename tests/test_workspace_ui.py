@@ -25,6 +25,12 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertIn("activate_workspace", script)
         self.assertIn("gods_eye_status", script)
 
+    def test_workspace_views_do_not_block_existing_visualizer_input(self):
+        script = workspace_script()
+        self.assertIn('.jw-view { display:none; position:absolute; inset:0; pointer-events:none; }', script)
+        self.assertIn('.jw-tab { border:', script)
+        self.assertIn('.jw-chip { padding:', script)
+
     def test_gods_eye_status_dispatches_registered_location_action(self):
         class FakeRuntime:
             def __init__(self):
