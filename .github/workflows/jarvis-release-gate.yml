@@ -64,21 +64,24 @@ jobs:
         run: |
           $prefix = python -c "import sys; print(sys.prefix)"
           Write-Host ("Python prefix: {0}" -f $prefix)
-          $dlls = @(
-            'vcruntime140.dll',
-            'vcruntime140_1.dll',
-            'msvcp140.dll',
-            'msvcp140_1.dll',
-            'msvcp140_2.dll'
-          )
-          $paths = @()
-          foreach ($dll in $dlls) {
-            $found = Get-ChildItem -LiteralPath $prefix -Filter $dll -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($null -eq $found) { throw "Required Windows runtime DLL was not found under Python prefix: $dll" }
-            $paths += $found.FullName
-            Write-Host ("Found {0}: {1}" -f $dll, $found.FullName)
+          $searchRoots = @($prefix, (Join-Path $env:WINDIR 'System32'))
+          $patterns = @('vcruntime140*.dll', 'msvcp140*.dll')
+          $foundPaths = New-Object System.Collections.Generic.List[string]
+          foreach ($root in $searchRoots) {
+            foreach ($pattern in $patterns) {
+              Get-ChildItem -LiteralPath $root -Filter $pattern -File -Recurse:$false -ErrorAction SilentlyContinue |
+                ForEach-Object { if (-not $foundPaths.Contains($_.FullName)) { $foundPaths.Add($_.FullName) } }
+            }
           }
-          Set-Content -LiteralPath 'build_runtime_dlls.txt' -Encoding UTF8 -Value $paths
+          $required = @('vcruntime140.dll', 'vcruntime140_1.dll')
+          foreach ($dll in $required) {
+            if (-not ($foundPaths | Where-Object { $_.EndsWith("\$dll", [System.StringComparison]::OrdinalIgnoreCase) })) {
+              throw "Required Windows runtime DLL was not found on the build machine: $dll"
+            }
+          }
+          if ($foundPaths.Count -lt 2) { throw 'No usable Microsoft VC runtime DLLs were discovered' }
+          $foundPaths | ForEach-Object { Write-Host ("Bundling runtime DLL: {0}" -f $_) }
+          Set-Content -LiteralPath 'build_runtime_dlls.txt' -Encoding UTF8 -Value $foundPaths
       - name: Write build identity
         shell: pwsh
         run: |
