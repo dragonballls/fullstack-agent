@@ -194,5 +194,5 @@ class ActivityStore:
         if error is None:
             return None
         text = str(error).replace("\\", "/")
-        text = re.sub(r"(?i)(token|api[_-]?key|authorization|password)\\s*[=:]\\s*(?:Bearer\\s+)?([^\\s,;]+)", r"\\1=[redacted]", text)
+        text = re.sub(r"(?i)(token|api[_-]?key|authorization|password)\s*[=:]\s*(?:Bearer\s+)?([^\s,;]+)", r"\\1=[redacted]", text)
         return text[:500]
