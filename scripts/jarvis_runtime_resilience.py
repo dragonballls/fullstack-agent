@@ -9,10 +9,6 @@ from typing import Any
 from scripts.jarvis_voice_bridge import JarvisVoiceBridge as _JarvisVoiceBridge
 
 
-class _MouthShutdown(SystemExit):
-    """Private control exception used only to terminate the Backtalk worker."""
-
-
 _MOUTH_SENTINEL = object()
 _OMNIROUTE_READY = threading.Event()
 
@@ -61,7 +57,10 @@ def _patch_mouth_instance(mouth: Any) -> None:
     def get_with_shutdown(*args: Any, **kwargs: Any) -> Any:
         item = original_get(*args, **kwargs)
         if item is _MOUTH_SENTINEL:
-            raise _MouthShutdown()
+            # SystemExit is deliberately used rather than a custom exception:
+            # threading suppresses an expected SystemExit from its worker
+            # exception hook, keeping shutdown clean in packaged builds.
+            raise SystemExit()
         return item
 
     q.get = get_with_shutdown
@@ -72,10 +71,9 @@ def _patch_mouth_instance(mouth: Any) -> None:
         try:
             original_shutdown()
         finally:
-            # The worker may already be blocked inside the original queue.get() that
-            # existed before our wrapper was installed. Send two sentinels so that
-            # both that in-flight read and the wrapped read can observe shutdown.
-            q.put(_MOUTH_SENTINEL)
+            # Backtalk's real worker blocks on _q.get() and its public shutdown
+            # intentionally only stops playback. Wake that worker with one
+            # private sentinel so process exit does not leave a live daemon.
             q.put(_MOUTH_SENTINEL)
             worker_thread = getattr(self, "_worker", None)
             if worker_thread is not None and worker_thread.is_alive() and threading.current_thread() is not worker_thread:
@@ -115,8 +113,6 @@ class JarvisResilientVoiceBridge(_JarvisVoiceBridge):
                 "voice STT preflight failed; voice input disabled while Jarvis stays running: "
                 f"{type(exc).__name__}: {str(exc)[:400]}"
             )
-            # A preflight failure belongs to the voice layer. Stop only this
-            # listener rather than allowing it to enter a restart loop.
             self.stop_event.set()
             return False
 
@@ -211,14 +207,13 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   function maybeHide() {
     clearTimeout(timer);
     timer = setTimeout(function () {
-      if (!centerHovered && !shellHovered && document.activeElement !== input) {
+      const inputFocused = document.activeElement === input;
+      if (!centerHovered && !shellHovered && !inputFocused) {
         shell.classList.remove("jarvis-active");
       }
     }, 140);
   }
 
-  // The upstream Jarvis element is canvas-drawn, so the zone is transparent and
-  // never intercepts clicks; document-level pointer tracking uses its geometry.
   document.addEventListener("mousemove", function (event) {
     const rect = zone.getBoundingClientRect();
     const next = event.clientX >= rect.left && event.clientX <= rect.right
