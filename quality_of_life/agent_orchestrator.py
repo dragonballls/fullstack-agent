@@ -144,7 +144,10 @@ class AgentOrchestrator:
 
     def _deterministic_context(self, text: str, confirmed: bool) -> tuple[str, bool, list[str], bool]:
         """Execute explicitly supported intents through the existing policy-gated runtime."""
-        workflow = self._workflow_store.resolve(text)
+        try:
+            workflow = self._workflow_store.resolve(text)
+        except (OSError, ValueError):
+            workflow = None
         if workflow is not None:
             result = WorkflowService.execute(
                 self.runtime,
