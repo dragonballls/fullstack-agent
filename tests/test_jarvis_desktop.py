@@ -65,6 +65,31 @@ class JarvisDesktopTests(unittest.TestCase):
         host.stop()
         visualizer.stop.assert_called_once_with()
 
+    def test_native_window_uses_resizable_default_and_windows_edgechromium(self):
+        controller = Mock()
+        visualizer = Mock()
+        visualizer.url.return_value = "http://127.0.0.1:8790/faces/board/"
+        host = FullstackJarvisHost(controller, visualizer=visualizer, voice=Mock(), hands=Mock())
+
+        fake_webview = ModuleType("webview")
+        fake_webview.create_window = Mock(return_value=SimpleNamespace())
+        fake_webview.start = Mock()
+
+        with patch.object(sys, "platform", "win32"), patch.dict(sys.modules, {"webview": fake_webview}):
+            host.run_window()
+
+        fake_webview.create_window.assert_called_once_with(
+            title="Jarvis",
+            url="http://127.0.0.1:8790/faces/board/",
+            width=1200,
+            height=800,
+            fullscreen=False,
+            resizable=True,
+            min_size=(800, 600),
+        )
+        fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
+        self.assertIsNotNone(host._window)
+
     def test_frozen_backtalk_smoke_mode_validates_embedded_modules_without_audio_hardware(self):
         controller = Mock()
         adapter = VoiceAdapter(controller)
