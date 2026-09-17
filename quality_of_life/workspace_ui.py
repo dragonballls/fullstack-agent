@@ -53,6 +53,10 @@ def install(desktop_module: Any) -> None:
             try:
                 runtime = self.host.controller.runtime
                 result = runtime.dispatch(Capability.LOCATION_READ, "locations.current")
+                if not isinstance(result, dict):
+                    return {"ok": False, "available": False, "reason": "Location result is unavailable."}
+                if not bool(result.get("permitted", False)) or result.get("point") is None:
+                    return {"ok": False, "available": False, "reason": "Location is not authorized or unavailable."}
                 return {"ok": True, "location": result}
             except Exception as exc:
                 return {
