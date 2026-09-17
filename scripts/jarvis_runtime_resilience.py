@@ -72,6 +72,10 @@ def _patch_mouth_instance(mouth: Any) -> None:
         try:
             original_shutdown()
         finally:
+            # The worker may already be blocked inside the original queue.get() that
+            # existed before our wrapper was installed. Send two sentinels so that
+            # both that in-flight read and the wrapped read can observe shutdown.
+            q.put(_MOUTH_SENTINEL)
             q.put(_MOUTH_SENTINEL)
             worker_thread = getattr(self, "_worker", None)
             if worker_thread is not None and worker_thread.is_alive() and threading.current_thread() is not worker_thread:
@@ -111,6 +115,9 @@ class JarvisResilientVoiceBridge(_JarvisVoiceBridge):
                 "voice STT preflight failed; voice input disabled while Jarvis stays running: "
                 f"{type(exc).__name__}: {str(exc)[:400]}"
             )
+            # A preflight failure belongs to the voice layer. Stop only this
+            # listener rather than allowing it to enter a restart loop.
+            self.stop_event.set()
             return False
 
     def _run(self) -> None:
@@ -153,6 +160,10 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   const input = document.getElementById("jarvis-text-input");
   if (!input) return;
 
+  const zone = document.createElement("div");
+  zone.id = "jarvis-hover-zone";
+  zone.setAttribute("aria-hidden", "true");
+
   const style = document.createElement("style");
   style.id = "jarvis-text-resilience-style";
   style.textContent = `
@@ -174,8 +185,19 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
       box-shadow: 0 0 34px rgba(61,220,132,.18), inset 0 0 22px rgba(61,220,132,.05) !important;
       pointer-events: auto !important;
     }
+    #jarvis-hover-zone {
+      position: fixed !important;
+      left: 50% !important;
+      top: 50% !important;
+      width: min(420px, 36vw) !important;
+      height: min(190px, 28vh) !important;
+      transform: translate(-50%, -50%) !important;
+      pointer-events: none !important;
+      z-index: 2147483646 !important;
+    }
   `;
   document.head.appendChild(style);
+  document.body.appendChild(zone);
 
   let centerHovered = false;
   let shellHovered = false;
@@ -195,14 +217,12 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
     }, 140);
   }
 
-  // The upstream Jarvis element is canvas-drawn, so detect hover geometrically
-  // around the viewport center instead of overlaying an invisible click target.
+  // The upstream Jarvis element is canvas-drawn, so the zone is transparent and
+  // never intercepts clicks; document-level pointer tracking uses its geometry.
   document.addEventListener("mousemove", function (event) {
-    const dx = event.clientX - (window.innerWidth / 2);
-    const dy = event.clientY - (window.innerHeight / 2);
-    const halfW = Math.min(210, window.innerWidth * 0.18);
-    const halfH = Math.min(95, window.innerHeight * 0.14);
-    const next = Math.abs(dx) <= halfW && Math.abs(dy) <= halfH;
+    const rect = zone.getBoundingClientRect();
+    const next = event.clientX >= rect.left && event.clientX <= rect.right
+      && event.clientY >= rect.top && event.clientY <= rect.bottom;
     if (next !== centerHovered) {
       centerHovered = next;
       if (centerHovered) active(); else maybeHide();
@@ -221,8 +241,8 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   input.addEventListener("blur", maybeHide);
 
   // The visualizer's cinematic shortcut is a bubbling keydown listener.
-  // Stop propagation only from the focused text input, and never cancel the
-  // browser default, so ordinary spaces are inserted into the sentence.
+  // Stop propagation only from the focused text input. Do not preventDefault.
+  // Ordinary spaces must remain browser-default text input behavior.
   input.addEventListener("keydown", function (event) {
     if (event.key === " " || event.code === "Space") {
       event.stopImmediatePropagation();
