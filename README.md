@@ -4,7 +4,7 @@
 
 This fork preserves the upstream `fullstack-agent` setup flow, but the **Jarvis profile is the primary product contract for this fork**. Jarvis uses OmniRoute as its conversational/agent brain; Claude Code is not required by the Jarvis profile.
 
-**Important distribution boundary:** this repository is a Jarvis integration/source layer, not a standalone native Windows `.exe`. The verified `Jarvis-Source-Bundle.zip` is the supported downloadable source artifact. Target-machine credentials, permissions, microphones, webcams, browsers, and separate upstream components still have to be configured where required. See `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
+**Windows product boundary:** this repository is both the Jarvis integration/source layer and the source of the verified standalone Windows `Jarvis.exe` release. The normal end-user product is the single-file executable; Python, a virtual environment, a source checkout, and a separate Fullstack Agent checkout are developer/build concerns only. Target-machine credentials, permissions, microphones, webcams, browsers, and external service authorization still have to be configured where required. See `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
 
 ## What the upstream fullstack-agent stack provides
 
@@ -15,7 +15,7 @@ Four pieces, each its own open repo, can still be assembled by the upstream setu
 - **The face: [ai-visualizer](https://github.com/jaredrhod/ai-visualizer).** Visualizers for the upstream stack.
 - **The hands: [barehands](https://github.com/jaredrhod/barehands).** Optional webcam hand interaction for the upstream stack.
 
-Those upstream components remain separate projects. The Jarvis extensions in this repository do not pretend otherwise.
+The Jarvis Windows release embeds pinned revisions of the upstream components needed by its native Fullstack presentation and voice contract. Their upstream repositories remain separate projects, while the release workflow vendors the required source into the executable.
 
 ## Jarvis integration
 
@@ -25,6 +25,7 @@ This fork ships independent Jarvis extensions without replacing the upstream sta
 - **`quality_of_life/`** provides guarded computer control, browser automation, location/God's Eye context, account access, multi-AI cloud routing, and Windows maintenance.
 - **Webcam hand control** provides guarded system-wide pointer movement, click/drag/scroll gestures, tracking-loss handling, emergency pause, and an explicit activation boundary.
 - **Background-efficient mode** keeps local voice wake listening available while allowing foreground-only presentation work to suspend when minimized; active hand control remains independently managed. See `docs/jarvis-background-mode.md`.
+- **Phone/device integration** provides Android companion and device-adapter contracts behind explicit permissions and readiness checks.
 
 The Jarvis profile uses **OmniRoute only** as its conversational/agent brain. Claude Code and a Claude subscription are not required by the Jarvis profile and are not valid Jarvis fallbacks.
 
@@ -36,17 +37,17 @@ Jarvis also includes a scoped multi-account model for Google, Microsoft, GitHub,
 
 ## Jarvis Windows launch
 
-For the Jarvis profile on Windows, use `scripts/start-jarvis.ps1`. It starts `scripts/jarvis_desktop.pyw` with the repository `.venv\Scripts\pythonw.exe`, giving Jarvis a lightweight chat-bar host without a persistent PowerShell console. Run `python readiness.py` first on a new installation.
+For end users on Windows, the normal launch path is the verified **single-file `Jarvis.exe`** from the GitHub `latest` release. Double-clicking that executable is the supported product launch path; it opens the native Fullstack visualizer and does not require a persistent PowerShell console.
 
-The upstream `start.bat` remains available for the separate fullstack-agent stack and is **not** the Jarvis runtime launcher.
+For repository developers, `scripts/start-jarvis.ps1` is a helper for launching a locally built `dist\\Jarvis.exe`. It does not define the end-user installation contract and should not be confused with the separate upstream `start.bat` flow.
 
 ## Jarvis installation and download
 
 For the Jarvis profile, start with `JARVIS_DOWNLOAD.md` and `JARVIS_SETUP.md`.
 
-The release workflow validates the source bundle on Ubuntu and Windows with Python 3.11, 3.12, and 3.13; checks dependency consistency; compiles the Python modules; runs the complete regression suite; runs Windows-maintenance tests; and reruns tests from the extracted downloadable bundle.
+The release workflow validates the source and runtime contracts on Ubuntu and Windows with Python 3.11, 3.12, and 3.13; checks dependency consistency; compiles the Python modules; runs the complete regression suite; runs Windows-maintenance tests; fetches pinned Fullstack Agent components; builds the native single-file executable; and smoke-tests the frozen visualizer and packaged Jarvis host.
 
-A semantic-version tag (`vMAJOR.MINOR.PATCH`) publishes the verified `Jarvis-Source-Bundle.zip` automatically as a GitHub Release asset.
+A semantic-version tag (`vMAJOR.MINOR.PATCH`) publishes the verified `Jarvis.exe` directly as a GitHub Release asset. The rolling `latest` release is also refreshed from the same passing Windows gate on `main`.
 
 ### Upstream fullstack-agent installation
 
@@ -61,7 +62,7 @@ mkdir -p ~/my-agent && cd ~/my-agent && git clone https://github.com/jaredrhod/f
 Windows (PowerShell):
 
 ```text
-$d="$env:USERPROFILE\.local\bin"; if (Test-Path "$d\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\my-agent | Out-Null; cd $HOME\my-agent; if (-not (Test-Path fullstack-agent\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
+$d="$env:USERPROFILE\\.local\\bin"; if (Test-Path "$d\\claude.exe") { $env:Path="$d;$env:Path" }; New-Item -ItemType Directory -Force -Path $HOME\\my-agent | Out-Null; cd $HOME\\my-agent; if (-not (Test-Path fullstack-agent\\fullstack-agent.md)) { Invoke-WebRequest https://github.com/jaredrhod/fullstack-agent/archive/refs/heads/main.zip -OutFile fsa.zip; Expand-Archive fsa.zip . -Force; New-Item -ItemType Directory -Force -Path fullstack-agent | Out-Null; Get-ChildItem fullstack-agent-main -Force | Copy-Item -Destination fullstack-agent -Recurse -Force; Remove-Item fullstack-agent-main -Recurse -Force; Remove-Item fsa.zip }; cd fullstack-agent; if (Get-Command claude -ErrorAction SilentlyContinue) { claude "set me up" } else { Write-Output "Claude Code is not installed yet. Install it first at https://jaredrhod.com/start then paste this again." }
 ```
 
 ## Upstream already-built pieces
@@ -70,7 +71,7 @@ The upstream wizard can adopt an existing memory vault, voice line, or visualize
 
 ## After upstream setup
 
-The original upstream shortcuts and `start.sh` / `start.bat` continue to describe that upstream multi-repository stack. They are **not** the Jarvis runtime launcher. For Jarvis, use `scripts/start-jarvis.ps1` and the documented source-layer/runtime contract in `JARVIS_SETUP.md` and `JARVIS_DOWNLOAD.md`.
+The original upstream shortcuts and `start.sh` / `start.bat` continue to describe that upstream multi-repository stack. They are **not** the Jarvis Windows product launcher. For Jarvis, use the verified `Jarvis.exe` release asset for normal operation.
 
 ## Safety and runtime boundaries
 
@@ -85,7 +86,7 @@ The original upstream shortcuts and `start.sh` / `start.bat` continue to describ
 
 Use `JARVIS_READINESS.md` and `readiness.py` for machine-specific checks. A `READY` result means the required local prerequisites detected by that diagnostic are present. Optional integrations may still report warnings.
 
-The authoritative Windows/source distribution contract is `JARVIS_DOWNLOAD.md`. `fullstack-agent.md` is retained for the upstream setup flow and is not the Jarvis installer/runtime contract.
+The authoritative Windows/product distribution contract is `JARVIS_DOWNLOAD.md`, with `JARVIS_SETUP.md` defining the normal end-user setup and `JARVIS_VOICE.md` defining the voice contract. Historical plan documents and stale feature branches do not supersede the current `main` implementation.
 
 ## The rest of it
 
