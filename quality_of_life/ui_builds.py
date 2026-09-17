@@ -547,6 +547,13 @@ def build_manager_script() -> str:
     panel.classList.toggle("active");
     if (panel.classList.contains("active")) refresh();
   });
+  window.addEventListener("keydown", event => {
+    if (event.ctrlKey && event.shiftKey && String(event.key).toLowerCase() === "b") {
+      event.preventDefault();
+      panel.classList.toggle("active");
+      if (panel.classList.contains("active")) refresh();
+    }
+  });
   document.getElementById("juib-close").addEventListener("click", () => panel.classList.remove("active"));
   document.getElementById("juib-new").addEventListener("click", () => {
     editor.classList.toggle("active");
