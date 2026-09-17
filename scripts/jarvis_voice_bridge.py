@@ -72,18 +72,24 @@ def _configure_vendor() -> Path:
 
 
 def _migrate_legacy_stt_default(config: dict[str, Any]) -> dict[str, Any]:
-    """Move Jarvis-generated legacy `auto` STT settings to stable CPU use."""
+    """Move legacy auto/CPU-incompatible STT settings to stable CPU mode."""
     if os.environ.get("JARVIS_STT_DEVICE"):
         return config
-    if str(config.get("stt_device", "")).strip().lower() != "auto":
+    device = str(config.get("stt_device", "")).strip().lower()
+    compute = str(config.get("stt_compute", "")).strip().lower()
+    if device != "auto" and not (device == "cpu" and compute == "float16"):
         return config
     migrated = dict(config)
     migrated["stt_device"] = "cpu"
+    migrated["stt_compute"] = "int8"
     try:
         BACKTALK_CONFIG.write_text(json.dumps(migrated, indent=2) + "\n", encoding="utf-8")
-        _log("migrated legacy STT device auto -> cpu for stable Windows voice startup")
+        _log(
+            "migrated legacy STT settings to cpu/int8 for stable Windows voice startup "
+            f"(was {device or 'unset'}/{compute or 'unset'})"
+        )
     except OSError as exc:
-        _log(f"could not persist STT device migration: {type(exc).__name__}: {exc}")
+        _log(f"could not persist STT migration: {type(exc).__name__}: {exc}")
     return migrated
 
 
@@ -121,7 +127,11 @@ class JarvisVoiceBridge:
                 from backtalk.config import CFG
                 self.config = _migrate_legacy_stt_default(dict(CFG))
                 CFG["stt_device"] = self.config["stt_device"]
-                _log(f"Backtalk voice components configured from {vendor}; stt_device={CFG['stt_device']}")
+                CFG["stt_compute"] = self.config.get("stt_compute", "int8")
+                _log(
+                    f"Backtalk voice components configured from {vendor}; "
+                    f"stt_device={CFG['stt_device']} stt_compute={CFG['stt_compute']}"
+                )
             except Exception as exc:
                 self.config = dict(DEFAULT_CONFIG)
                 _log(f"could not load Backtalk config: {type(exc).__name__}: {exc}")
