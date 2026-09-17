@@ -124,6 +124,39 @@ class WorkflowStoreTests(unittest.TestCase):
         self.assertEqual(record.status.value, "waiting")
         self.assertEqual(record.step, "Waiting for confirmation")
 
+    def test_continue_on_error_does_not_leave_activity_terminal_before_next_step(self):
+        class FakePolicy:
+            def needs_confirmation(self, _capability):
+                return False
+
+        class FakeRuntime:
+            def __init__(self):
+                from quality_of_life.activity import ActivityStore
+                self.policy = FakePolicy()
+                self.activity = ActivityStore()
+
+            def dispatch(self, _capability, operation, **_kwargs):
+                if operation == "applications.list":
+                    raise RuntimeError("first step failed")
+                return {"operation": operation}
+
+        runtime = FakeRuntime()
+        workflow = Workflow.new(
+            "Resilient",
+            steps=(
+                WorkflowStep("applications.list", {}, continue_on_error=True),
+                WorkflowStep("processes.list", {}),
+            ),
+        )
+
+        result = WorkflowService.execute(runtime, workflow, activity_store=runtime.activity)
+        record = runtime.activity.list()[0]
+
+        self.assertFalse(result.verified)
+        self.assertEqual(result.completed_steps, 1)
+        self.assertEqual(record.status.value, "failed")
+        self.assertIn("first step failed", record.error)
+
 
 if __name__ == "__main__":
     unittest.main()
