@@ -53,7 +53,7 @@ class WorkspaceUiTests(unittest.TestCase):
         result = api.gods_eye_status()
         self.assertTrue(result["ok"])
         self.assertEqual(result["location"]["point"]["latitude"], 1.0)
-        self.assertEqual(api.host.controller.runtime.calls, [("location.read", "gods_eye.locate_me")])
+        self.assertEqual(api.host.controller.runtime.calls, [("location.read", "locations.current")])
 
 
 if __name__ == "__main__":
