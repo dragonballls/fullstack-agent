@@ -261,6 +261,243 @@ class AutoUpdateController:
         return False
 
 
+class JarvisWebApi:
+    """Small pywebview bridge for the centered Jarvis text input."""
+
+    def __init__(self, host: "FullstackJarvisHost") -> None:
+        self.host = host
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _payload(result: Any) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "text": str(getattr(result, "text", result)),
+            "needs_confirmation": bool(getattr(result, "needs_confirmation", False)),
+        }
+
+    def submit_text(self, text: str, confirmed: bool = False) -> dict[str, Any]:
+        normalized = str(text or "").strip()
+        if not normalized:
+            return {"ok": False, "error": "Enter a request first.", "needs_confirmation": False}
+        with self._lock:
+            try:
+                bridge = getattr(self.host.voice, "bridge", None)
+                if bridge is not None and not confirmed:
+                    result = bridge.handle_transcript(normalized)
+                else:
+                    result = self.host.controller.execute_request(normalized, confirmed=bool(confirmed))
+                return self._payload(result)
+            except Exception as exc:
+                LOGGER.exception("center text input request failed")
+                message = f"{type(exc).__name__}: {exc}".replace("OPENAI_API_KEY", "[secret]")
+                return {"ok": False, "error": message[:500], "needs_confirmation": False}
+
+
+TEXT_INPUT_SCRIPT = r'''
+(function () {
+  "use strict";
+  if (window.__jarvisTextInputInstalled) return;
+  window.__jarvisTextInputInstalled = true;
+
+  const style = document.createElement("style");
+  style.id = "jarvis-text-input-style";
+  style.textContent = `
+    #jarvis-text-shell {
+      position: fixed;
+      z-index: 2147483647;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(320px, calc(100vw - 36px));
+      padding: 10px;
+      border: 1px solid rgba(61,220,132,.20);
+      border-radius: 14px;
+      background: rgba(2,7,5,.46);
+      box-shadow: 0 0 24px rgba(61,220,132,.08), inset 0 0 18px rgba(61,220,132,.03);
+      backdrop-filter: blur(8px);
+      opacity: .42;
+      transition: width .22s ease, opacity .22s ease, border-color .22s ease, box-shadow .22s ease;
+      pointer-events: auto;
+      font-family: var(--mono, Consolas, monospace);
+      color: #e8f0f2;
+    }
+    #jarvis-text-shell:hover,
+    #jarvis-text-shell.jarvis-active {
+      width: min(640px, calc(100vw - 36px));
+      opacity: 1;
+      border-color: rgba(61,220,132,.56);
+      box-shadow: 0 0 34px rgba(61,220,132,.18), inset 0 0 22px rgba(61,220,132,.05);
+    }
+    #jarvis-text-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 3px 7px;
+      font-size: 9px;
+      letter-spacing: .28em;
+      color: #8fc4a8;
+      user-select: none;
+    }
+    #jarvis-text-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #3ddc84;
+      box-shadow: 0 0 10px rgba(61,220,132,.55);
+      flex: 0 0 auto;
+    }
+    #jarvis-text-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #jarvis-text-input {
+      min-width: 0;
+      flex: 1;
+      border: 1px solid rgba(143,232,184,.22);
+      outline: none;
+      border-radius: 9px;
+      padding: 12px 13px;
+      color: #e8f0f2;
+      background: rgba(0,0,0,.28);
+      font: inherit;
+      font-size: 13px;
+      letter-spacing: .04em;
+      cursor: text;
+      caret-color: #8fe8b8;
+    }
+    #jarvis-text-input::placeholder { color: #6d8580; }
+    #jarvis-text-input:focus { border-color: rgba(143,232,184,.58); box-shadow: 0 0 18px rgba(61,220,132,.10); }
+    #jarvis-text-send {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(143,232,184,.28);
+      border-radius: 9px;
+      color: #a6ffd0;
+      background: rgba(61,220,132,.06);
+      cursor: pointer;
+      font: inherit;
+      font-size: 16px;
+    }
+    #jarvis-text-send:hover { border-color: rgba(143,232,184,.68); background: rgba(61,220,132,.13); }
+    #jarvis-text-status {
+      margin: 7px 3px 0;
+      min-height: 14px;
+      max-height: 44px;
+      overflow: hidden;
+      font-size: 9px;
+      line-height: 1.45;
+      letter-spacing: .10em;
+      color: #839b94;
+      white-space: pre-wrap;
+    }
+    #jarvis-text-status.jarvis-error { color: #ff8c98; }
+    #jarvis-text-hint {
+      margin: 7px 3px 0;
+      font-size: 8px;
+      letter-spacing: .17em;
+      color: #566a64;
+      user-select: none;
+    }
+  `;
+  document.head.appendChild(style);
+
+  const shell = document.createElement("div");
+  shell.id = "jarvis-text-shell";
+  shell.innerHTML = `
+    <div id="jarvis-text-label"><span id="jarvis-text-dot"></span>JARVIS TEXT LINK</div>
+    <div id="jarvis-text-row">
+      <input id="jarvis-text-input" type="text" autocomplete="off" spellcheck="false" placeholder="Hover here and type to talk to Jarvis..." aria-label="Talk to Jarvis by text" disabled />
+      <button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button>
+    </div>
+    <div id="jarvis-text-status"></div>
+    <div id="jarvis-text-hint">ENTER — SEND &nbsp;&nbsp; ESC — CLEAR</div>
+  `;
+  document.body.appendChild(shell);
+
+  const input = shell.querySelector("#jarvis-text-input");
+  const send = shell.querySelector("#jarvis-text-send");
+  const status = shell.querySelector("#jarvis-text-status");
+  let apiReady = false;
+
+  function setActive(active) {
+    if (active) shell.classList.add("jarvis-active");
+    else if (document.activeElement !== input) shell.classList.remove("jarvis-active");
+  }
+
+  async function submit(confirmed) {
+    const text = input.value.trim();
+    if (!text || !apiReady) return;
+    setActive(true);
+    input.disabled = true;
+    send.disabled = true;
+    status.classList.remove("jarvis-error");
+    status.textContent = "PROCESSING...";
+    try {
+      let result = await window.pywebview.api.submit_text(text, !!confirmed);
+      if (result && result.needs_confirmation && !confirmed) {
+        status.textContent = result.text || "Confirmation required.";
+        const accepted = window.confirm(result.text || "Jarvis requires confirmation for this action.");
+        if (accepted) {
+          result = await window.pywebview.api.submit_text(text, true);
+        } else {
+          status.textContent = "CANCELLED";
+          result = null;
+        }
+      }
+      if (result) {
+        if (result.ok) {
+          status.textContent = result.text || "DONE";
+          input.value = "";
+        } else {
+          status.classList.add("jarvis-error");
+          status.textContent = result.error || "Jarvis request failed.";
+        }
+      }
+    } catch (error) {
+      status.classList.add("jarvis-error");
+      status.textContent = "TEXT LINK ERROR: " + String(error);
+    } finally {
+      input.disabled = false;
+      send.disabled = false;
+      input.focus();
+    }
+  }
+
+  shell.addEventListener("mouseenter", function () { setActive(true); });
+  shell.addEventListener("mouseleave", function () { setActive(false); });
+  shell.addEventListener("focusin", function () { setActive(true); });
+  shell.addEventListener("focusout", function () { setTimeout(function () { setActive(false); }, 0); });
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submit(false);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      input.value = "";
+      status.textContent = "";
+      input.blur();
+    }
+  });
+  send.addEventListener("click", function () { submit(false); });
+
+  function markReady() {
+    apiReady = !!(window.pywebview && window.pywebview.api);
+    input.disabled = !apiReady;
+    send.disabled = !apiReady;
+    if (apiReady) {
+      status.textContent = "READY — TEXT LINK ONLINE";
+    }
+  }
+
+  window.addEventListener("pywebviewready", markReady, { once: true });
+  if (window.pywebview && window.pywebview.api) markReady();
+})();
+'''
+
+
 class FullstackJarvisHost:
     """Lifecycle supervisor for the complete Jarvis Fullstack presentation."""
 
@@ -272,8 +509,13 @@ class FullstackJarvisHost:
         self.started = False
         self.stopped = False
         self._window: Any | None = None
+        self._web_api = JarvisWebApi(self)
         self._update_stop = threading.Event()
         self.updater = AutoUpdateController(self._update_stop, self._exit_for_update)
+
+    @property
+    def web_api(self) -> JarvisWebApi:
+        return self._web_api
 
     @staticmethod
     def _exit_for_update() -> None:
@@ -312,6 +554,20 @@ class FullstackJarvisHost:
         self.stopped = True
         self.started = False
 
+    @staticmethod
+    def _fullscreen_enabled() -> bool:
+        return os.environ.get("JARVIS_FULLSCREEN", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _on_window_loaded(self, *_args: Any, **_kwargs: Any) -> None:
+        window = self._window
+        if window is None:
+            return
+        try:
+            window.evaluate_js(TEXT_INPUT_SCRIPT)
+            LOGGER.info("centered Jarvis text input overlay injected")
+        except Exception:
+            LOGGER.exception("centered Jarvis text input overlay failed to inject")
+
     def run_window(self) -> None:
         """Create the native visualizer window on the foreground thread."""
         smoke = os.environ.get("JARVIS_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -325,13 +581,29 @@ class FullstackJarvisHost:
             import webview
         except ImportError as exc:
             raise RuntimeError("pywebview is required for the native Jarvis window") from exc
-        self._window = webview.create_window(
-            "Jarvis",
-            self.visualizer.url(),
-            fullscreen=True,
-            min_size=(800, 600),
-        )
-        webview.start(debug=False)
+        gui = "edgechromium" if sys.platform == "win32" else None
+        LOGGER.info("creating native Jarvis window; gui=%s fullscreen=%s url=%s", gui or "default", self._fullscreen_enabled(), self.visualizer.url())
+        window_kwargs = {
+            "title": "Jarvis",
+            "url": self.visualizer.url(),
+            "width": 1200,
+            "height": 800,
+            "fullscreen": self._fullscreen_enabled(),
+            "resizable": True,
+            "min_size": (800, 600),
+            "js_api": self.web_api,
+        }
+        self._window = webview.create_window(**window_kwargs)
+        try:
+            self._window.events.loaded += self._on_window_loaded
+        except Exception:
+            LOGGER.exception("could not attach Jarvis text input loaded callback")
+        LOGGER.info("native Jarvis window object created; entering GUI event loop")
+        if gui is None:
+            webview.start(debug=False)
+        else:
+            webview.start(gui=gui, debug=False)
+        LOGGER.info("native Jarvis GUI event loop exited")
 
 
 def main() -> int:

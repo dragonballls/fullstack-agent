@@ -5,6 +5,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
+from scripts import jarvis_desktop
 from scripts.jarvis_desktop import FullstackJarvisHost, JarvisDesktopController, VoiceAdapter, build_runtime
 
 
@@ -65,6 +66,69 @@ class JarvisDesktopTests(unittest.TestCase):
         host.stop()
         visualizer.stop.assert_called_once_with()
 
+    def test_native_window_uses_resizable_default_and_windows_edgechromium(self):
+        controller = Mock()
+        visualizer = Mock()
+        visualizer.url.return_value = "http://127.0.0.1:8790/faces/board/"
+        host = FullstackJarvisHost(controller, visualizer=visualizer, voice=Mock(), hands=Mock())
+
+        fake_webview = ModuleType("webview")
+        fake_webview.create_window = Mock(return_value=SimpleNamespace())
+        fake_webview.start = Mock()
+
+        with patch.object(sys, "platform", "win32"), patch.dict(sys.modules, {"webview": fake_webview}):
+            host.run_window()
+
+        fake_webview.create_window.assert_called_once_with(
+            title="Jarvis",
+            url="http://127.0.0.1:8790/faces/board/",
+            width=1200,
+            height=800,
+            fullscreen=False,
+            resizable=True,
+            min_size=(800, 600),
+            js_api=host.web_api,
+        )
+        fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
+        self.assertIsNotNone(host._window)
+
+    def test_text_input_api_is_exposed_to_native_window(self):
+        self.assertTrue(hasattr(jarvis_desktop, "JarvisWebApi"))
+        self.assertTrue(hasattr(jarvis_desktop, "TEXT_INPUT_SCRIPT"))
+        self.assertIn("pywebview.api.submit_text", jarvis_desktop.TEXT_INPUT_SCRIPT)
+        self.assertIn("mouseenter", jarvis_desktop.TEXT_INPUT_SCRIPT)
+        self.assertIn("keydown", jarvis_desktop.TEXT_INPUT_SCRIPT)
+
+    def test_text_input_api_routes_to_jarvis_voice_bridge(self):
+        controller = Mock()
+        controller.runtime = Mock()
+        voice = SimpleNamespace(bridge=Mock())
+        voice.bridge.handle_transcript.return_value = SimpleNamespace(needs_confirmation=False, text="done")
+        host = FullstackJarvisHost(controller, voice=voice)
+        api = host.web_api
+
+        result = api.submit_text("  hello Jarvis  ")
+
+        voice.bridge.handle_transcript.assert_called_once_with("hello Jarvis")
+        self.assertEqual(result["ok"], True)
+        self.assertEqual(result["text"], "done")
+        self.assertFalse(result["needs_confirmation"])
+
+    def test_text_input_api_falls_back_to_controller_when_voice_unavailable(self):
+        controller = Mock()
+        controller.runtime = Mock()
+        controller.execute_request.return_value = SimpleNamespace(
+            needs_confirmation=False,
+            text="controller response",
+        )
+        host = FullstackJarvisHost(controller, voice=SimpleNamespace(bridge=None))
+
+        result = host.web_api.submit_text(" run diagnostics ")
+
+        controller.execute_request.assert_called_once_with("run diagnostics", confirmed=False)
+        self.assertEqual(result["text"], "controller response")
+        self.assertFalse(result["needs_confirmation"])
+
     def test_frozen_backtalk_smoke_mode_validates_embedded_modules_without_audio_hardware(self):
         controller = Mock()
         adapter = VoiceAdapter(controller)
@@ -75,13 +139,13 @@ class JarvisDesktopTests(unittest.TestCase):
         mouth = ModuleType("backtalk.mouth")
         ptt = ModuleType("backtalk.ptt")
 
-        class Ears:  # noqa: D101
+        class Ears:
             pass
 
-        class Mouth:  # noqa: D101
+        class Mouth:
             pass
 
-        class PTTListener:  # noqa: D101
+        class PTTListener:
             pass
 
         ears.Ears = Ears

@@ -1,13 +1,40 @@
 import os
+import tempfile
 import threading
 import time
+from pathlib import Path
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from scripts.jarvis_voice_bridge import JarvisVoiceBridge
+from scripts.jarvis_voice_bridge import DEFAULT_CONFIG, JarvisVoiceBridge, _migrate_legacy_stt_default
 
 
 class JarvisVoiceBridgeTests(TestCase):
+    def test_default_stt_device_avoids_gpu_auto_detection(self):
+        self.assertEqual(DEFAULT_CONFIG["stt_device"], "cpu")
+        self.assertEqual(DEFAULT_CONFIG["stt_compute"], "int8")
+
+    def test_legacy_auto_and_float16_settings_migrate_to_cpu_int8(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config_path = Path(temp) / "backtalk.json"
+            config_path.write_text('{"stt_device": "auto", "stt_compute": "float16"}\n', encoding="utf-8")
+            with patch("scripts.jarvis_voice_bridge.BACKTALK_CONFIG", config_path), patch.dict(
+                os.environ, {"JARVIS_STT_DEVICE": ""}, clear=False
+            ):
+                migrated = _migrate_legacy_stt_default(
+                    {"stt_device": "auto", "stt_compute": "float16", "voice": "bm_lewis"}
+                )
+            self.assertEqual(migrated["stt_device"], "cpu")
+            self.assertEqual(migrated["stt_compute"], "int8")
+            saved = config_path.read_text(encoding="utf-8")
+            self.assertIn('"stt_device": "cpu"', saved)
+            self.assertIn('"stt_compute": "int8"', saved)
+
+    def test_explicit_stt_device_override_is_respected(self):
+        config = {"stt_device": "cuda", "stt_compute": "float16"}
+        with patch.dict(os.environ, {"JARVIS_STT_DEVICE": "cuda"}, clear=False):
+            self.assertEqual(_migrate_legacy_stt_default(config), config)
+
     def test_transcript_uses_existing_jarvis_controller(self):
         controller = Mock()
         controller.execute_request.return_value = Mock(needs_confirmation=False, text="done")
@@ -17,6 +44,16 @@ class JarvisVoiceBridgeTests(TestCase):
         controller.execute_request.assert_called_once_with("open calculator", confirmed=False)
         mouth.say.assert_called_once_with("done")
         self.assertIsNotNone(result)
+
+    def test_voice_output_failure_does_not_escape_speech_boundary(self):
+        controller = Mock()
+        mouth = Mock()
+        mouth.say.side_effect = RuntimeError("audio device disappeared")
+        bridge = JarvisVoiceBridge(controller=controller, ears=Mock(), mouth=mouth, ptt=Mock())
+
+        bridge._speak("hello")
+
+        mouth.say.assert_called_once_with("hello")
 
     def test_confirmation_requires_a_second_confirmed_execution(self):
         controller = Mock()
@@ -36,6 +73,19 @@ class JarvisVoiceBridgeTests(TestCase):
         self.assertEqual(controller.execute_request.call_args_list[0].kwargs, {"confirmed": False})
         self.assertEqual(controller.execute_request.call_args_list[1].kwargs, {"confirmed": True})
         self.assertEqual(mouth.say.call_count, 2)
+
+    def test_stop_closes_audio_output_when_vendor_exposes_drop_out(self):
+        controller = Mock()
+        ears = Mock()
+        mouth = Mock()
+        mouth._drop_out = Mock()
+        bridge = JarvisVoiceBridge(controller=controller, ears=ears, mouth=mouth, ptt=Mock())
+
+        bridge.stop()
+
+        mouth.shut_up.assert_called_once_with()
+        mouth.shutdown.assert_called_once_with()
+        mouth._drop_out.assert_called_once_with()
 
     def test_start_is_idempotent_with_injected_components(self):
         controller = Mock()

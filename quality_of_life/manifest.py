@@ -65,4 +65,5 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("system", "Structured system inspection and allowlisted settings", "quality_of_life.system.SystemController"))
     registry.register(ToolSpec("windows", "Windows window enumeration and management", "quality_of_life.windows.WindowsController"))
     registry.register(ToolSpec("windows_maintenance", "Guarded Windows PC diagnostics, background-process cleanup, startup management, and confirmed repairs", "windows_maintenance.facade.MaintenanceFacade"))
+    registry.register(ToolSpec("workflows", "Persistent named routines and guarded run history", "quality_of_life.workflows.WorkflowStore"))
     return registry
