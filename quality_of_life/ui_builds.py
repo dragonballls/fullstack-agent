@@ -391,7 +391,7 @@ def build_manager_script() -> str:
     .juib-title { font-size:10px; letter-spacing:.18em; }
     .juib-sub { color:#6f887f; font-size:9px; }
     .juib-actions { display:flex; gap:6px; }
-    .juib-btn { border:1px solid rgba(143,232,184,.14); border-radius:8px; padding:6px 8px; color:#9fc9b6; background:rgba(255,255,255,.02); cursor:pointer; font:9px inherit; }
+    .juib-btn { border:1px solid rgba(143,232,184,.14); border-radius:8px; padding:6px 8px; color:#9fc9b6; background:rgba(255,255,255,.02); cursor:pointer; font:9px/1.2 Inter,Segoe UI,system-ui,sans-serif; }
     .juib-btn:hover { border-color:rgba(143,232,184,.35); color:#e7fff2; }
     #jarvis-ui-build-list { overflow:auto; padding:10px; display:flex; flex-direction:column; gap:7px; }
     .juib-row { display:grid; grid-template-columns:1fr auto; gap:9px; padding:10px; border:1px solid rgba(143,232,184,.09); border-radius:10px; background:rgba(255,255,255,.018); }
