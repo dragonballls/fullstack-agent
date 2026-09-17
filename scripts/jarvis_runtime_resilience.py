@@ -14,6 +14,7 @@ class _MouthShutdown(BaseException):
 
 
 _MOUTH_SENTINEL = object()
+_OMNIROUTE_READY = threading.Event()
 
 
 class JarvisResilientWebApi:
@@ -37,6 +38,7 @@ class JarvisResilientWebApi:
             return {"ok": False, "error": "Enter a request first.", "needs_confirmation": False}
         with self._lock:
             try:
+                _ensure_omniroute_once()
                 result = self.host.controller.execute_request(normalized, confirmed=bool(confirmed))
                 return self._payload(result)
             except Exception as exc:
@@ -49,11 +51,11 @@ def _patch_mouth_instance(mouth: Any) -> None:
     if getattr(mouth, "_jarvis_lifecycle_patched", False):
         return
 
-    queue = getattr(mouth, "_q", None)
+    q = getattr(mouth, "_q", None)
     worker = getattr(mouth, "_worker", None)
-    original_get = getattr(queue, "get", None)
+    original_get = getattr(q, "get", None)
     original_shutdown = getattr(mouth, "shutdown", None)
-    if queue is None or worker is None or not callable(original_get) or not callable(original_shutdown):
+    if q is None or worker is None or not callable(original_get) or not callable(original_shutdown):
         return
 
     def get_with_shutdown(*args: Any, **kwargs: Any) -> Any:
@@ -62,7 +64,7 @@ def _patch_mouth_instance(mouth: Any) -> None:
             raise _MouthShutdown()
         return item
 
-    queue.get = get_with_shutdown
+    q.get = get_with_shutdown
 
     def shutdown(self: Any) -> None:
         if getattr(self, "_jarvis_shutdown_complete", False):
@@ -70,7 +72,7 @@ def _patch_mouth_instance(mouth: Any) -> None:
         try:
             original_shutdown()
         finally:
-            queue.put(_MOUTH_SENTINEL)
+            q.put(_MOUTH_SENTINEL)
             worker_thread = getattr(self, "_worker", None)
             if worker_thread is not None and worker_thread.is_alive() and threading.current_thread() is not worker_thread:
                 worker_thread.join(timeout=5)
@@ -105,7 +107,6 @@ class JarvisResilientVoiceBridge(_JarvisVoiceBridge):
             self._log("voice STT preflight passed before live listening")
             return True
         except Exception as exc:
-            self.stop_event.set()
             self._log(
                 "voice STT preflight failed; voice input disabled while Jarvis stays running: "
                 f"{type(exc).__name__}: {str(exc)[:400]}"
@@ -113,13 +114,17 @@ class JarvisResilientVoiceBridge(_JarvisVoiceBridge):
             return False
 
     def _run(self) -> None:
-        if not self._prepare_stt():
-            return
-        super()._run()
+        while not self.stop_event.is_set():
+            if self._prepare_stt():
+                super()._run()
+                return
+            self.stop_event.wait(15.0)
 
 
-def _ensure_omniroute() -> None:
+def _ensure_omniroute_once() -> None:
     """Start an installed local OmniRoute gateway without opening a visible console."""
+    if _OMNIROUTE_READY.is_set():
+        return
     if os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() in {"0", "false", "no", "off"}:
         return
     try:
@@ -128,6 +133,7 @@ def _ensure_omniroute() -> None:
 
         lifecycle = OmniRouteLifecycle(CloudModelRouter.omniroute_base_url())
         lifecycle.ensure_available()
+        _OMNIROUTE_READY.set()
     except Exception as exc:
         try:
             from scripts.jarvis_voice_bridge import _log
@@ -242,12 +248,12 @@ TEXT_INPUT_RESILIENCE_SCRIPT = r'''
   input.addEventListener("keydown", blockCinematicSpace);
   input.addEventListener("keyup", blockCinematicSpace);
   input.addEventListener("keypress", blockCinematicSpace);
-  document.addEventListener("keydown", function (event) {
+  window.addEventListener("keydown", function (event) {
     if (document.activeElement === input && (event.key === " " || event.code === "Space")) {
       event.stopImmediatePropagation();
     }
   }, true);
-  document.addEventListener("keyup", function (event) {
+  window.addEventListener("keyup", function (event) {
     if (document.activeElement === input && (event.key === " " || event.code === "Space")) {
       event.stopImmediatePropagation();
     }
@@ -265,4 +271,4 @@ def install_desktop_resilience() -> None:
         jarvis_desktop.TEXT_INPUT_SCRIPT + "\n" + TEXT_INPUT_RESILIENCE_SCRIPT
     )
     voice_module.JarvisVoiceBridge = JarvisResilientVoiceBridge
-    threading.Thread(target=_ensure_omniroute, name="jarvis-omniroute-start", daemon=True).start()
+    threading.Thread(target=_ensure_omniroute_once, name="jarvis-omniroute-start", daemon=True).start()
