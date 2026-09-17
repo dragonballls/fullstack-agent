@@ -48,6 +48,16 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertIn("concurrency:", text, name)
             self.assertIn("cancel-in-progress: true", text, name)
 
+    def test_pr_test_workflows_do_not_duplicate_feature_branch_runs(self):
+        for name in (
+            "quality-of-life-tests.yml",
+            "integration-tests.yml",
+            "self-coding-tests.yml",
+        ):
+            workflow = (Path(".github/workflows") / name).read_text(encoding="utf-8")
+            self.assertIn("push:\n    branches: [main]", workflow, name)
+            self.assertIn("pull_request:", workflow, name)
+
 
 if __name__ == "__main__":
     unittest.main()
