@@ -159,7 +159,7 @@ jobs:
           JARVIS_ALLOW_HEADLESS_GUI: '1'
         run: ./scripts/verify_windows_gui_smoke.ps1
       - name: Generate signed Jarvis.exe build attestation
-        uses: actions/attest@v4
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-path: dist/Jarvis.exe
       - name: Upload raw Jarvis.exe build artifact
