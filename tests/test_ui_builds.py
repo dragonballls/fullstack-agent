@@ -95,6 +95,33 @@ class UIBuildStoreTests(unittest.TestCase):
             self.assertEqual(store.active().id, DEFAULT_BUILD_ID)
             self.assertEqual(store.active().id, json.loads((Path(tmp) / "state.json").read_text(encoding="utf-8"))["active"])
 
+    def test_no_console_entrypoint_installs_ui_build_manager(self):
+        entrypoint = Path("scripts/jarvis_desktop.pyw").read_text(encoding="utf-8")
+        self.assertIn("from quality_of_life.ui_builds import install as install_ui_builds", entrypoint)
+        self.assertIn("install_ui_builds(_desktop)", entrypoint)
+
+    def test_manager_is_additive_to_the_existing_web_api_and_script(self):
+        from quality_of_life import ui_builds, workspace_ui
+
+        class BaseApi:
+            def __init__(self, host):
+                self.host = host
+
+            def submit_text(self, text, confirmed=False):
+                return {"text": text, "confirmed": confirmed}
+
+        desktop = type("Desktop", (), {})()
+        desktop.JarvisWebApi = BaseApi
+        desktop.TEXT_INPUT_SCRIPT = "ORIGINAL_COMMAND_SURFACE"
+        workspace_ui.install(desktop)
+        ui_builds.install(desktop)
+
+        self.assertIn("ORIGINAL_COMMAND_SURFACE", desktop.TEXT_INPUT_SCRIPT)
+        self.assertIn("jarvis-workspace-shell", desktop.TEXT_INPUT_SCRIPT)
+        self.assertIn("UI BUILD GALLERY", desktop.TEXT_INPUT_SCRIPT)
+        self.assertTrue(hasattr(desktop.JarvisWebApi, "submit_text"))
+        self.assertTrue(hasattr(desktop.JarvisWebApi, "ui_builds_catalog"))
+
     def test_manager_script_exposes_catalog_save_switch_and_rollback(self):
         script = build_manager_script()
         for token in (
