@@ -11,12 +11,19 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertTrue(state["command_bar_visible"])
         self.assertIn("map", state["panels"])
 
-    def test_workspace_script_contains_persistent_command_and_workspace_controls(self):
+    def test_bridge_rejects_unknown_workspace(self):
+        bridge = WorkspaceBridge()
+        with self.assertRaises(ValueError):
+            bridge.activate("not-a-workspace")
+
+    def test_workspace_script_preserves_existing_command_surface_and_persists_view(self):
         script = workspace_script()
-        self.assertIn("God's Eye", script)
-        self.assertIn("command", script)
-        self.assertIn("pywebview.api.submit_text", script)
-        self.assertIn("workspaceState", script)
+        self.assertIn("GOD'S EYE", script)
+        self.assertIn("jarvis-text-input", script)
+        self.assertIn("localStorage", script)
+        self.assertIn("jarvis.activeWorkspace", script)
+        self.assertIn("activate_workspace", script)
+        self.assertIn("gods_eye_status", script)
 
 
 if __name__ == "__main__":
