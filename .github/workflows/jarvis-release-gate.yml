@@ -165,6 +165,9 @@ jobs:
           finally {
             if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
           }
+      - name: Smoke-test the actual native Jarvis window controls
+        shell: pwsh
+        run: ./scripts/verify_windows_gui_smoke.ps1
       - name: Upload raw Jarvis.exe build artifact
         uses: actions/upload-artifact@v4
         with:
