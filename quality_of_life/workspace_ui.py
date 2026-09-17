@@ -50,7 +50,7 @@ def install(desktop_module: Any) -> None:
             """Return a safe UI status without inventing a location."""
             try:
                 runtime = self.host.controller.runtime
-                result = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.locate_me")
+                result = runtime.dispatch(Capability.LOCATION_READ, "locations.current")
                 return {"ok": True, "location": result}
             except Exception as exc:
                 return {
