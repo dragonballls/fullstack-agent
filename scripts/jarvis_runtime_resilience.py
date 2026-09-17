@@ -9,7 +9,7 @@ from typing import Any
 from scripts.jarvis_voice_bridge import JarvisVoiceBridge as _JarvisVoiceBridge
 
 
-class _MouthShutdown(BaseException):
+class _MouthShutdown(SystemExit):
     """Private control exception used only to terminate the Backtalk worker."""
 
 
@@ -142,9 +142,6 @@ def _ensure_omniroute_once() -> None:
             pass
 
 
-# Runs after the original Fullstack text-link script so its existing
-# submission/confirmation behavior is preserved and only the interaction
-# contract is changed.
 TEXT_INPUT_RESILIENCE_SCRIPT = r'''
 (function () {
   "use strict";
