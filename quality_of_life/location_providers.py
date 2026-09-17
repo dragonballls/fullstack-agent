@@ -89,5 +89,5 @@ class LocationProviderRegistry:
 
 def _safe_text(value: object, limit: int) -> str:
     text = str(value or "").replace("\r", " ").replace("\n", " ").strip()
-    text = re.sub(r"(?i)(token|api[_-]?key|authorization|password)\s*[=:]\s*(?:Bearer\s+)?([^\s,;]+)", r"\\1=[redacted]", text)
+    text = re.sub(r"(?i)(token|api[_-]?key|authorization|password)\s*[=:]\s*(?:Bearer\s+)?([^\s,;]+)", r"\1=[redacted]", text)
     return text[:limit]
