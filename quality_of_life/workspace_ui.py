@@ -138,10 +138,14 @@ def workspace_script() -> str:
   const views = [...shell.querySelectorAll(".jw-view")];
   const tabs = [...shell.querySelectorAll(".jw-tab")];
   const api = () => window.pywebview && window.pywebview.api;
+  const storageKey = "jarvis.activeWorkspace";
 
-  function setView(name) {
+  function setView(name, persist = true) {
     views.forEach(v => v.classList.toggle("active", v.dataset.view === name));
     tabs.forEach(t => t.classList.toggle("active", t.dataset.workspace === name));
+    if (persist) {
+      try { window.localStorage.setItem(storageKey, name); } catch (_) {}
+    }
     if (api() && api().activate_workspace) api().activate_workspace(name).catch(() => {});
     if (name === "gods-eye" && api() && api().gods_eye_status) refreshLocation();
   }
@@ -169,6 +173,14 @@ def workspace_script() -> str:
   }));
 
   window.jarvisWorkspaceState = { setView, refreshLocation };
-  if (api() && api().workspace_state) api().workspace_state().then(state => state && setView(state.active || "home")).catch(() => {});
+  let restored = "home";
+  try {
+    const candidate = window.localStorage.getItem(storageKey);
+    if (["home", "gods-eye", "coding", "browser", "system", "workflows"].includes(candidate)) restored = candidate;
+  } catch (_) {}
+  setView(restored, false);
+  if (api() && api().workspace_state) api().workspace_state().then(state => {
+    if (!window.localStorage.getItem(storageKey) && state && state.active) setView(state.active, false);
+  }).catch(() => {});
 })();
 '''
