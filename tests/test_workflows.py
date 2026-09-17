@@ -157,6 +157,12 @@ class WorkflowStoreTests(unittest.TestCase):
         self.assertEqual(record.status.value, "failed")
         self.assertIn("first step failed", record.error)
 
+    def test_workflow_error_summary_redacts_common_secret_patterns(self):
+        self.assertEqual(
+            WorkflowService._safe_error(RuntimeError("token=SECRET123 authorization=Bearer SECRET456")),
+            "token=[redacted] authorization=[redacted]",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
