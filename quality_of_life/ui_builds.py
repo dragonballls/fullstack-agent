@@ -494,11 +494,19 @@ def build_manager_script() -> str:
       list.querySelectorAll(".juib-activate").forEach(button => {
         button.addEventListener("click", async () => {
           const id = button.dataset.id;
+          let activatedPayload = null;
           try {
-            const payload = await api().ui_builds_activate(id);
-            await applyPayload(payload);
+            activatedPayload = await api().ui_builds_activate(id);
+            await applyPayload(activatedPayload);
             await refresh();
           } catch (error) {
+            if (activatedPayload && api().ui_builds_rollback) {
+              try {
+                const fallback = await api().ui_builds_rollback();
+                await applyPayload(fallback);
+                await refresh();
+              } catch (_) {}
+            }
             window.alert("Could not activate UI build: " + String(error && error.message || error));
           }
         });
@@ -547,18 +555,20 @@ def build_manager_script() -> str:
 
   async function hydrate() {
     if (!api() || !api().ui_builds_active) return;
+    let activePayload = null;
     try {
-      const payload = await api().ui_builds_active();
-      await applyPayload(payload);
+      activePayload = await api().ui_builds_active();
+      await applyPayload(activePayload);
       refresh();
     } catch (_) {
-      // A broken optional build never remains selected across restarts.
-      try {
-        const fallback = await api().ui_builds_rollback();
-        await applyPayload(fallback);
-        refresh();
-      } catch (_) {
-        // Default/base Jarvis UI remains authoritative even if the optional manager fails.
+      if (activePayload && api().ui_builds_rollback) {
+        try {
+          const fallback = await api().ui_builds_rollback();
+          await applyPayload(fallback);
+          refresh();
+        } catch (_) {
+          // Default/base Jarvis UI remains authoritative even if the optional manager fails.
+        }
       }
     }
   }
