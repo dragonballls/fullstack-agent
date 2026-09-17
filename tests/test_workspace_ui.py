@@ -134,6 +134,48 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertIn("const state = await api().workspace_state()", script)
         self.assertIn("setView(target, false)", script)
 
+    def test_workspace_api_exposes_read_only_capability_catalog(self):
+        class FakeRuntime:
+            def dispatch(self, capability, operation):
+                return {"point": None, "permitted": False}
+
+            def activity_snapshot(self, limit=20):
+                return []
+
+            def activity_cancel(self, activity_id):
+                return {"id": activity_id, "status": "running", "cancel_requested": True}
+
+        class FakeController:
+            def __init__(self):
+                self.runtime = FakeRuntime()
+
+        class FakeHost:
+            def __init__(self):
+                self.controller = FakeController()
+
+        desktop = type("Desktop", (), {})()
+        from quality_of_life import workspace_ui
+        base_api = type("BaseApi", (), {"__init__": lambda self, host: setattr(self, "host", host)})
+        desktop.JarvisWebApi = base_api
+        desktop.TEXT_INPUT_SCRIPT = ""
+        workspace_ui.install(desktop)
+        api = desktop.JarvisWebApi(FakeHost())
+
+        catalog = api.capability_catalog()
+        names = {item["name"] for item in catalog}
+
+        self.assertIn("self_coding.run", names)
+        self.assertIn("devices.screen", names)
+        self.assertIn("accounts.connect", names)
+        self.assertTrue(all({"name", "risk", "description"} <= set(item) for item in catalog))
+        self.assertTrue(all("OPENAI_API_KEY" not in str(item) for item in catalog))
+
+    def test_workspace_script_exposes_capability_index_without_direct_tool_execution(self):
+        script = workspace_script()
+        self.assertIn("capability_catalog", script)
+        self.assertIn("COMMAND INDEX", script)
+        self.assertNotIn("run_operation", script)
+
 
 if __name__ == "__main__":
     unittest.main()
