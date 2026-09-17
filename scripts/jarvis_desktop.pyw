@@ -14,7 +14,11 @@ from scripts.jarvis_runtime_resilience import install_desktop_resilience  # noqa
 
 install_desktop_resilience()
 
-from scripts.jarvis_desktop import main  # noqa: E402
+import scripts.jarvis_desktop as _desktop  # noqa: E402
+from quality_of_life.workspace_ui import install as install_workspace_ui  # noqa: E402
+
+install_workspace_ui(_desktop)
+main = _desktop.main
 
 
 if __name__ == "__main__":
