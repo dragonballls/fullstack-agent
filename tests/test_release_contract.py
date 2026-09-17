@@ -36,6 +36,18 @@ class ReleaseContractTests(unittest.TestCase):
         publish = workflow.index("softprops/action-gh-release@v2")
         self.assertLess(verify, publish)
 
+    def test_pr_workflows_cancel_stale_runs_for_the_same_ref(self):
+        for name in (
+            "quality-of-life-tests.yml",
+            "integration-tests.yml",
+            "self-coding-tests.yml",
+            "jarvis-release-gate.yml",
+        ):
+            workflow = Path(".github/workflows") / name
+            text = workflow.read_text(encoding="utf-8")
+            self.assertIn("concurrency:", text, name)
+            self.assertIn("cancel-in-progress: true", text, name)
+
 
 if __name__ == "__main__":
     unittest.main()
