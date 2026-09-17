@@ -102,16 +102,14 @@ class JarvisDesktopTests(unittest.TestCase):
     def test_text_input_api_routes_to_jarvis_voice_bridge(self):
         controller = Mock()
         controller.runtime = Mock()
-        voice = Mock()
-        bridge = Mock()
-        bridge.handle_transcript.return_value = SimpleNamespace(needs_confirmation=False, text="done")
-        voice.bridge = bridge
+        voice = SimpleNamespace(bridge=Mock())
+        voice.bridge.handle_transcript.return_value = SimpleNamespace(needs_confirmation=False, text="done")
         host = FullstackJarvisHost(controller, voice=voice)
         api = host.web_api
 
         result = api.submit_text("  hello Jarvis  ")
 
-        bridge.handle_transcript.assert_called_once_with("hello Jarvis")
+        voice.bridge.handle_transcript.assert_called_once_with("hello Jarvis")
         self.assertEqual(result["ok"], True)
         self.assertEqual(result["text"], "done")
         self.assertFalse(result["needs_confirmation"])
@@ -123,7 +121,7 @@ class JarvisDesktopTests(unittest.TestCase):
             needs_confirmation=False,
             text="controller response",
         )
-        host = FullstackJarvisHost(controller, voice=Mock())
+        host = FullstackJarvisHost(controller, voice=SimpleNamespace(bridge=None))
 
         result = host.web_api.submit_text(" run diagnostics ")
 
