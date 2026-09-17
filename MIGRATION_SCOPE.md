@@ -1,1 +1,1 @@
-Temporary migration marker; removed after migration validation.
+Migration scope marker; remove before final merge.
