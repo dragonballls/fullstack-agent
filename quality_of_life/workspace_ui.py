@@ -13,6 +13,7 @@ from .capabilities import OPERATION_CATALOG
 from .location_providers import LocationProviderRegistry
 from .permissions import Capability
 from .tool_broker import UNIVERSAL_OPERATION_SPECS
+from .workflows import WorkflowStore
 from .workspace import WorkspaceState, WorkspaceType
 
 
@@ -43,6 +44,7 @@ def install(desktop_module: Any) -> None:
             base_api.__init__(self, host)
             WorkspaceBridge.__init__(self)
             self._location_providers = LocationProviderRegistry()
+            self._workflow_store = WorkflowStore()
 
         def workspace_state(self) -> dict[str, object]:
             return WorkspaceBridge.workspace_state(self)
@@ -77,6 +79,21 @@ def install(desktop_module: Any) -> None:
 
         def register_gods_eye_provider(self, kind: str, provider: Any) -> None:
             self._location_providers.register(kind, provider)
+
+        def workflow_catalog(self) -> list[dict[str, object]]:
+            """Return persisted workflows without exposing execution primitives."""
+            items = []
+            for workflow in self._workflow_store.list():
+                items.append(
+                    {
+                        "id": workflow.id,
+                        "name": workflow.name,
+                        "aliases": list(workflow.aliases),
+                        "enabled": workflow.enabled,
+                        "last_run": workflow.last_run.as_dict() if workflow.last_run else None,
+                    }
+                )
+            return items
 
         def capability_catalog(self) -> list[dict[str, object]]:
             """Return a read-only catalog so every guarded feature is discoverable."""
@@ -219,7 +236,7 @@ def workspace_script() -> str:
       <section class="jw-view" data-view="coding"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">CODING AGENT</div><h1>Build • Test • Verify</h1><p>Jarvis keeps the command link alive while coding tasks run. Progress, tool activity, and failures can be surfaced here without replacing the underlying agent.</p></div></div></section>
       <section class="jw-view" data-view="browser"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">BROWSER WORKSPACE</div><h1>Research and action</h1><p>Browser tasks can remain visible while the command bar stays available for follow-up instructions.</p></div></div></section>
       <section class="jw-view" data-view="system"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">SYSTEM HEALTH</div><h1>Observe before changing</h1><p>System maintenance should surface resource state, active applications, and proposed changes before mutating anything.</p></div></div></section>
-      <section class="jw-view" data-view="workflows"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">WORKFLOW ENGINE</div><h1>Queued agent work</h1><p>Long-running tasks belong in workflows with progress, cancellation, and recovery instead of disappearing behind a busy screen.</p></div></div></section>
+      <section class="jw-view" data-view="workflows"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">WORKFLOW ENGINE</div><h1>Queued agent work</h1><p>Saved routines appear here. Running one uses the persistent command bar and the same confirmation safeguards as any other Jarvis command.</p><div class="jw-list" id="jw-workflows-list"><div class="jw-row"><b>No saved workflows</b><small>ready for commands</small></div></div></div></div></section>
     </div>
   `;
   document.body.appendChild(shell);
@@ -274,6 +291,34 @@ def workspace_script() -> str:
     }
     if (api() && api().activate_workspace) api().activate_workspace(name).catch(() => {});
     if (name === "gods-eye" && api() && api().gods_eye_status) refreshLocation();
+  }
+
+  async function refreshWorkflows() {
+    if (!api() || !api().workflow_catalog) return;
+    const list = document.getElementById("jw-workflows-list");
+    if (!list) return;
+    try {
+      const workflows = await api().workflow_catalog();
+      if (!Array.isArray(workflows) || !workflows.length) {
+        list.innerHTML = '<div class="jw-row"><b>No saved workflows</b><small>ready for commands</small></div>';
+        return;
+      }
+      list.innerHTML = workflows.map(item => {
+        const name = String(item.name || "Workflow").replace(/[<>]/g, "");
+        const enabled = item.enabled ? "ENABLED" : "DISABLED";
+        const last = item.last_run ? (item.last_run.success ? "last run succeeded" : (item.last_run.needs_confirmation ? "awaiting confirmation" : "last run failed")) : "never run";
+        return '<div class="jw-row"><div><b>' + name + '</b><small>' + enabled + ' · ' + last + '</small></div><button class="jw-chip" data-workflow-command="run my ' + name.replace(/["']/g, "") + '">RUN</button></div>';
+      }).join("");
+      list.querySelectorAll("[data-workflow-command]").forEach(button => button.addEventListener("click", () => {
+        const input = document.getElementById("jarvis-text-input");
+        if (input) {
+          input.value = button.getAttribute("data-workflow-command") || "";
+          input.focus();
+        }
+      }));
+    } catch (_) {
+      list.innerHTML = '<div class="jw-row"><small>Workflow store unavailable; command link remains online.</small></div>';
+    }
   }
 
   async function refreshActivity() {
@@ -361,6 +406,8 @@ def workspace_script() -> str:
   hydrateWorkspace();
   window.addEventListener("pywebviewready", hydrateWorkspace, { once: true });
   refreshActivity();
+  refreshWorkflows();
   setInterval(refreshActivity, 1500);
+  setInterval(refreshWorkflows, 3000);
 })();
 '''
