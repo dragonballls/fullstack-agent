@@ -38,7 +38,7 @@ class WorkspaceUiTests(unittest.TestCase):
 
             def dispatch(self, capability, operation):
                 self.calls.append((capability.value, operation))
-                return {"point": {"latitude": 1.0, "longitude": 2.0}}
+                return {"point": {"latitude": 1.0, "longitude": 2.0}, "permitted": True, "source": "system"}
 
         class FakeController:
             def __init__(self):
@@ -100,6 +100,33 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertIn("activity_cancel", script)
         self.assertIn("gods_eye_providers", script)
         self.assertIn("ACTIVITY", script)
+
+    def test_gods_eye_status_rejects_unpermitted_location_result(self):
+        class FakeRuntime:
+            def dispatch(self, capability, operation):
+                return {"point": {"latitude": 1.0, "longitude": 2.0}, "permitted": False}
+
+        class FakeController:
+            def __init__(self):
+                self.runtime = FakeRuntime()
+
+        class FakeHost:
+            def __init__(self):
+                self.controller = FakeController()
+
+        desktop = type("Desktop", (), {})()
+        from quality_of_life import workspace_ui
+        base_api = type("BaseApi", (), {"__init__": lambda self, host: setattr(self, "host", host)})
+        desktop.JarvisWebApi = base_api
+        desktop.TEXT_INPUT_SCRIPT = ""
+        workspace_ui.install(desktop)
+        api = desktop.JarvisWebApi(FakeHost())
+
+        result = api.gods_eye_status()
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["available"])
+        self.assertIn("authorized", result["reason"].casefold())
 
 
 if __name__ == "__main__":
