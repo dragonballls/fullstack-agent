@@ -418,24 +418,38 @@ class WorkflowService:
                             step="Waiting for confirmation",
                         )
                 elif activity is not None:
-                    activity = activity_store.update(
-                        activity.id,
-                        status=ActivityStatus.FAILED,
-                        step=step.operation,
-                        error=_safe_error(exc),
-                    )
+                    if step.continue_on_error:
+                        activity = activity_store.update(
+                            activity.id,
+                            status=ActivityStatus.RUNNING,
+                            step=f"Error in {step.operation}; continuing",
+                        )
+                    else:
+                        activity = activity_store.update(
+                            activity.id,
+                            status=ActivityStatus.FAILED,
+                            step=step.operation,
+                            error=_safe_error(exc),
+                        )
                 if not step.continue_on_error:
                     break
             except Exception as exc:
                 verified = False
                 errors.append(f"{step.operation}: {_safe_error(exc)}")
                 if activity is not None:
-                    activity = activity_store.update(
-                        activity.id,
-                        status=ActivityStatus.FAILED,
-                        step=step.operation,
-                        error=_safe_error(exc),
-                    )
+                    if step.continue_on_error:
+                        activity = activity_store.update(
+                            activity.id,
+                            status=ActivityStatus.RUNNING,
+                            step=f"Error in {step.operation}; continuing",
+                        )
+                    else:
+                        activity = activity_store.update(
+                            activity.id,
+                            status=ActivityStatus.FAILED,
+                            step=step.operation,
+                            error=_safe_error(exc),
+                        )
                 if not step.continue_on_error:
                     break
 
