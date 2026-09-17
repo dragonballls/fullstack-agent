@@ -73,6 +73,25 @@ class LocationProviderRegistryTests(unittest.TestCase):
 
         self.assertFalse(registry.status("phone").live)
 
+    def test_provider_detail_masks_common_secret_patterns(self):
+        class Provider:
+            def status(self):
+                return {
+                    "available": True,
+                    "authorized": True,
+                    "detail": "token=SECRET123 authorization=Bearer SECRET456",
+                }
+
+        registry = LocationProviderRegistry()
+        registry.register("phone", Provider())
+
+        detail = registry.status("phone").detail
+
+        self.assertNotIn("SECRET123", detail)
+        self.assertNotIn("SECRET456", detail)
+        self.assertIn("[redacted]", detail)
+
+
 
 if __name__ == "__main__":
     unittest.main()
