@@ -21,11 +21,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "mic_mode": "ptt",
     "voice": "bm_lewis",
     "stt_model": "small.en",
-    "stt_device": "auto",
+    "stt_device": "cpu",
     "stt_compute": "int8",
     "greeting": "Hello. I'm online and ready.",
     "greeting_open_mic": "",
 }
+
+
+def _log(message: str) -> None:
+    try:
+        log_dir = APP_DIR / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with (log_dir / "voice-bridge.log").open("a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+    except OSError:
+        pass
 
 
 def _configure_vendor() -> Path:
@@ -61,6 +71,22 @@ def _configure_vendor() -> Path:
     return vendor
 
 
+def _migrate_legacy_stt_default(config: dict[str, Any]) -> dict[str, Any]:
+    """Move Jarvis-generated legacy `auto` STT settings to stable CPU use."""
+    if os.environ.get("JARVIS_STT_DEVICE"):
+        return config
+    if str(config.get("stt_device", "")).strip().lower() != "auto":
+        return config
+    migrated = dict(config)
+    migrated["stt_device"] = "cpu"
+    try:
+        BACKTALK_CONFIG.write_text(json.dumps(migrated, indent=2) + "\n", encoding="utf-8")
+        _log("migrated legacy STT device auto -> cpu for stable Windows voice startup")
+    except OSError as exc:
+        _log(f"could not persist STT device migration: {type(exc).__name__}: {exc}")
+    return migrated
+
+
 class JarvisVoiceBridge:
     """Run Fullstack ears/mouth while every request goes to Jarvis."""
 
@@ -90,12 +116,15 @@ class JarvisVoiceBridge:
             and self.ptt is None
         )
         if needs_vendor:
-            _configure_vendor()
+            vendor = _configure_vendor()
             try:
                 from backtalk.config import CFG
-                self.config = dict(CFG)
-            except Exception:
+                self.config = _migrate_legacy_stt_default(dict(CFG))
+                CFG["stt_device"] = self.config["stt_device"]
+                _log(f"Backtalk voice components configured from {vendor}; stt_device={CFG['stt_device']}")
+            except Exception as exc:
                 self.config = dict(DEFAULT_CONFIG)
+                _log(f"could not load Backtalk config: {type(exc).__name__}: {exc}")
         else:
             self.config = dict(DEFAULT_CONFIG)
 
@@ -141,7 +170,10 @@ class JarvisVoiceBridge:
     def _speak(self, text: str) -> None:
         if self.mouth is None or not text:
             return
-        self.mouth.say(text)
+        try:
+            self.mouth.say(text)
+        except Exception as exc:
+            _log(f"speech output error: {type(exc).__name__}: {exc}")
 
     def handle_transcript(self, text: str) -> Any:
         text = text.strip()
@@ -196,26 +228,31 @@ class JarvisVoiceBridge:
 
     @staticmethod
     def _log(message: str) -> None:
-        try:
-            log_dir = APP_DIR / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            with (log_dir / "voice-bridge.log").open("a", encoding="utf-8") as handle:
-                handle.write(message + "\n")
-        except OSError:
-            pass
+        _log(message)
 
     def stop(self) -> None:
         if self.stopped:
             return
         self.stop_event.set()
         try:
+            if self.ptt is not None:
+                listener = getattr(self.ptt, "_listener", None)
+                stop_listener = getattr(listener, "stop", None)
+                if callable(stop_listener):
+                    stop_listener()
+        except Exception as exc:
+            self._log(f"PTT listener shutdown failed: {type(exc).__name__}: {exc}")
+        try:
             if self.mouth is not None:
                 self.mouth.shut_up()
                 shutdown = getattr(self.mouth, "shutdown", None)
                 if callable(shutdown):
                     shutdown()
-        except Exception:
-            self._log("mouth shutdown failed")
+                drop_out = getattr(self.mouth, "_drop_out", None)
+                if callable(drop_out):
+                    drop_out()
+        except Exception as exc:
+            self._log(f"mouth shutdown failed: {type(exc).__name__}: {exc}")
         if self.thread is not None and self.thread.is_alive():
             self.thread.join(timeout=3)
         self.stopped = True
