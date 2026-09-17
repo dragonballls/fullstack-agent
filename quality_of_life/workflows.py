@@ -10,6 +10,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
+from .activity import ActivityStatus, ActivityStore
 from .capabilities import operation
 
 
@@ -331,7 +332,14 @@ class WorkflowService:
     """Execute stored workflow steps exclusively through the runtime dispatcher."""
 
     @staticmethod
-    def execute(runtime: Any, workflow: Workflow, *, confirmed: bool = False, store: WorkflowStore | None = None) -> WorkflowExecutionResult:
+    def execute(
+        runtime: Any,
+        workflow: Workflow,
+        *,
+        confirmed: bool = False,
+        store: WorkflowStore | None = None,
+        activity_store: ActivityStore | None = None,
+    ) -> WorkflowExecutionResult:
         run_id = str(uuid4())
         started = _now()
         errors: list[str] = []
@@ -339,16 +347,47 @@ class WorkflowService:
         completed = 0
         needs_confirmation = False
         verified = True
+        cancelled = False
+
+        if activity_store is None:
+            factory = getattr(runtime, "activity_store", None)
+            if callable(factory):
+                activity_store = factory()
+        activity = activity_store.create(workflow.name) if activity_store is not None else None
+        if activity is not None:
+            activity = activity_store.update(activity.id, status=ActivityStatus.RUNNING, step="Starting")
 
         for step in workflow.steps:
+            if activity is not None:
+                observed = activity_store.get(activity.id)
+                if observed is not None and observed.cancel_requested:
+                    activity = activity_store.acknowledge_cancel(activity.id)
+                    cancelled = True
+                    verified = False
+                    errors.append("workflow cancelled")
+                    break
+
             spec = operation(step.operation)
             protected = runtime.policy.needs_confirmation(spec.capability)
             if protected and not confirmed:
                 needs_confirmation = True
                 verified = False
                 errors.append(f"confirmation required: {step.operation}")
+                if activity is not None:
+                    activity = activity_store.update(
+                        activity.id,
+                        status=ActivityStatus.WAITING,
+                        step="Waiting for confirmation",
+                    )
                 break
             try:
+                if activity is not None:
+                    activity = activity_store.update(
+                        activity.id,
+                        status=ActivityStatus.RUNNING,
+                        progress=int((completed / len(workflow.steps)) * 100),
+                        step=step.operation,
+                    )
                 if protected and confirmed:
                     result = runtime.orchestrator.run(
                         spec.capability,
@@ -360,16 +399,43 @@ class WorkflowService:
                     result = runtime.dispatch(spec.capability, step.operation, **dict(step.arguments))
                 outputs.append(f"{step.operation}: {result}")
                 completed += 1
+                if activity is not None:
+                    activity = activity_store.update(
+                        activity.id,
+                        status=ActivityStatus.RUNNING,
+                        progress=int((completed / len(workflow.steps)) * 100),
+                        step=step.operation,
+                    )
             except PermissionError as exc:
                 verified = False
                 errors.append(f"{step.operation}: {_safe_error(exc)}")
                 if "confirmation" in str(exc).casefold() and not confirmed:
                     needs_confirmation = True
+                    if activity is not None:
+                        activity = activity_store.update(
+                            activity.id,
+                            status=ActivityStatus.WAITING,
+                            step="Waiting for confirmation",
+                        )
+                elif activity is not None:
+                    activity = activity_store.update(
+                        activity.id,
+                        status=ActivityStatus.FAILED,
+                        step=step.operation,
+                        error=_safe_error(exc),
+                    )
                 if not step.continue_on_error:
                     break
             except Exception as exc:
                 verified = False
                 errors.append(f"{step.operation}: {_safe_error(exc)}")
+                if activity is not None:
+                    activity = activity_store.update(
+                        activity.id,
+                        status=ActivityStatus.FAILED,
+                        step=step.operation,
+                        error=_safe_error(exc),
+                    )
                 if not step.continue_on_error:
                     break
 
@@ -382,6 +448,22 @@ class WorkflowService:
             errors=tuple(errors[:8]),
             needs_confirmation=needs_confirmation,
         )
+        if activity is not None and not cancelled and not needs_confirmation:
+            final_status = ActivityStatus.SUCCEEDED if summary.success else ActivityStatus.FAILED
+            activity = activity_store.update(
+                activity.id,
+                status=final_status,
+                progress=100 if summary.success else int((completed / len(workflow.steps)) * 100),
+                step="Complete" if summary.success else "Failed",
+                error=summary.errors[0] if not summary.success and summary.errors else None,
+            )
         if store is not None:
             store.record_run(workflow.id, summary)
-        return WorkflowExecutionResult(run_id, summary.success, needs_confirmation, completed, tuple(outputs[:32]), summary.errors)
+        return WorkflowExecutionResult(
+            run_id,
+            summary.success,
+            needs_confirmation,
+            completed,
+            tuple(outputs[:32]),
+            summary.errors,
+        )
