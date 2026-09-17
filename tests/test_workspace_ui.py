@@ -128,6 +128,12 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertIn("authorized", result["reason"].casefold())
 
+    def test_workspace_restore_hydrates_backend_state_before_activation(self):
+        script = workspace_script()
+        self.assertIn("async function hydrateWorkspace()", script)
+        self.assertIn("const state = await api().workspace_state()", script)
+        self.assertIn("setView(target, false)", script)
+
 
 if __name__ == "__main__":
     unittest.main()
