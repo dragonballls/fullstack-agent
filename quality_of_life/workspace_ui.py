@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .permissions import Capability
 from .workspace import WorkspaceState, WorkspaceType
 
 
@@ -49,7 +50,7 @@ def install(desktop_module: Any) -> None:
             """Return a safe UI status without inventing a location."""
             try:
                 runtime = self.host.controller.runtime
-                result = runtime.dispatch("location.read", "gods_eye.locate_me")
+                result = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.locate_me")
                 return {"ok": True, "location": result}
             except Exception as exc:
                 return {
