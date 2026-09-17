@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .location_providers import LocationProviderRegistry
 from .permissions import Capability
 from .workspace import WorkspaceState, WorkspaceType
 
@@ -39,6 +40,7 @@ def install(desktop_module: Any) -> None:
         def __init__(self, host: Any) -> None:
             base_api.__init__(self, host)
             WorkspaceBridge.__init__(self)
+            self._location_providers = LocationProviderRegistry()
 
         def workspace_state(self) -> dict[str, object]:
             return WorkspaceBridge.workspace_state(self)
@@ -58,6 +60,47 @@ def install(desktop_module: Any) -> None:
                     "available": False,
                     "reason": f"Location provider unavailable: {type(exc).__name__}",
                 }
+
+        def activity_snapshot(self, limit: int = 20) -> list[dict[str, object]]:
+            return self.host.controller.runtime.activity_snapshot(limit)
+
+        def activity_cancel(self, activity_id: str) -> dict[str, object]:
+            return self.host.controller.runtime.activity_cancel(activity_id)
+
+        def register_gods_eye_provider(self, kind: str, provider: Any) -> None:
+            self._location_providers.register(kind, provider)
+
+        def gods_eye_providers(self) -> list[dict[str, object]]:
+            location_result = self.gods_eye_status()
+            if location_result.get("ok"):
+                location = location_result.get("location")
+                location = location if isinstance(location, dict) else {}
+                permitted = bool(location.get("permitted", False))
+                point = location.get("point")
+                available = bool(point is not None and permitted)
+                device = {
+                    "kind": "device",
+                    "available": available,
+                    "authorized": permitted,
+                    "live": False,
+                    "source": str(location.get("source", ""))[:80],
+                    "detail": "authorized current location available" if available else "location unavailable",
+                }
+            else:
+                device = {
+                    "kind": "device",
+                    "available": False,
+                    "authorized": False,
+                    "live": False,
+                    "source": "",
+                    "detail": str(location_result.get("reason", "location unavailable"))[:240],
+                }
+            optional = [
+                state.as_dict()
+                for state in self._location_providers.snapshot()
+                if state.kind != "device"
+            ]
+            return [device, *optional]
 
     desktop_module.JarvisWebApi = WorkspaceWebApi
     desktop_module.TEXT_INPUT_SCRIPT += "\n" + workspace_script()
@@ -107,6 +150,11 @@ def workspace_script() -> str:
     .jw-home-card p { color:#78958a; line-height:1.6; font-size:12px; max-width:640px; }
     .jw-command-hint { display:flex; flex-wrap:wrap; gap:7px; margin-top:18px; }
     .jw-chip { padding:8px 10px; border-radius:9px; border:1px solid rgba(143,232,184,.10); color:#86a499; background:rgba(255,255,255,.02); font-size:9px; cursor:pointer; pointer-events:auto; }
+    #jw-activity-panel { position:fixed; left:18px; bottom:18px; width:min(420px,calc(100vw - 36px)); max-height:120px; z-index:2147483001; pointer-events:none; }
+    #jw-activity-list { display:flex; flex-direction:column; gap:6px; padding:0 10px 10px; max-height:82px; overflow:auto; }
+    .jw-activity-row { display:grid; grid-template-columns:1fr auto; gap:8px; padding:7px 9px; border:1px solid rgba(143,232,184,.08); border-radius:9px; background:rgba(255,255,255,.018); font-size:9px; }
+    .jw-activity-row small { color:#6d8580; }
+    .jw-activity-cancel { pointer-events:auto; border:1px solid rgba(255,188,188,.16); border-radius:7px; padding:4px 7px; color:#d7a7a7; background:transparent; font-size:8px; cursor:pointer; }
     .jw-chip:hover { color:#dfffee; border-color:rgba(143,232,184,.34); }
     @media(max-width:900px){ #jarvis-workspace-top{overflow:auto;} .jw-grid{grid-template-columns:1fr;} .jw-bottom{display:none;} .jw-grid>.jw-card:nth-child(2){display:none;} }
   `;
@@ -124,6 +172,10 @@ def workspace_script() -> str:
       <button class="jw-tab" data-workspace="system">SYSTEM</button>
       <button class="jw-tab" data-workspace="workflows">WORKFLOWS</button>
     </div>
+      <div id="jw-activity-panel" class="jw-card">
+        <div class="jw-card-title">ACTIVITY</div>
+        <div id="jw-activity-list"><div class="jw-activity-row"><span>Waiting for activity</span><small>idle</small></div></div>
+      </div>
     <div id="jarvis-workspace-content">
       <section class="jw-view active" data-view="home"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">ACTIVE AGENT SHELL</div><h1>Jarvis is ready.</h1><p>The command surface stays available while Jarvis changes workspaces. You can type commands without leaving the active system view.</p><div class="jw-command-hint"><button class="jw-chip" data-command="Open God's Eye">OPEN GOD'S EYE</button><button class="jw-chip" data-command="Show my phone">SHOW MY PHONE</button><button class="jw-chip" data-command="Show my workflows">WORKFLOWS</button><button class="jw-chip" data-command="Check system status">SYSTEM STATUS</button></div></div></div></section>
       <section class="jw-view" data-view="gods-eye"><div class="jw-grid"><div class="jw-card"><div class="jw-card-title">GOD'S EYE / LIVE CONTEXT</div><div class="jw-map"><div class="jw-radar"></div><div class="jw-empty" id="jw-location-empty"><strong>AWAITING AUTHORIZED LOCATION DATA</strong><span>Jarvis will never invent a device or family location.</span></div></div></div><div class="jw-card"><div class="jw-card-title">ENTITIES</div><div class="jw-list" id="jw-entities"><div class="jw-row"><b>Location service</b><small>checking…</small></div><div class="jw-row"><b>Phone</b><small>not connected</small></div><div class="jw-row"><b>Family</b><small>no shared feed</small></div></div></div><div class="jw-bottom"><div class="jw-card jw-stat"><small>WORKSPACE</small><strong>GOD'S EYE</strong></div><div class="jw-card jw-stat"><small>COMMAND LINK</small><strong>ONLINE</strong></div><div class="jw-card jw-stat"><small>LOCATION PRIVACY</small><strong>GUARDED</strong></div></div></div></section>
@@ -150,14 +202,43 @@ def workspace_script() -> str:
     if (name === "gods-eye" && api() && api().gods_eye_status) refreshLocation();
   }
 
+  async function refreshActivity() {
+    if (!api() || !api().activity_snapshot) return;
+    const list = document.getElementById("jw-activity-list");
+    if (!list) return;
+    try {
+      const activities = await api().activity_snapshot(8);
+      if (!Array.isArray(activities) || !activities.length) {
+        list.innerHTML = '<div class="jw-activity-row"><span>No active agent work</span><small>idle</small></div>';
+        return;
+      }
+      list.innerHTML = activities.map(item => {
+        const progress = item.progress == null ? "" : " " + String(item.progress) + "%";
+        const canCancel = !["succeeded","failed","cancelled"].includes(String(item.status));
+        const cancel = canCancel ? '<button class="jw-activity-cancel" data-activity-cancel="' + String(item.id).replace(/[^a-zA-Z0-9_-]/g, "") + '">CANCEL</button>' : "";
+        return '<div class="jw-activity-row"><span><b>' + String(item.title || "Activity").replace(/[<>]/g, "") + '</b> <small>' + String(item.step || item.status || "").replace(/[<>]/g, "") + progress + '</small></span>' + cancel + '</div>';
+      }).join("");
+      list.querySelectorAll("[data-activity-cancel]").forEach(button => button.addEventListener("click", async () => {
+        const id = button.getAttribute("data-activity-cancel");
+        if (!id || !api().activity_cancel) return;
+        button.disabled = true;
+        try { await api().activity_cancel(id); } catch (_) {}
+        refreshActivity();
+      }));
+    } catch (_) {
+      list.innerHTML = '<div class="jw-activity-row"><span>Activity service unavailable</span><small>Jarvis command link remains online</small></div>';
+    }
+  }
+
   async function refreshLocation() {
     const empty = document.getElementById("jw-location-empty");
     const entities = document.getElementById("jw-entities");
     try {
       const result = await api().gods_eye_status();
+      const providers = api().gods_eye_providers ? await api().gods_eye_providers() : [];
       if (result && result.ok && result.location) {
         empty.innerHTML = "<strong>LOCATION DATA AVAILABLE</strong><span>Source and permission state received from Jarvis.</span>";
-        entities.innerHTML = '<div class="jw-row"><b>Location service</b><small>authorized</small></div><div class="jw-row"><b>Current location</b><small>available</small></div><div class="jw-row"><b>Phone / family</b><small>separate provider</small></div>';
+        entities.innerHTML = providers.map(provider => '<div class="jw-row"><b>' + String(provider.kind || "provider").toUpperCase() + '</b><small>' + (provider.live ? 'LIVE / ' : '') + (provider.authorized ? 'AUTHORIZED' : 'UNAVAILABLE') + '</small></div>').join("");
       } else if (result && result.reason) {
         empty.innerHTML = `<strong>LOCATION FEED OFFLINE</strong><span>${String(result.reason).replace(/[<>]/g, "")}</span>`;
       }
@@ -179,6 +260,8 @@ def workspace_script() -> str:
     if (["home", "gods-eye", "coding", "browser", "system", "workflows"].includes(candidate)) restored = candidate;
   } catch (_) {}
   setView(restored, false);
+  refreshActivity();
+  setInterval(refreshActivity, 1500);
   if (api() && api().workspace_state) api().workspace_state().then(state => {
     if (!window.localStorage.getItem(storageKey) && state && state.active) setView(state.active, false);
   }).catch(() => {});
