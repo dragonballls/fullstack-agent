@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import time
@@ -21,7 +22,7 @@ class OmniRouteLifecycle:
         poll_interval: float = 0.25,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.command = (command or os.environ.get("JARVIS_OMNIROUTE_COMMAND", "omniroute")).strip()
+        self.command = (command or os.environ.get("JARVIS_OMNIROUTE_COMMAND", "omniroute --no-open")).strip()
         self.startup_timeout = max(1.0, float(startup_timeout))
         self.poll_interval = max(0.05, float(poll_interval))
 
@@ -49,13 +50,17 @@ class OmniRouteLifecycle:
 
     def _command_argv(self) -> list[str]:
         configured = self.command
-        resolved = shutil.which(configured)
+        argv = shlex.split(configured, posix=os.name != "nt")
+        if not argv:
+            raise RuntimeError("OmniRoute startup command is empty")
+        resolved = shutil.which(argv[0])
         if resolved:
-            return [resolved]
-        if os.path.isfile(configured):
-            return [configured]
+            argv[0] = resolved
+            return argv
+        if os.path.isfile(argv[0]):
+            return argv
         raise RuntimeError(
-            f"OmniRoute is not running at {self.base_url} and the '{configured}' command was not found"
+            f"OmniRoute is not running at {self.base_url} and the '{argv[0]}' command was not found"
         )
 
     def ensure_available(self) -> bool:
