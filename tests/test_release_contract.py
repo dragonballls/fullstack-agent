@@ -14,7 +14,7 @@ class ReleaseContractTests(unittest.TestCase):
             "Build single-file Jarvis.exe",
             "Smoke-test embedded visualizer",
             "Smoke-test the packaged native Jarvis host",
-            "actions/attest@v4",
+            "actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d",
             "gh attestation verify dist/Jarvis.exe",
             "needs: windows-exe",
         )
