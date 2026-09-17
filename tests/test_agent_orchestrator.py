@@ -1,3 +1,4 @@
+import tempfile
 import threading
 import unittest
 
@@ -5,6 +6,7 @@ from quality_of_life.activity import ActivityStatus, ActivityStore
 from quality_of_life.agent_orchestrator import AgentOrchestrator
 from quality_of_life.orchestration import RequestProfile
 from quality_of_life.permissions import Capability
+from quality_of_life.workflows import Workflow, WorkflowService, WorkflowStep, WorkflowStore
 
 
 class FakeOperation:
@@ -146,6 +148,54 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].status, ActivityStatus.SUCCEEDED)
         self.assertEqual(records[0].progress, 100)
+
+    def test_explicit_saved_workflow_command_requires_confirmation(self):
+        runtime = FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            store = WorkflowStore(f"{tmp}/workflows.json")
+            workflow = Workflow.new(
+                "System check",
+                aliases=("status check",),
+                steps=(WorkflowStep("applications.list", {}),),
+            )
+            store.create(workflow)
+            agent = AgentOrchestrator(FakeRouter(), runtime)
+            agent._workflow_store = store
+
+            text, verified, errors, needs_confirmation = agent._deterministic_context(
+                "run my system check",
+                confirmed=False,
+            )
+
+            self.assertTrue(needs_confirmation)
+            self.assertFalse(verified)
+            self.assertEqual(errors, [])
+            self.assertIn("confirmation", text.casefold())
+            self.assertEqual(runtime.dispatch_calls, [])
+
+    def test_confirmed_saved_workflow_command_executes_through_runtime(self):
+        runtime = FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            store = WorkflowStore(f"{tmp}/workflows.json")
+            workflow = Workflow.new(
+                "System check",
+                steps=(WorkflowStep("applications.list", {}),),
+            )
+            store.create(workflow)
+            agent = AgentOrchestrator(FakeRouter(), runtime)
+            agent._workflow_store = store
+
+            text, verified, errors, needs_confirmation = agent._deterministic_context(
+                "run my system check",
+                confirmed=True,
+            )
+
+            self.assertTrue(verified)
+            self.assertFalse(needs_confirmation)
+            self.assertEqual(errors, [])
+            self.assertIn("System check", text)
+            self.assertEqual(len(runtime.dispatch_calls), 1)
+            self.assertEqual(runtime.dispatch_calls[0][1], "applications.list")
 
 
 if __name__ == "__main__":
