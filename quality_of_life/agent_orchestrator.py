@@ -17,6 +17,7 @@ from .planner import PlanError, plan_request
 from .router import CloudModelRouter, ProviderResult
 from .tool_broker import ToolResult, UNIVERSAL_OPERATION_SPECS, UniversalToolBroker
 from .web_tools import WebToolAdapter
+from .workflows import WorkflowService, WorkflowStore
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class AgentOrchestrator:
         self.runtime = runtime
         self.max_parallel = max_parallel
         self._universal_tool_broker = UniversalToolBroker(getattr(runtime, "policy", None))
+        self._workflow_store = WorkflowStore()
         web_hosts = {host.strip().lower() for host in __import__("os").environ.get("JARVIS_WEB_ALLOWED_HOSTS", "").split(",") if host.strip()}
         if web_hosts:
             self._universal_tool_broker.register(WebToolAdapter(web_hosts))
@@ -142,6 +144,30 @@ class AgentOrchestrator:
 
     def _deterministic_context(self, text: str, confirmed: bool) -> tuple[str, bool, list[str], bool]:
         """Execute explicitly supported intents through the existing policy-gated runtime."""
+        workflow = self._workflow_store.resolve(text)
+        if workflow is not None:
+            result = WorkflowService.execute(
+                self.runtime,
+                workflow,
+                confirmed=confirmed,
+                store=self._workflow_store,
+            )
+            if result.needs_confirmation:
+                return (
+                    f'Workflow "{workflow.name}" is ready, but confirmation is required before it runs.',
+                    False,
+                    list(result.errors),
+                    True,
+                )
+            if result.verified:
+                return (
+                    f'Workflow "{workflow.name}" completed: {result.completed_steps} step(s).',
+                    True,
+                    list(result.errors),
+                    False,
+                )
+            detail = "; ".join(result.errors[:3]) or "workflow did not verify successfully"
+            return f'Workflow "{workflow.name}" did not complete successfully: {detail}', False, list(result.errors), False
         intent = parse_intent(text)
         if intent.kind == "browser_open":
             browser = str(intent.arguments["browser"])
