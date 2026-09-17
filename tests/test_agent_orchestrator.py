@@ -63,6 +63,12 @@ class FakeRuntime:
         self.orchestrator = FakeOrchestrator()
         self.activity = ActivityStore()
 
+        class Policy:
+            def needs_confirmation(self, _capability):
+                return False
+
+        self.policy = Policy()
+
     def activity_store(self):
         return self.activity
 
