@@ -9,6 +9,7 @@ from typing import Any
 
 from .background import BackgroundJobs
 from .background_mode import BackgroundModeController
+from .activity import ActivityStore
 from .gods_eye import GodsEye, Place
 from .gods_eye_launcher import GodsEyeLauncher
 from .intents import Intent, parse_intent
@@ -36,6 +37,7 @@ class JarvisRuntime:
         self._agent_orchestrator: Any | None = None
         self._health_monitor: Any | None = None
         self._background_mode = BackgroundModeController()
+        self._activity = ActivityStore()
         self._register_actions()
 
     def available_tools(self) -> tuple[str, ...]:
@@ -155,6 +157,18 @@ class JarvisRuntime:
     def background_status(self) -> dict[str, object]:
         """Return the current background lifecycle state and degraded components."""
         return self._background_mode.status()
+
+    def activity_store(self) -> ActivityStore:
+        """Return the bounded process-local activity store."""
+        return self._activity
+
+    def activity_snapshot(self, limit: int = 20) -> list[dict[str, object]]:
+        """Return JSON-safe activity records for workspace surfaces."""
+        return [record.as_dict() for record in self._activity.list(limit)]
+
+    def activity_cancel(self, activity_id: str) -> dict[str, object]:
+        """Request cooperative cancellation without terminating the executor."""
+        return self._activity.request_cancel(activity_id).as_dict()
 
     def _register_actions(self) -> None:
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.move", lambda x, y: self._tool("computer").move(x, y)))
