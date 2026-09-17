@@ -159,7 +159,7 @@ class AgentOrchestrator:
                 return (
                     f'Workflow "{workflow.name}" is ready, but confirmation is required before it runs.',
                     False,
-                    list(result.errors),
+                    [],
                     True,
                 )
             if result.verified:
