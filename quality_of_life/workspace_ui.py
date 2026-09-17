@@ -79,7 +79,7 @@ def workspace_script() -> str:
     .jw-tab { border:1px solid rgba(143,232,184,.11); border-radius:10px; padding:9px 11px; color:#819a91; background:rgba(2,8,6,.44); cursor:pointer; font-size:10px; letter-spacing:.12em; transition:.18s ease; }
     .jw-tab:hover,.jw-tab.active { color:#dfffee; border-color:rgba(143,232,184,.42); background:rgba(61,220,132,.08); box-shadow:0 0 18px rgba(61,220,132,.08); }
     #jarvis-workspace-content { position:absolute; inset:76px 18px 112px; pointer-events:none; }
-    .jw-view { display:none; position:absolute; inset:0; pointer-events:auto; }
+    .jw-view { display:none; position:absolute; inset:0; pointer-events:none; }
     .jw-view.active { display:block; }
     .jw-grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; grid-template-rows:minmax(0,1fr) 130px; gap:12px; height:100%; }
     .jw-card { border:1px solid rgba(143,232,184,.12); border-radius:16px; background:linear-gradient(145deg,rgba(4,13,10,.76),rgba(2,7,6,.54)); backdrop-filter:blur(12px); box-shadow:inset 0 1px rgba(255,255,255,.025),0 14px 40px rgba(0,0,0,.18); overflow:hidden; }
@@ -106,7 +106,7 @@ def workspace_script() -> str:
     .jw-home-card h1 { margin:0 0 8px; font-size:28px; font-weight:500; letter-spacing:.04em; }
     .jw-home-card p { color:#78958a; line-height:1.6; font-size:12px; max-width:640px; }
     .jw-command-hint { display:flex; flex-wrap:wrap; gap:7px; margin-top:18px; }
-    .jw-chip { padding:8px 10px; border-radius:9px; border:1px solid rgba(143,232,184,.10); color:#86a499; background:rgba(255,255,255,.02); font-size:9px; cursor:pointer; }
+    .jw-chip { padding:8px 10px; border-radius:9px; border:1px solid rgba(143,232,184,.10); color:#86a499; background:rgba(255,255,255,.02); font-size:9px; cursor:pointer; pointer-events:auto; }
     .jw-chip:hover { color:#dfffee; border-color:rgba(143,232,184,.34); }
     @media(max-width:900px){ #jarvis-workspace-top{overflow:auto;} .jw-grid{grid-template-columns:1fr;} .jw-bottom{display:none;} .jw-grid>.jw-card:nth-child(2){display:none;} }
   `;
