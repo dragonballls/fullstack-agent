@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import time
 from typing import Any, Callable, Iterable, Iterator
 
+from .activity import ActivityStatus
 from .api_tools import ApiToolAdapter
 from .capabilities import operation
 from .computer_use import ComputerUseAgent, RouterComputerUsePlanner, ScreenObserver
@@ -260,10 +261,37 @@ class AgentOrchestrator:
         return f"Computer goal was not fully verified after {result.steps_executed} action(s).", False, False, list(result.errors), "computer-use"
 
     def _coding_context(self, text: str, confirmed: bool) -> tuple[str, bool]:
-        if not confirmed:
+        activity = None
+        factory = getattr(self.runtime, "activity_store", None)
+        if callable(factory):
+            activity = factory().create("Coding: " + text[:100])
+            if not confirmed:
+                factory().update(activity.id, status=ActivityStatus.WAITING, step="Waiting for confirmation")
+                return "A repository-changing coding request requires confirmation before self-coding can run.", False
+            factory().update(activity.id, status=ActivityStatus.RUNNING, step="Starting self-coding")
+        elif not confirmed:
             return "A repository-changing coding request requires confirmation before self-coding can run.", False
-        result = self.runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal=text)
+
+        try:
+            result = self.runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal=text)
+        except Exception as exc:
+            if activity is not None:
+                factory().update(
+                    activity.id,
+                    status=ActivityStatus.FAILED,
+                    step="Self-coding failed",
+                    error=str(exc),
+                )
+            raise
         branch = str(result)
+        if activity is not None:
+            factory().update(
+                activity.id,
+                status=ActivityStatus.SUCCEEDED if branch else ActivityStatus.FAILED,
+                progress=100 if branch else 0,
+                step="Complete" if branch else "Self-coding failed",
+                error=None if branch else "self-coding returned no verified result",
+            )
         return f"Self-coding completed on verified branch: {branch}", bool(branch)
 
     @staticmethod
