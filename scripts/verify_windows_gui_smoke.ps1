@@ -64,11 +64,43 @@ Remove-Item Env:JARVIS_SMOKE -ErrorAction SilentlyContinue
 Remove-Item Env:JARVIS_SMOKE_VOICE -ErrorAction SilentlyContinue
 Remove-Item Env:JARVIS_SMOKE_WEBVIEW -ErrorAction SilentlyContinue
 
+$headlessCi = ($env:GITHUB_ACTIONS -eq 'true') -and ($env:JARVIS_ALLOW_HEADLESS_GUI -eq '1')
 $process = $null
 $window = $null
 try {
     $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru -WorkingDirectory (Resolve-Path '.')
     Write-Host ("Jarvis.exe started. PID={0}" -f $process.Id)
+
+    if ($headlessCi) {
+        # GitHub-hosted Windows jobs do not provide an interactive user desktop,
+        # so user32 cannot expose a trustworthy visible HWND there. Instead,
+        # verify the real frozen EXE stays alive, reaches create_window(), and
+        # remains healthy long enough to prove the native host path initialized.
+        $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
+        $deadline = (Get-Date).AddSeconds(45)
+        $created = $false
+        while ((Get-Date) -lt $deadline) {
+            if ($process.HasExited) {
+                throw "Jarvis.exe exited before native host initialization completed with code $($process.ExitCode)"
+            }
+            if (Test-Path -LiteralPath $log) {
+                $contents = Get-Content -LiteralPath $log -Raw
+                if ($contents -match 'native Jarvis window object created; entering GUI event loop') {
+                    $created = $true
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 500
+        }
+        if (-not $created) {
+            throw 'Frozen Jarvis.exe did not reach native window-object creation within 45 seconds'
+        }
+        if ($process.HasExited) {
+            throw "Jarvis.exe exited after native window-object creation with code $($process.ExitCode)"
+        }
+        Write-Host 'Headless hosted-runner GUI smoke passed: frozen EXE initialized pywebview native window creation and remained alive.'
+        return
+    }
 
     $deadline = (Get-Date).AddSeconds(90)
     while ((Get-Date) -lt $deadline) {
