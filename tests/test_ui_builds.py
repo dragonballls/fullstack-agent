@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import shutil
+import subprocess
 import unittest
 
 from quality_of_life.ui_builds import (
@@ -121,6 +123,23 @@ class UIBuildStoreTests(unittest.TestCase):
         self.assertIn("UI BUILD GALLERY", desktop.TEXT_INPUT_SCRIPT)
         self.assertTrue(hasattr(desktop.JarvisWebApi, "submit_text"))
         self.assertTrue(hasattr(desktop.JarvisWebApi, "ui_builds_catalog"))
+
+    def test_manager_script_is_valid_javascript_when_node_is_available(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node is not installed on this runner")
+        script_path = Path(self.id().replace(".", "_") + ".js")
+        try:
+            script_path.write_text(build_manager_script(), encoding="utf-8")
+            completed = subprocess.run(
+                [node, "--check", str(script_path)],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        finally:
+            script_path.unlink(missing_ok=True)
 
     def test_manager_script_exposes_catalog_save_switch_and_rollback(self):
         script = build_manager_script()
