@@ -257,17 +257,31 @@ def workspace_script() -> str:
     if (input) { input.value = chip.dataset.command || ""; input.focus(); }
   }));
 
-  window.jarvisWorkspaceState = { setView, refreshLocation };
-  let restored = "home";
+  window.jarvisWorkspaceState = { setView, refreshLocation, refreshActivity };
+  const validWorkspace = value => ["home", "gods-eye", "coding", "browser", "system", "workflows"].includes(value);
+  let storedWorkspace = null;
   try {
     const candidate = window.localStorage.getItem(storageKey);
-    if (["home", "gods-eye", "coding", "browser", "system", "workflows"].includes(candidate)) restored = candidate;
+    if (validWorkspace(candidate)) storedWorkspace = candidate;
   } catch (_) {}
-  setView(restored, false);
+
+  async function hydrateWorkspace() {
+    if (!api() || !api().workspace_state) {
+      setView(storedWorkspace || "home", false);
+      return;
+    }
+    try {
+      const state = await api().workspace_state();
+      const target = storedWorkspace || (state && validWorkspace(state.active) ? state.active : "home");
+      setView(target, false);
+    } catch (_) {
+      setView(storedWorkspace || "home", false);
+    }
+  }
+
+  hydrateWorkspace();
+  window.addEventListener("pywebviewready", hydrateWorkspace, { once: true });
   refreshActivity();
   setInterval(refreshActivity, 1500);
-  if (api() && api().workspace_state) api().workspace_state().then(state => {
-    if (!window.localStorage.getItem(storageKey) && state && state.active) setView(state.active, false);
-  }).catch(() => {});
 })();
 '''
