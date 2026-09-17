@@ -1,5 +1,6 @@
 import unittest
 
+from quality_of_life.workflows import Workflow, WorkflowStep, WorkflowStore
 from quality_of_life.workspace_ui import WorkspaceBridge, workspace_script
 
 
