@@ -235,7 +235,7 @@ class UIBuildStore:
                     "updated_at": build.updated_at,
                 }
             )
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError) as exc:
             raise ValueError(f"invalid UI build '{build_id}': {type(exc).__name__}") from exc
 
     def _state(self) -> dict[str, object]:
@@ -371,7 +371,7 @@ class UIBuildStore:
                     "updated_at": str(manifest.get("updated_at", "") or ""),
                 }
             )
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError) as exc:
             raise ValueError(f"invalid UI build '{safe_id}': {type(exc).__name__}") from exc
 
     def catalog(self) -> list[dict[str, object]]:
