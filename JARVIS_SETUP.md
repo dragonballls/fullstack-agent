@@ -4,7 +4,7 @@ This is the authoritative setup contract for the Jarvis Windows desktop product.
 
 ## Windows product
 
-The supported end-user product is a single signed/release-published `Jarvis.exe`. Normal use does not require Python, a virtual environment, a source checkout, a separate Fullstack Agent checkout, or a persistent PowerShell window.
+The supported end-user product is a single verified/release-published `Jarvis.exe`. Normal use does not require Python, a virtual environment, a source checkout, a separate Fullstack Agent checkout, or a persistent PowerShell window.
 
 Download the `Jarvis.exe` asset from the verified GitHub `latest` release. Double-clicking that executable is the normal Windows launch path.
 
