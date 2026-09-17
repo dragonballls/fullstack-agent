@@ -312,6 +312,10 @@ class FullstackJarvisHost:
         self.stopped = True
         self.started = False
 
+    @staticmethod
+    def _fullscreen_enabled() -> bool:
+        return os.environ.get("JARVIS_FULLSCREEN", "0").strip().lower() in {"1", "true", "yes", "on"}
+
     def run_window(self) -> None:
         """Create the native visualizer window on the foreground thread."""
         smoke = os.environ.get("JARVIS_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -325,13 +329,24 @@ class FullstackJarvisHost:
             import webview
         except ImportError as exc:
             raise RuntimeError("pywebview is required for the native Jarvis window") from exc
-        self._window = webview.create_window(
-            "Jarvis",
-            self.visualizer.url(),
-            fullscreen=True,
-            min_size=(800, 600),
-        )
-        webview.start(debug=False)
+        gui = "edgechromium" if sys.platform == "win32" else None
+        LOGGER.info("creating native Jarvis window; gui=%s fullscreen=%s url=%s", gui or "default", self._fullscreen_enabled(), self.visualizer.url())
+        window_kwargs = {
+            "title": "Jarvis",
+            "url": self.visualizer.url(),
+            "width": 1200,
+            "height": 800,
+            "fullscreen": self._fullscreen_enabled(),
+            "resizable": True,
+            "min_size": (800, 600),
+        }
+        self._window = webview.create_window(**window_kwargs)
+        LOGGER.info("native Jarvis window object created; entering GUI event loop")
+        if gui is None:
+            webview.start(debug=False)
+        else:
+            webview.start(gui=gui, debug=False)
+        LOGGER.info("native Jarvis GUI event loop exited")
 
 
 def main() -> int:
