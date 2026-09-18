@@ -412,8 +412,46 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.accessibility.update", lambda **settings: self._neural_advanced_command("accessibility", "update", settings)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.fullstack.command", lambda domain, operation, payload=None: self._neural_advanced_command("fullstack", "route", {"domain": domain, "operation": operation, "payload": payload or {}})))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status", lambda: self._neural_advanced_command("master", "status", {})))
-        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None: self._neural_advanced_command("master", "execute", {"feature": feature, "payload": payload or {}})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None, confirmed=False: self._neural_master_execute(feature, payload, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.smoke", lambda limit=None: self._neural_advanced_command("master", "smoke", {"limit": limit} if limit is not None else {})))
+
+    def _neural_master_capability(self, feature: str) -> Capability:
+        from .neural_advanced import MASTER_SCOPE
+        name = str(feature).strip()
+        category = next((key for key, values in MASTER_SCOPE.items() if name in values), None)
+        if category in {"spatial_windows", "desktop_3d"}:
+            return Capability.WINDOW_CONTROL
+        if category == "cross_application":
+            return Capability.CLIPBOARD if "clipboard" in name.casefold() else Capability.FILE_WRITE
+        if category == "browser":
+            return Capability.BROWSER_CONTROL
+        if category == "hardware_display" or category == "multi_monitor" or category in {"accessibility", "accessibility_full"}:
+            return Capability.SYSTEM_SETTINGS
+        if category == "memory_history":
+            return Capability.FILE_WRITE
+        if category == "reliability":
+            return Capability.SYSTEM_MAINTENANCE
+        if category == "remote_computing" and ("control" in name.casefold() or "synchronization" in name.casefold()):
+            return Capability.SYSTEM_MAINTENANCE
+        if category == "multi_user" or category == "multi_user_shared":
+            return Capability.ACCOUNT_WRITE
+        if category in {"optimization_intelligence"}:
+            return Capability.SYSTEM_SETTINGS
+        if category in {"xr", "xr_full"} and "haptic" in name.casefold():
+            return Capability.DEVICE_INPUT
+        if category in {"audio", "games", "time_machine", "world_streaming", "large_world_proof", "advanced_analytics", "performance", "performance_intelligence", "search_navigation", "lifecycle", "planning", "testing", "developer_tools", "remote", "simulation", "simulation_world", "core_neural"}:
+            return Capability.SYSTEM_DIAGNOSTICS
+        if category == "xr":
+            return Capability.SYSTEM_SETTINGS
+        return Capability.SYSTEM_DIAGNOSTICS
+
+    def _neural_master_execute(self, feature: str, payload: Mapping[str, Any] | None = None, *, confirmed: bool = False) -> dict[str, object]:
+        capability = self._neural_master_capability(feature)
+        self.policy.check(capability)
+        if self.policy.needs_confirmation(capability) and not confirmed:
+            if self.confirmation is None or not self.confirmation(capability, "neural.master.execute"):
+                raise PermissionError(f"Confirmation is required: {capability.value}/neural.master.execute")
+        return self._neural_advanced_command("master", "execute", {"feature": feature, "payload": dict(payload or {})})
 
     def _neural_advanced_command(self, domain: str, operation: str, payload: dict[str, object] | None = None) -> dict[str, object]:
         world = self._neural_world_service
