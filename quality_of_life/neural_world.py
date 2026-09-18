@@ -11,6 +11,8 @@ import math
 import threading
 from typing import Any, Mapping
 
+from .neural_events import NeuralEventBus
+from .neural_persistence import NeuralPersistence
 from .permissions import Capability
 
 
@@ -144,14 +146,17 @@ def _stable_position(entity_id: str) -> tuple[float, float, float]:
 class NeuralWorld:
     """Thread-safe graph with deterministic placement and bounded snapshots."""
 
-    def __init__(self, *, max_entities: int = 50_000) -> None:
+    def __init__(self, *, max_entities: int = 50_000, event_bus: NeuralEventBus | None = None, persistence: NeuralPersistence | None = None) -> None:
         if max_entities < 100:
             raise ValueError("max_entities must be at least 100")
         self.max_entities = max_entities
         self._lock = threading.RLock()
         self._entities: dict[str, NeuralEntity] = {}
         self._relations: dict[tuple[str, str, str], NeuralRelation] = {}
+        self.events = event_bus or NeuralEventBus()
+        self.persistence = persistence
         self._bootstrap()
+        self._load_persisted()
 
     def _bootstrap(self) -> None:
         core = self.upsert(
@@ -216,6 +221,7 @@ class NeuralWorld:
                 created_at=now, updated_at=now,
             )
             self._entities[safe_id] = node
+            self.events.publish('entity.created', entity_id=node.id, payload={'kind': node.kind.value, 'label': node.label, 'lifecycle': node.lifecycle.value})
             return node
 
     def retire(self, entity_id: str, *, remove: bool = False) -> bool:
@@ -228,6 +234,7 @@ class NeuralWorld:
             node.energy = 0.0
             node.visible = False
             node.updated_at = _now()
+            self.events.publish('entity.retired', entity_id=node.id, payload={'remove': bool(remove), 'lifecycle': node.lifecycle.value})
             if remove:
                 self._entities.pop(entity_id, None)
                 for key in tuple(self._relations):
@@ -244,6 +251,7 @@ class NeuralWorld:
                 max(0.0, min(1.0, float(strength))),
             )
             self._relations[(source, target, relation.relation_type)] = relation
+            self.events.publish('relation.created', entity_id=source, payload=relation.as_dict())
             return relation
 
     def search(self, query: str, *, kind: str | None = None,
@@ -292,6 +300,56 @@ class NeuralWorld:
                         "strength": relation.strength,
                     }]))
         return []
+
+    def save(self) -> bool:
+        """Persist persistent entities and relationships when configured."""
+        if self.persistence is None:
+            return False
+        with self._lock:
+            entities = [node.as_dict() for node in self._entities.values() if node.persistent]
+            relations = [relation.as_dict() for relation in self._relations.values()]
+        self.persistence.save(entities, relations)
+        self.events.publish("world.saved", payload={"entities": len(entities), "relations": len(relations)})
+        return True
+
+    def event_snapshot(self, sequence: int = 0, limit: int = 500) -> list[dict[str, object]]:
+        return self.events.since(sequence, limit=limit)
+
+    def _load_persisted(self) -> None:
+        if self.persistence is None:
+            return
+        snapshot = self.persistence.load()
+        if snapshot is None:
+            return
+        with self._lock:
+            for item in snapshot.entities:
+                try:
+                    self.upsert(
+                        str(item["id"]), str(item["kind"]), str(item["label"]),
+                        source=str(item.get("source", "persisted")),
+                        status=str(item.get("status", "idle")),
+                        lifecycle=str(item.get("lifecycle", LifecycleState.MATURE.value)),
+                        position=tuple(float(v) for v in item.get("position", (0, 0, 0))),
+                        scale=float(item.get("scale", 1.0)),
+                        energy=float(item.get("energy", 0.35)),
+                        visible=bool(item.get("visible", True)),
+                        persistent=bool(item.get("persistent", True)),
+                        parent_id=str(item["parent_id"]) if item.get("parent_id") else None,
+                        metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else None,
+                    )
+                except (KeyError, TypeError, ValueError, MemoryError):
+                    continue
+            for item in snapshot.relations:
+                try:
+                    self.relate(
+                        str(item["source"]),
+                        str(item["target"]),
+                        str(item["relation_type"]),
+                        float(item.get("strength", 0.5)),
+                    )
+                except (KeyError, TypeError, ValueError):
+                    continue
+        self.events.clear()
 
     def snapshot(self, *, limit: int = 1800) -> dict[str, object]:
         limit = max(1, min(5000, int(limit)))
