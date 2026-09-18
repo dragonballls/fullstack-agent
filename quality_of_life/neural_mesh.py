@@ -546,7 +546,9 @@ function renderNeuralConsolePlacement(force){
     corePos=nodePosition(core);
     coreScreen=worldToScreen(corePos);
     const c=camera();
-    const anchor=add(add(corePos,mul3(c.right,2.7)),mul3(c.up,-2.0));
+    const commandAnchor=S.nodes.find(function(n){return n.id==="jarvis.neural-command";});
+    const commandPos=commandAnchor?nodePosition(commandAnchor):add(add(corePos,mul3(c.right,2.7)),mul3(c.up,-2.0));
+    const anchor=add(add(commandPos,mul3(c.right,2.1)),mul3(c.up,-1.25));
     anchorScreen=worldToScreen(anchor);
   }
   let x=width*.5,y=height*.5,depth=16;
