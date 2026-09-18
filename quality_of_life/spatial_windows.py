@@ -15,6 +15,22 @@ class SpatialWindowUnavailable(RuntimeError):
     pass
 
 
+_WINRT_CAPTURE: bool | None = None
+
+
+def _winrt_capture_available() -> bool:
+    global _WINRT_CAPTURE
+    if _WINRT_CAPTURE is not None:
+        return _WINRT_CAPTURE
+    try:
+        import winrt.windows.graphics.capture  # type: ignore # noqa: F401
+    except ImportError:
+        _WINRT_CAPTURE = False
+    else:
+        _WINRT_CAPTURE = True
+    return _WINRT_CAPTURE
+
+
 @dataclass(frozen=True)
 class WindowRect:
     x: int
