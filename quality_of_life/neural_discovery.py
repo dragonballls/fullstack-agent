@@ -30,10 +30,11 @@ class NeuralDiscovery:
         seen: set[str] = set()
         for app in apps or ():
             app_id = self._app_id(app)
+            label = str(getattr(app, "name", "") or "").strip() or app_id
             seen.add(app_id)
             node = self.world.upsert(
                 app_id, EntityKind.APPLICATION,
-                str(getattr(app, "name", app_id)),
+                label,
                 source="windows.applications",
                 status="installed",
                 lifecycle=LifecycleState.MATURE,
