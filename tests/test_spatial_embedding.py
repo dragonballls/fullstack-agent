@@ -26,7 +26,7 @@ class FakeUser32:
     def GetWindowRect(self, h, rect):
         import ctypes
         item = self.rects[int(h)]
-        real = ctypes.cast(rect, ctypes.POINTER(type(__import__("quality_of_life.spatial_windows", fromlist=["ctypes"]).ctypes.wintypes.RECT)())).contents
+        real = getattr(rect, "_obj", rect)
         real.left=item["x"]; real.top=item["y"]; real.right=item["x"]+item["width"]; real.bottom=item["y"]+item["height"]; return 1
 
 
