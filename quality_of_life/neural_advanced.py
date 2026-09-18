@@ -1800,7 +1800,8 @@ class NeuralAdvancedRuntime:
             if "clipboard" in lower:
                 result = self.cross_app.clipboard_put(data.get("payload", data.get("text", "shared")), source=str(data.get("source", "jarvis")))
             elif "suggest" in lower or "destination" in lower:
-                result = self.cross_app.suggest(str(data.get("kind", "artifact")), str(data.get("source", "master")), destinations=list(data.get("destinations", ("browser", "editor", "workflow", "repository"))))
+                suggestions = self.cross_app.suggest(str(data.get("kind", "artifact")), str(data.get("source", "master")), destinations=list(data.get("destinations", ("browser", "editor", "workflow", "repository"))))
+                result = {"suggestions": suggestions, "semantic": True}
             else:
                 kind = str(data.get("kind", "file" if "file" in lower else "artifact"))
                 result = self.cross_app.transfer(kind, str(data.get("source", "master:source")), str(data.get("destination", "master:destination")), data.get("payload_ref"))
@@ -1810,6 +1811,7 @@ class NeuralAdvancedRuntime:
                     result["semantic_route"] = {"from": "browser", "to": "code", "kind": kind}
                 if "build" in lower and "arbitrary" in lower:
                     result["semantic_route"] = {"from": "build", "to": "application", "kind": kind}
+                result["semantic"] = True
             return self._record_master(category, name, result, data)
 
         if category == "browser":
@@ -1959,7 +1961,9 @@ class NeuralAdvancedRuntime:
             elif "snapshot" in lower or "historical state" in lower:
                 result = self.history.save_snapshot(str(data.get("id", "master:snapshot")), dict(data.get("world", {"layout": self.workspace.snapshot(), "performance": self.performance.analytics()})))
             elif "decay" in lower:
-                result = self.history.decay_relationships(float(data.get("half_life_seconds", 86400)))
+                before = dict(self.history._relationships)
+                after = self.history.decay_relationships(float(data.get("half_life_seconds", 86400)))
+                result = {"before": before, "after": after, "decay_applied": True}
             elif "prun" in lower:
                 result = self.history.prune(int(data.get("keep_recent", 128)))
             elif "restor" in lower or "historical layout restoration" in lower or "historical application restoration" in lower:
@@ -2070,6 +2074,8 @@ class NeuralAdvancedRuntime:
                         kind = value
                         break
                 result = self.audio.emit(kind, position=data.get("position"), intensity=float(data.get("intensity", data.get("activity", 0.5))))
+            if isinstance(result, dict):
+                result["event"] = kind
             return self._record_master(category, name, result, data)
 
         if category == "multi_user_shared":
