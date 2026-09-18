@@ -15,6 +15,15 @@ class TaskNeuronLifecycleTests(unittest.TestCase):
         self.assertEqual(entity.lifecycle.value, "waiting")
         self.assertEqual(entity.status, "Waiting for confirmation")
 
+    def test_failed_task_remains_failed(self):
+        runtime = JarvisRuntime.__new__(JarvisRuntime)
+        runtime._neural_world_service = NeuralWorld()
+        task_id = runtime.neural_task_started("broken task")
+        runtime.neural_task_finished(task_id, success=False, message="failure")
+        entity = runtime._neural_world_service._entities[task_id]
+        self.assertEqual(entity.lifecycle.value, "failed")
+        self.assertEqual(entity.status, "failed")
+
     def test_completed_task_becomes_mature(self):
         runtime = JarvisRuntime.__new__(JarvisRuntime)
         runtime._neural_world_service = NeuralWorld()
