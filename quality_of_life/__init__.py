@@ -12,6 +12,7 @@ from .health_monitor import HealthMonitor, HealthSnapshot
 from .intents import Intent, parse_intent
 from .jarvis_voice import JarvisVoiceRuntime, VoiceRouteResult
 from .neural_advanced import NeuralAdvancedRuntime, FEATURES
+from .neural_completeness import NeuralFeatureCompleteness, REMAINING_SCOPE
 from .manifest import ToolRegistry, ToolSpec, default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
 from .orchestration import OrchestrationPlan, RequestProfile, SpecialistTask, build_plan, classify_request
@@ -55,6 +56,8 @@ __all__ = [
     "LocalWakeWordListener",
     "LocationSnapshot",
     "NeuralAdvancedRuntime",
+    "NeuralFeatureCompleteness",
+    "REMAINING_SCOPE",
     "FEATURES",
     "OPERATION_CATALOG",
     "OperationRisk",
