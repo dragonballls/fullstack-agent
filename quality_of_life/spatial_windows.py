@@ -131,6 +131,15 @@ class SpatialWindowManager:
         }
         return {"ok": True, "embedded": True, "handle": child, "host_handle": host, "x": x, "y": y, "width": width, "height": height}
 
+    def unembed_all(self, *, confirmed: bool = True) -> list[dict[str, object]]:
+        results = []
+        for handle in tuple(self._embedded):
+            try:
+                results.append(self.unembed(handle, confirmed=confirmed))
+            except (LookupError, RuntimeError, PermissionError) as exc:
+                results.append({"ok": False, "handle": handle, "error": type(exc).__name__})
+        return results
+
     def unembed(self, identifier: int, *, confirmed: bool = False) -> dict[str, object]:
         self.policy.check(Capability.WINDOW_CONTROL)
         if not confirmed:
