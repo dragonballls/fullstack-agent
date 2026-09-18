@@ -171,6 +171,23 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         self.assertIn("workspace", payload)
 
 
+    def test_master_scope_implements_and_smokes_every_requested_feature(self):
+        runtime = NeuralAdvancedRuntime()
+        status = runtime.master_scope_status()
+        self.assertEqual(status["status"], "100%_added")
+        self.assertEqual(status["missing"], [])
+        self.assertGreater(status["total"], 150)
+
+        smoke = runtime.master_smoke_test()
+        self.assertEqual(smoke["status"], "pass", smoke["failures"])
+        self.assertEqual(smoke["executed"], smoke["total"])
+        self.assertEqual(smoke["failures"], [])
+
+        world = NeuralWorld()
+        bridge = world.neural_advanced_command("master", "status")
+        self.assertEqual(bridge["status"], "100%_added")
+        self.assertEqual(bridge["missing"], [])
+
     def test_advanced_runtime_can_be_invoked_through_guarded_runtime_dispatch(self):
         from quality_of_life.permissions import Capability, CapabilityPolicy
         from quality_of_life.runtime import JarvisRuntime
