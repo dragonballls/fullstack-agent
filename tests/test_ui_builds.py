@@ -128,8 +128,8 @@ class UIBuildStoreTests(unittest.TestCase):
         node = shutil.which("node")
         if node is None:
             self.skipTest("node is not installed on this runner")
-        script_path = Path(self.id().replace(".", "_") + ".js")
-        try:
+        with TemporaryDirectory() as tmp:
+            script_path = Path(tmp) / "ui_build_manager.js"
             script_path.write_text(build_manager_script(), encoding="utf-8")
             completed = subprocess.run(
                 [node, "--check", str(script_path)],
@@ -138,8 +138,6 @@ class UIBuildStoreTests(unittest.TestCase):
                 timeout=20,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        finally:
-            script_path.unlink(missing_ok=True)
 
     def test_manager_script_exposes_catalog_save_switch_and_rollback(self):
         script = build_manager_script()
