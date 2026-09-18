@@ -602,9 +602,14 @@ TEXT_INPUT_SCRIPT = r'''
         self.started = False
         self.stopped = False
         self._window: Any | None = None
+        self._floating_window: Any | None = None
+        self._floating_visible = False
+        self._floating_lock = threading.RLock()
+        self._shutting_down = False
         self._web_api = JarvisWebApi(self)
         self._update_stop = threading.Event()
         self.updater = AutoUpdateController(self._update_stop, self._exit_for_update)
+        self.floating_hotkey = FloatingTextHotkey(self._toggle_text_link_from_hotkey)
 
     @property
     def web_api(self) -> JarvisWebApi:
@@ -637,6 +642,16 @@ TEXT_INPUT_SCRIPT = r'''
     def stop(self) -> None:
         if self.stopped:
             return
+        self._shutting_down = True
+        self.floating_hotkey.stop()
+        with self._floating_lock:
+            self._save_floating_position()
+            if self._floating_window is not None:
+                try:
+                    self._floating_window.destroy()
+                except Exception:
+                    LOGGER.exception("floating command bar failed to close cleanly")
+                self._floating_window = None
         self.updater.stop()
         try:
             save = getattr(self._web_api, "neural_world_save", None)
@@ -662,6 +677,136 @@ TEXT_INPUT_SCRIPT = r'''
     @staticmethod
     def _fullscreen_enabled() -> bool:
         return os.environ.get("JARVIS_FULLSCREEN", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _load_floating_position(self) -> tuple[int | None, int | None]:
+        try:
+            payload = json.loads(FLOATING_POSITION_FILE.read_text(encoding="utf-8"))
+            x, y = payload.get("x"), payload.get("y")
+            if isinstance(x, int) and isinstance(y, int):
+                return x, y
+        except (OSError, ValueError, TypeError):
+            pass
+        return None, None
+
+    def _save_floating_position(self) -> None:
+        window = self._floating_window
+        if window is None:
+            return
+        try:
+            x, y = int(window.x), int(window.y)
+            FLOATING_POSITION_FILE.parent.mkdir(parents=True, exist_ok=True)
+            FLOATING_POSITION_FILE.write_text(json.dumps({"x": x, "y": y}), encoding="utf-8")
+        except Exception:
+            LOGGER.exception("could not persist floating command bar position")
+
+    def _create_floating_window(self, webview: Any) -> Any:
+        with self._floating_lock:
+            if self._floating_window is not None:
+                return self._floating_window
+            x, y = self._load_floating_position()
+            kwargs: dict[str, Any] = {
+                "title": "Jarvis Floating Text Link",
+                "html": FLOATING_TEXT_INPUT_HTML,
+                "js_api": self.web_api,
+                "width": 620,
+                "height": 112,
+                "resizable": True,
+                "min_size": (460, 96),
+                "hidden": True,
+                "frameless": True,
+                "easy_drag": True,
+                "shadow": True,
+                "on_top": True,
+                "background_color": "#030806",
+            }
+            if x is not None and y is not None:
+                kwargs["x"], kwargs["y"] = x, y
+            self._floating_window = webview.create_window(**kwargs)
+            self._floating_window.events.moved += self._on_floating_moved
+            self._floating_window.events.closing += self._on_floating_closing
+            self._floating_window.events.loaded += self._on_floating_loaded
+            LOGGER.info("floating command bar window object created; hotkey=%s", FLOATING_HOTKEY_LABEL)
+            return self._floating_window
+
+    def _on_floating_loaded(self, *_args: Any, **_kwargs: Any) -> None:
+        LOGGER.info("floating command bar DOM loaded")
+        if self._floating_visible and self._floating_window is not None:
+            try:
+                self._floating_window.evaluate_js("window.setTimeout(function(){var e=document.getElementById('input'); if(e)e.focus();},80);")
+            except Exception:
+                pass
+
+    def _on_floating_moved(self, *_args: Any, **_kwargs: Any) -> None:
+        self._save_floating_position()
+
+    def _on_floating_closing(self, *_args: Any, **_kwargs: Any) -> bool | None:
+        if self._shutting_down:
+            return True
+        self._floating_visible = False
+        try:
+            if self._floating_window is not None:
+                self._save_floating_position()
+                self._floating_window.hide()
+            self._show_main_text_link()
+        except Exception:
+            LOGGER.exception("could not convert floating command bar close into a hide action")
+        return False
+
+    def _show_main_text_link(self) -> None:
+        window = self._window
+        if window is None:
+            return
+        try:
+            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(true); window.jarvisTextInput && window.jarvisTextInput.focus();")
+        except Exception:
+            LOGGER.exception("could not restore in-app Jarvis text link")
+
+    def _hide_main_text_link(self) -> None:
+        window = self._window
+        if window is None:
+            return
+        try:
+            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(false);")
+        except Exception:
+            LOGGER.exception("could not hide in-app Jarvis text link")
+
+    def _toggle_text_link_from_hotkey(self) -> None:
+        self.toggle_text_link(None)
+
+    def toggle_text_link(self, detached: bool | None = None) -> dict[str, Any]:
+        with self._floating_lock:
+            target = (not self._floating_visible) if detached is None else bool(detached)
+            window = self._floating_window
+            if window is None:
+                import webview
+                window = self._create_floating_window(webview)
+            self._floating_visible = target
+            if target:
+                self._hide_main_text_link()
+                try:
+                    window.on_top = True
+                except Exception:
+                    pass
+                window.show()
+                try:
+                    window.evaluate_js("window.setTimeout(function(){var e=document.getElementById('input'); if(e)e.focus();},80);")
+                except Exception:
+                    pass
+                LOGGER.info("floating command bar shown")
+            else:
+                self._save_floating_position()
+                window.hide()
+                self._show_main_text_link()
+                LOGGER.info("floating command bar hidden")
+            return self.text_link_state()
+
+    def text_link_state(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "floating": bool(self._floating_visible),
+            "hotkey": FLOATING_HOTKEY_LABEL,
+            "position_persisted": FLOATING_POSITION_FILE.exists(),
+        }
 
     def _on_window_before_show(self, window: Any) -> None:
         try:
