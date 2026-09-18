@@ -118,7 +118,7 @@ NEURAL_MESH_BUILTIN = {
   <div id="jn-neural-console" aria-label="Neural command surface">
     <div id="jn-console-header">
       <div class="jn-console-identity"><span class="jn-console-orb"></span><div><div class="jn-console-title">NEURAL COMMAND</div><div class="jn-console-subtitle" id="jn-console-status">3D CORE LINK · ALWAYS IN VIEW</div></div></div>
-      <div class="jn-console-controls"><button class="jn-console-btn" id="jn-console-collapse" title="Collapse the command surface">MIN</button><button class="jn-console-btn" id="jn-console-hotkey" title="F13 toggles this surface">F13</button></div>
+      <div class="jn-console-controls"><button class="jn-console-btn" id="jn-console-float" title="Detach the neural command surface into a movable desktop window">FLOAT</button><button class="jn-console-btn" id="jn-console-collapse" title="Collapse the command surface">MIN</button><button class="jn-console-btn" id="jn-console-hotkey" title="F13 toggles this surface">F13</button></div>
     </div>
     <div id="jn-console-body">
       <div id="jn-console-log"><div class="jn-console-message system">Neural command surface online. Locked to JARVIS CORE.</div></div>
@@ -826,6 +826,17 @@ function toggleNeuralConsole(){
   const input=ui.querySelector("#jn-chat-input");
   if(!S.consoleCollapsed&&input)window.setTimeout(function(){input.focus();},0);
 }
+window.jarvisNeuralCommandSurface={
+  setVisible:function(visible){
+    const el=ui.querySelector("#jn-neural-console"),tether=ui.querySelector("#jn-console-tether");
+    if(el)el.style.display=visible?"":"none";
+    if(tether)tether.style.display=visible?"":"none";
+    if(visible){renderNeuralConsolePlacement(true);const input=ui.querySelector("#jn-chat-input");if(input)input.focus();}
+  },
+  focus:function(){
+    const input=ui.querySelector("#jn-chat-input");if(input)input.focus();
+  }
+};
 canvas.addEventListener("pointerdown",function(e){
   if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
   const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;
@@ -871,6 +882,17 @@ ui.querySelector("#jn-freeze").addEventListener("click",function(){S.frozen=!S.f
 ui.querySelector("#jn-chat-send").addEventListener("click",chat);
 ui.querySelector("#jn-chat-input").addEventListener("input",resizeNeuralComposer);
 ui.querySelector("#jn-chat-input").addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();chat()}});
+ui.querySelector("#jn-console-float").addEventListener("click",async function(){
+  const a=api();
+  if(!a||!a.toggle_text_link){appendConsoleMessage("system","Desktop floating link is unavailable in this build.");return;}
+  try{
+    await a.toggle_text_link(true);
+    setConsoleStatus("FLOATING LINK · DESKTOP-WIDE");
+    appendConsoleMessage("system","Floating neural command link opened. Use Ctrl+Alt+Shift+F12 to toggle it anywhere.");
+  }catch(e){
+    appendConsoleMessage("system","Could not open floating link: "+String(e));
+  }
+});
 ui.querySelector("#jn-console-collapse").addEventListener("click",toggleNeuralConsole);
 ui.querySelector("#jn-console-hotkey").addEventListener("click",function(){setConsoleCollapsed(false);const input=ui.querySelector("#jn-chat-input");if(input)input.focus();});
 ui.querySelectorAll(".jn-console-chip").forEach(function(button){button.addEventListener("click",function(){const input=ui.querySelector("#jn-chat-input");if(!input)return;input.value=String(button.dataset.command||"");resizeNeuralComposer();input.focus();});});
