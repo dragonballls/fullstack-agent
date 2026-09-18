@@ -27,5 +27,7 @@ jobs:
         run: python -m compileall quality_of_life tests
       - name: Run neural completeness gate
         run: python -m unittest tests.test_neural_completeness -v
+      - name: Run exhaustive Neural master behavior gate
+        run: python -m unittest tests.test_neural_advanced.NeuralAdvancedRuntimeTests.test_master_behavior_level_verification_is_exhaustive -v
       - name: Run regression tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
