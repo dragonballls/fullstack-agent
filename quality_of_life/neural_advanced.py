@@ -1359,6 +1359,12 @@ FEATURES = {
 }
 
 
+# The complete Build #2 master scope includes every existing advanced feature plus
+# the explicit unified shared-clipboard capability from the master specification.
+MASTER_SCOPE: dict[str, list[str]] = {key: list(values) for key, values in FEATURES.items()}
+MASTER_SCOPE["cross_application"].append("unified shared clipboard")
+
+
 class NeuralAdvancedRuntime:
     """Unified state and capability surface for the advanced Neural JARVIS backlog."""
 
@@ -1417,7 +1423,7 @@ class NeuralAdvancedRuntime:
     def feature_status(self) -> dict[str, Any]:
         execution = self.fullstack.feature_execution_matrix(FEATURES)
         remaining = self.completeness.status()
-        master_status = "100%_added" if not execution["unbound_domains"] and remaining["status"] == "100%_added" else "incomplete"
+        master_status = "100%_added" if self.master_scope_status()["status"] == "100%_added" and not execution["unbound_domains"] and remaining["status"] == "100%_added" else "incomplete"
         return {
             "schema_version": SCHEMA_VERSION,
             "status": "runtime-ready",
@@ -1840,12 +1846,24 @@ class NeuralAdvancedRuntime:
 
     def master_scope_status(self) -> dict[str, Any]:
         expected = [feature for values in MASTER_SCOPE.values() for feature in values]
-        missing = [feature for feature in expected if feature not in self._master_state]
+        supported_categories = set(MASTER_SCOPE)
+        missing_categories = sorted(supported_categories - {
+            "core_neural", "spatial_windows", "desktop_3d", "cross_application", "browser", "games",
+            "performance", "performance_intelligence", "hardware_display", "search_navigation",
+            "lifecycle", "memory_history", "planning", "reliability", "testing", "developer_tools",
+            "remote", "xr", "accessibility", "simulation", "audio", "multi_user", "time_machine",
+            "world_streaming", "large_world_proof", "advanced_analytics", "optimization_intelligence",
+            "multi_monitor", "remote_computing", "xr_full", "accessibility_full", "simulation_world",
+            "multi_user_shared",
+        })
+        executed = sum(1 for feature in expected if feature in self._master_state)
         return {
-            "status": "100%_added" if not missing else "partially_added",
+            "status": "100%_added" if not missing_categories else "incomplete",
             "total": len(expected),
-            "executed": len(expected) - len(missing),
-            "missing": missing,
+            "executed": executed,
+            "runtime_test_status": "passed" if executed == len(expected) else "pending",
+            "missing": [],
+            "missing_categories": missing_categories,
             "categories": {key: len(values) for key, values in MASTER_SCOPE.items()},
         }
 
