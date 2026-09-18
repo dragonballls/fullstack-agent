@@ -556,6 +556,12 @@ class FullstackJarvisHost:
                 component.stop()
             except Exception:
                 LOGGER.exception("fullstack component failed during shutdown")
+        try:
+            restore = getattr(self._web_api, "spatial_unembed_all", None)
+            if callable(restore):
+                restore()
+        except Exception:
+            LOGGER.exception("failed to restore spatial application windows")
         self.controller.close()
         self.stopped = True
         self.started = False
