@@ -8,7 +8,7 @@ designs can be added without modifying the application binary.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 import json
 import os
@@ -215,9 +215,9 @@ class UIBuildStore:
             raise KeyError(f"unknown UI build: {build_id}")
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            build_created_at = str(manifest.get("created_at", "") or "")
+            build_updated_at = str(manifest.get("updated_at", "") or "")
             build = self._normalize(manifest, protected=bool(manifest.get("protected", False)))
-            build.created_at = str(manifest.get("created_at", "") or "")
-            build.updated_at = str(manifest.get("updated_at", "") or "")
             css_path = build_dir / "style.css"
             markup_path = build_dir / "index.html"
             script_path = build_dir / "script.js"
@@ -233,12 +233,10 @@ class UIBuildStore:
                 },
                 protected=build.protected,
             )
-            return UIBuild(
-                **{
-                    **validated_assets.payload(),
-                    "created_at": build.created_at,
-                    "updated_at": build.updated_at,
-                }
+            return replace(
+                validated_assets,
+                created_at=build_created_at,
+                updated_at=build_updated_at,
             )
         except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError) as exc:
             raise ValueError(f"invalid UI build '{build_id}': {type(exc).__name__}") from exc
