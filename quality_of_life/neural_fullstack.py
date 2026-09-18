@@ -75,6 +75,42 @@ FULLSTACK_EXECUTION_DOMAINS = (
     "multi_user_shared",
 )
 
+FULLSTACK_EXECUTOR_BINDINGS = {
+    "core_neural": "organism",
+    "spatial_windows": "spatial",
+    "desktop_3d": "spatial",
+    "cross_application": "cross_application",
+    "browser": "browser_games",
+    "games": "browser_games",
+    "performance": "performance",
+    "performance_intelligence": "performance",
+    "hardware_display": "displays",
+    "search_navigation": "history",
+    "lifecycle": "organism",
+    "memory_history": "history",
+    "planning": "simulation",
+    "reliability": "remote",
+    "testing": "simulation",
+    "developer_tools": "inspectors",
+    "remote": "remote",
+    "xr": "xr_accessibility",
+    "accessibility": "xr_accessibility",
+    "simulation": "simulation",
+    "audio": "audio",
+    "multi_user": "multi_user",
+    "time_machine": "history",
+    "world_streaming": "streaming",
+    "large_world_proof": "simulation",
+    "advanced_analytics": "performance",
+    "optimization_intelligence": "optimization",
+    "multi_monitor": "displays",
+    "remote_computing": "remote",
+    "xr_full": "xr_accessibility",
+    "accessibility_full": "xr_accessibility",
+    "simulation_world": "simulation",
+    "multi_user_shared": "multi_user",
+}
+
 
 @dataclass
 class ExecutionReceipt:
@@ -1613,6 +1649,7 @@ class FullStackNeuralExperience:
             handler = "available" if domain in FULLSTACK_EXECUTION_DOMAINS else "adapter-required"
             matrix[domain] = {
                 "executor": handler,
+                "executor_attribute": FULLSTACK_EXECUTOR_BINDINGS.get(domain),
                 "feature_count": len(feature_names),
                 "status": "implemented",
                 "features": [str(feature) for feature in feature_names],
@@ -1648,7 +1685,7 @@ class FullStackNeuralExperience:
 
 
 __all__ = [
-    "FULLSTACK_EXECUTION_DOMAINS",
+    "FULLSTACK_EXECUTION_DOMAINS", "FULLSTACK_EXECUTOR_BINDINGS",
     "FullStackNeuralExperience",
     "ExecutionReceipt",
     "AudioExperience",
