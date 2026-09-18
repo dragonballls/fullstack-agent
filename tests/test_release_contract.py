@@ -46,7 +46,9 @@ class ReleaseContractTests(unittest.TestCase):
             workflow = Path(".github/workflows") / name
             text = workflow.read_text(encoding="utf-8")
             self.assertIn("concurrency:", text, name)
-            self.assertIn("cancel-in-progress: true", text, name)
+            self.assertIn("group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}", text, name)
+            expected_cancel = "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" if name == "jarvis-release-gate.yml" else "cancel-in-progress: true"
+            self.assertIn(expected_cancel, text, name)
 
     def test_pr_test_workflows_do_not_duplicate_feature_branch_runs(self):
         for name in (
