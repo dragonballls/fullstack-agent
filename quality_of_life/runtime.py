@@ -52,6 +52,22 @@ class JarvisRuntime:
             return []
         return world.search(query, **filters)
 
+    def neural_shape_library(self) -> list[dict[str, object]]:
+        world = self._neural_world_service
+        return world.neural_shape_library() if world is not None else []
+
+    def neural_shape_save(self, name: str, shape: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_save(name, shape)
+
+    def neural_shape_delete(self, name: str) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_delete(name)
+
     def neural_entity_shape_set(self, entity_id: str, shape: object) -> dict[str, object]:
         world = self._neural_world_service
         if world is None:
@@ -61,7 +77,8 @@ class JarvisRuntime:
             entity = world._entities.get(str(entity_id))
             if entity is None:
                 raise KeyError("unknown neural entity")
-            normalized = normalize_shape(shape).as_dict()
+            registry = getattr(self._neural_world_service, "shape_registry", None)
+            normalized = (registry.resolve(shape) if registry is not None else normalize_shape(shape)).as_dict()
             entity.shape = normalized
             entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
             world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
