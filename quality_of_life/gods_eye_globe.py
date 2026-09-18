@@ -55,6 +55,22 @@ def globe_payload(runtime: Any) -> dict[str, object]:
             "current", "Current location", point[0], point[1], "current", True,
             current.get("accuracy_m"), str(current.get("source", ""))[:80],
         ))
+    try:
+        eye = runtime._tool("gods_eye")
+    except Exception:
+        eye = None
+    if eye is not None:
+        for kind in ("device", "phone", "family"):
+            for index, item in enumerate(eye.provider_locations(kind)):
+                point = _point(item)
+                if point is None or not bool(item.get("authorized", True)):
+                    continue
+                label = str(item.get("label", item.get("name", kind.title())))[:120]
+                locators.append(GlobeLocator(
+                    f"{kind}:{index}:{label.casefold().replace(" ", "-")[:50]}",
+                    label, point[0], point[1], kind, True,
+                    item.get("accuracy_m"), str(item.get("source", kind))[:80],
+                ))
     saved = runtime.dispatch(Capability.LOCATION_READ, "locations.list")
     for item in saved or ():
         raw = item.as_dict() if hasattr(item, "as_dict") else item if isinstance(item, dict) else {}
