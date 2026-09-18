@@ -161,6 +161,7 @@ class NeuralWorld:
         self._relations: dict[tuple[str, str, str], NeuralRelation] = {}
         self.events = event_bus or NeuralEventBus()
         self.persistence = persistence
+        self.shape_registry = ShapeRegistry()
         self._bootstrap()
         self._load_persisted()
 
@@ -621,7 +622,7 @@ def install(desktop_module: Any) -> None:
             self._neural_world = NeuralWorld(persistence=NeuralPersistence())
             self._performance = PerformanceGovernor()
             self._layout = SpatialLayoutStore()
-            self._shape_registry = ShapeRegistry()
+            self._shape_registry = self._neural_world.shape_registry
             self._discovery = NeuralDiscovery(self._neural_world, host.controller.runtime)
             self._last_discovery = 0.0
             try:
