@@ -59,6 +59,7 @@ class ShapeHistoryEntry:
     target_id: str
     original_entity: dict[str, Any] | None = None
     original_layout: dict[str, Any] | None = None
+    layout_existed: bool = False
     generated: bool = False
     created_at: str = ""
     updated_at: str = ""
@@ -68,6 +69,7 @@ class ShapeHistoryEntry:
             "target_id": self.target_id,
             "original_entity": self.original_entity,
             "original_layout": self.original_layout,
+            "layout_existed": self.layout_existed,
             "generated": self.generated,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -102,6 +104,7 @@ class NeuralShapeController:
                     target_id=str(raw.get("target_id", target_id)),
                     original_entity=dict(raw["original_entity"]) if isinstance(raw.get("original_entity"), dict) else None,
                     original_layout=dict(raw["original_layout"]) if isinstance(raw.get("original_layout"), dict) else None,
+                    layout_existed=bool(raw.get("layout_existed", isinstance(raw.get("original_layout"), dict))),
                     generated=bool(raw.get("generated", False)),
                     created_at=str(raw.get("created_at", "")),
                     updated_at=str(raw.get("updated_at", "")),
@@ -140,6 +143,7 @@ class NeuralShapeController:
                 return existing
             entity = None
             layout = None
+            layout_existed = False
             if not generated:
                 with self.world._lock:
                     node = self.world._entities.get(target_id)
@@ -147,12 +151,14 @@ class NeuralShapeController:
                         entity = node.as_dict()
             if not generated and target_id.startswith("window:"):
                 state = self.layout.get(target_id)
+                layout_existed = state is not None
                 if state is not None:
                     layout = state.as_dict()
             entry = ShapeHistoryEntry(
                 target_id=target_id,
                 original_entity=entity,
                 original_layout=layout,
+                layout_existed=layout_existed,
                 generated=generated,
                 created_at=_now(),
                 updated_at=_now(),
@@ -318,6 +324,12 @@ class NeuralShapeController:
             raw_layout.pop("key", None)
             try:
                 self.layout.upsert(target, **raw_layout)
+                restored = True
+            except (TypeError, ValueError, OSError):
+                pass
+        elif target.startswith("window:") and not entry.layout_existed:
+            try:
+                self.layout.remove(target)
                 restored = True
             except (TypeError, ValueError, OSError):
                 pass
