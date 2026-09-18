@@ -98,7 +98,10 @@ try {
         if ($process.HasExited) {
             throw "Jarvis.exe exited after native window-object creation with code $($process.ExitCode)"
         }
-        Write-Host 'Headless hosted-runner GUI smoke passed: frozen EXE validated the production pywebview native-window contract and remained alive.'
+        if ($contents -notmatch 'floating command bar window object created;') {
+            throw 'Frozen Jarvis.exe did not create the floating command bar window object'
+        }
+        Write-Host 'Headless hosted-runner GUI smoke passed: frozen EXE validated the production native-window contract and created the floating command bar window.'
         return
     }
 
