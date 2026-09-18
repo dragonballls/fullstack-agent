@@ -1747,9 +1747,12 @@ class NeuralAdvancedRuntime:
             if not metrics:
                 metrics = {"cpu": 20, "ram": 35, "gpu": 40, "vram": 30, "disk": 2, "network": 1, "thermal": 0.25, "battery": 0.9, "frame_ms": 16.6, "capture_ms": 3.0}
             result = self.performance.sample(**metrics)
-            if "cost" in lower:
-                result["window_cost"] = dict(self.performance.window_costs)
-                result["neuron_cost"] = dict(self.performance.neuron_costs)
+            if "window" in lower and "cost" in lower:
+                result["window_cost"] = self.performance.cost(windows=dict(data.get("window_costs", {"master:window": 1.0})))["per_window"]
+            if "neuron" in lower and "cost" in lower:
+                result["neuron_cost"] = self.performance.cost(neurons=dict(data.get("neuron_costs", {"master:neuron": 0.5})))["per_neuron"]
+            if "cost" in lower and "window" not in lower and "neuron" not in lower:
+                result["costs"] = self.performance.cost(windows={"master:window": 1.0}, neurons={"master:neuron": 0.5})
             if "baseline" in lower:
                 self.performance.baseline(str(data.get("name", "master")), float(data.get("value", 16.6)))
                 result["baseline"] = self.performance.baseline_comparison(str(data.get("name", "master")), float(data.get("value", 16.6)))
@@ -1907,10 +1910,11 @@ class NeuralAdvancedRuntime:
             return self._record_master(category, name, result, data)
 
         if category == "developer_tools":
-            inspector = next((value.replace(" inspector", "").replace("-", "_") for value in (
-                "relationship", "permission", "lifecycle", "performance", "render_cost", "physics_cost",
-                "capture_cost", "event_origin", "task", "provider", "spatial_coordinate", "world_state", "timeline"
-            ) if value.replace("_", " ") in lower), "world_state")
+            normalized_lower = lower.replace("-", " ")
+            inspector = next((value.replace("-", "_") for value in (
+                "relationship", "permission", "lifecycle", "performance", "render-cost", "physics-cost",
+                "capture-cost", "event-origin", "task", "provider", "spatial-coordinate", "world-state", "timeline"
+            ) if value.replace("-", " ") in normalized_lower), "world_state")
             payload = {"feature": name, "state": dict(data), "performance": self.performance.analytics()}
             fields = {
                 "relationship": "relationships", "permission": "permissions", "lifecycle": "lifecycle",
@@ -2264,6 +2268,7 @@ class NeuralAdvancedRuntime:
                     failures.append({"feature": feature, "reason": "behavior assertion failed", "detail": checked})
             except Exception as exc:
                 failures.append({"feature": feature, "error": type(exc).__name__, "detail": str(exc)})
+        self.streaming.stop_worker()
         return {
             "status": "pass" if not failures else "fail",
             "requested": len(expected),
