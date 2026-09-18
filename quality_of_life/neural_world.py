@@ -730,16 +730,16 @@ class NeuralWorldBridgeMixin:
         return self._advanced.tick(dt, activity=activity)
 
     def neural_workspace_command(self, operation: str, payload: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.command_workspace(operation, payload)
+        return self.neural_advanced_command("workspace", operation, payload)
 
     def neural_cross_application_suggest(self, kind: str, source: str, destinations: list[str]) -> list[dict[str, object]]:
         return self._advanced.cross_app.suggest(kind, source, destinations=destinations)
 
     def neural_cross_application_transfer(self, kind: str, source: str, destination: str, payload_ref: str = "") -> dict[str, object]:
-        return self._advanced.cross_app.transfer(kind, source, destination, payload_ref or None)
+        return self.neural_advanced_command("cross_application", "transfer", {"kind": kind, "source": source, "destination": destination, "payload_ref": payload_ref or None})
 
     def neural_performance_sample(self, metrics: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.performance.sample(**dict(metrics))
+        return self.neural_advanced_command("performance", "sample", dict(metrics))
 
     def neural_performance_analytics(self) -> dict[str, object]:
         return self._advanced.performance.analytics()
@@ -748,29 +748,28 @@ class NeuralWorldBridgeMixin:
         return self._advanced.profile_learning(kind, name, **dict(metrics))
 
     def neural_display_update(self, display_id: str, state: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.displays.upsert(display_id, **dict(state))
+        return self.neural_advanced_command("display", "update", {"id": display_id, "state": dict(state)})
 
     def neural_display_save_layout(self) -> dict[str, object]:
-        return self._advanced.displays.save_arrangement()
+        return self.neural_advanced_command("display", "save", {})
 
     def neural_history_bookmark(self, name: str, payload: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.history.bookmark(name, payload)
+        return self.neural_advanced_command("history", "bookmark", {"name": name, "payload": dict(payload)})
 
     def neural_history_snapshot(self, snapshot_id: str, world: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.history.save_snapshot(snapshot_id, world)
+        return self.neural_advanced_command("history", "snapshot", {"id": snapshot_id, "world": dict(world)})
 
     def neural_time_machine(self, compare_left: str = "", compare_right: str = "", replay_id: str = "") -> dict[str, object]:
-        compare = (compare_left, compare_right) if compare_left and compare_right else None
-        return self._advanced.time_machine(compare=compare, replay_id=replay_id or None)
+        return self.neural_advanced_command("history", "time_machine", {"left": compare_left, "right": compare_right, "replay_id": replay_id})
 
     def neural_dry_run(self, actions: list[Mapping[str, object]], known_good: Mapping[str, object] | None = None) -> dict[str, object]:
-        return self._advanced.planner.dry_run(actions, known_good=known_good)
+        return self.neural_advanced_command("planning", "dry_run", {"actions": actions, "known_good": known_good})
 
     def neural_inspect(self) -> dict[str, object]:
         return self._advanced.inspect()
 
     def neural_simulation_run(self, scenario: str, count: int = 1000) -> dict[str, object]:
-        return self._advanced.simulation_run(scenario, count=count)
+        return self.neural_advanced_command("simulation", "benchmark", {"scenario": scenario, "count": count})
 
     def neural_reliability_event(self, event: str, region: str = "") -> dict[str, object]:
         if event == "sleep": return self._advanced.reliability.sleep()
@@ -780,28 +779,28 @@ class NeuralWorldBridgeMixin:
         raise ValueError("unknown reliability event")
 
     def neural_accessibility_update(self, settings: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.xr_accessibility.update(**dict(settings))
+        return self.neural_advanced_command("accessibility", "update", dict(settings))
 
     def neural_audio_event(self, kind: str, source: str = "jarvis", position: list[float] | None = None, intensity: float = 0.5, priority: float = 0.5) -> dict[str, object]:
-        return self._advanced.audio.emit(kind, source=source, position=position, intensity=intensity, priority=priority)
+        return self.neural_advanced_command("audio", "event", {"kind": kind, "source": source, "position": position, "intensity": intensity, "priority": priority})
 
     def neural_audio_policy(self, game_active: bool = False, performance_pressure: float = 0.0) -> dict[str, object]:
-        return self._advanced.audio.policy(game_active=game_active, performance_pressure=performance_pressure)
+        return self.neural_advanced_command("audio", "policy", {"game_active": game_active, "performance_pressure": performance_pressure})
 
     def neural_multiuser_profile(self, user_id: str, preferences: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.multi_user.profile(user_id, **dict(preferences))
+        return self.neural_advanced_command("multi_user", "profile", {"id": user_id, "preferences": dict(preferences)})
 
     def neural_multiuser_region(self, region_id: str, owner: str, shared: bool = False, members: list[str] | None = None) -> dict[str, object]:
-        return self._advanced.multi_user.region(region_id, owner=owner, shared=shared, members=members or [])
+        return self.neural_advanced_command("multi_user", "region", {"id": region_id, "owner": owner, "shared": shared, "members": members or []})
 
     def neural_remote_region(self, region_id: str, state: Mapping[str, object]) -> dict[str, object]:
-        return self._advanced.remote.upsert(region_id, **dict(state))
+        return self.neural_advanced_command("remote", "upsert", {"id": region_id, "state": dict(state)})
 
     def neural_stream_region(self, region_id: str, priority: float = 0.5) -> dict[str, object]:
-        return self._advanced.streaming.request(region_id, priority=priority)
+        return self.neural_advanced_command("streaming", "request", {"id": region_id, "priority": priority})
 
     def neural_stream_pump(self, budget: int = 4) -> dict[str, object]:
-        return self._advanced.streaming.pump(budget)
+        return self.neural_advanced_command("streaming", "pump", {"budget": budget})
 
     def neural_advanced_snapshot_from_world(self) -> dict[str, object]:
         return self._advanced.snapshot()
@@ -812,6 +811,9 @@ class NeuralWorldBridgeMixin:
         required = {
             "workspace": Capability.WINDOW_CONTROL,
             "core": Capability.SYSTEM_DIAGNOSTICS,
+            "performance": Capability.SYSTEM_DIAGNOSTICS,
+            "audio": Capability.SYSTEM_DIAGNOSTICS,
+            "streaming": Capability.SYSTEM_DIAGNOSTICS,
             "fluid": Capability.SYSTEM_DIAGNOSTICS,
             "cross_application": Capability.FILE_WRITE,
             "browser": Capability.BROWSER_CONTROL,
