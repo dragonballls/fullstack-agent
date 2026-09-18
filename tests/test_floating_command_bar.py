@@ -33,6 +33,7 @@ class FloatingCommandBarContractTests(unittest.TestCase):
         self.assertIn("toggle_text_link(self, detached: bool | None = None)", self.desktop)
         self.assertIn("window.hide()", self.desktop)
         self.assertIn("_show_main_text_link()", self.desktop)
+        self.assertIn("jarvisNeuralCommandSurface", self.desktop)
         self.assertIn("toggle_text_link(false)", self.desktop)
 
     def test_position_is_persisted(self):
