@@ -615,6 +615,15 @@ class NeuralWorldBridgeMixin:
     def neural_observation_state(self) -> dict[str, object]:
         return self.host.controller.runtime.neural_observation_state()
 
+    def neural_selection_set(self, entity_id: str | None) -> dict[str, object]:
+        value = str(entity_id).strip() if entity_id else ""
+        if value:
+            with self._neural_world._lock:
+                if value not in self._neural_world._entities:
+                    raise KeyError("unknown neural selection")
+        self.host.controller.runtime.set_neural_selection(value or None)
+        return {"ok": True, "selected": value or None}
+
     def neural_shape_catalog(self) -> list[str]:
         from .neural_shapes import BUILTIN_SHAPES
         return list(BUILTIN_SHAPES) + [item["name"] for item in self._shape_registry.catalog()]
