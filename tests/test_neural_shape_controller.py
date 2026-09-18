@@ -56,6 +56,17 @@ class NeuralShapeControllerTests(unittest.TestCase):
         self.assertEqual(world.search("Neuron A", limit=1)[0]["shape"]["name"], "droplet")
         self.assertEqual(world.search("Neuron B", limit=1)[0]["shape"]["name"], "droplet")
 
+    def test_revert_all_also_removes_generated_objects(self):
+        tmp, world, layout, controller = self.make_controller()
+        self.addCleanup(tmp.cleanup)
+        world.upsert("neuron:global", EntityKind.TASK, "Global Neuron", source="test", shape="droplet")
+        controller.apply("neuron:global", "heart")
+        created = controller.create("Generated Widget", "torus")
+        result = controller.revert_all()
+        self.assertTrue(result["ok"])
+        self.assertEqual(world.search("Global Neuron", limit=1)[0]["shape"]["name"], "droplet")
+        self.assertEqual(world.search("Generated Widget", limit=5), [])
+
     def test_rotation_units_are_normalized(self):
         self.assertAlmostEqual(parse_rotation_speed(30, "degrees per second"), 0.5235987756, places=6)
         self.assertAlmostEqual(parse_rotation_speed(2, "rps"), 12.5663706144, places=6)
