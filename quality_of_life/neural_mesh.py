@@ -43,6 +43,8 @@ NEURAL_MESH_BUILTIN = {
 .jn-spatial-window.giant{width:740px;height:470px}
 .jn-window-head{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;border-bottom:1px solid rgba(92,200,255,.12);background:rgba(3,12,24,.57);font-size:8px;letter-spacing:.08em;color:#86c4e2;user-select:none;cursor:grab}
 .jn-window-head:active{cursor:grabbing}
+.jn-window-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;cursor:nwse-resize;opacity:.5}
+.jn-window-resize::after{content:"";position:absolute;right:2px;bottom:2px;width:10px;height:10px;border-right:2px solid rgba(140,220,255,.7);border-bottom:2px solid rgba(140,220,255,.7)}
 .jn-window-preview{display:block;width:100%;height:calc(100% - 28px);object-fit:contain;background:rgba(1,5,12,.70)}
 .jn-window-empty{height:222px;display:flex;align-items:center;justify-content:center;color:rgba(112,164,194,.55);font-size:8px;letter-spacing:.12em;text-transform:uppercase}
 .jn-spatial-window.giant .jn-window-empty{height:442px}
@@ -298,6 +300,11 @@ function render(now){
   }
   rootStatus("AUTO QUALITY · "+S.quality.toUpperCase()+" · "+Math.round(1000/Math.max(1,S.frameMs))+" FPS · "+nodes.length+" ACTIVE");
 }
+function renderEarthLabels(){
+  const box=ui.querySelector("#jn-focus");
+  const locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
+  if(S.view==="earth"&&locators.length)box.textContent="GOD'S EYE · "+locators.map(function(x){return String(x.label||"Locator").slice(0,36)}).slice(0,5).join(" · ");
+}
 function renderEarth(now){
   const oldYaw=S.yaw,oldPitch=S.pitch,oldDistance=S.distance,oldTarget=S.target.slice();
   S.yaw=S.earthYaw;S.pitch=S.earthPitch;S.distance=S.earthDistance;S.target=[0,0,0];
@@ -333,6 +340,7 @@ function renderEarth(now){
   }
   S.yaw=oldYaw;S.pitch=oldPitch;S.distance=oldDistance;S.target=oldTarget;
   ui.querySelector("#jn-title").textContent="GOD'S EYE";
+  renderEarthLabels();
   ui.querySelector("#jn-status").textContent="3D EARTH · "+locators.length+" LOCATORS · "+(S.earthData.authorized_current?"CURRENT LOCATION AUTHORIZED":"CURRENT LOCATION UNAVAILABLE");
 }
 async function pollEarth(){
@@ -456,7 +464,7 @@ async function pollWindows(){
 }
 function makeSurface(info){
   const el=document.createElement("div");el.className="jn-spatial-window";el.dataset.handle=String(info.handle);
-  el.innerHTML='<div class="jn-window-head"><span class="jn-window-title"></span><span class="jn-window-status"></span></div><div class="jn-window-empty">LIVE APPLICATION SURFACE</div>';
+  el.innerHTML='<div class="jn-window-head"><span class="jn-window-title"></span><span class="jn-window-status"></span></div><div class="jn-window-empty">LIVE APPLICATION SURFACE</div><div class="jn-window-resize"></div>';
   el.querySelector(".jn-window-title").textContent=String(info.title||"Window").slice(0,80);
   el.querySelector(".jn-window-status").textContent=info.presentation&&info.presentation.windows_graphics_capture?"GFX CAPTURE":"NATIVE";
   const head=el.querySelector(".jn-window-head");
@@ -475,8 +483,31 @@ function makeSurface(info){
     clearTimeout(S.layoutTimers.get(key));S.layoutTimers.set(key,setTimeout(async function(){const a=api();if(a&&a.neural_window_set_state){try{await a.neural_window_set_state(key,{position:[x/70,-y/70,3.5],scale:S.giant?1.28:1});}catch(_){}}},160));
   };
   head.addEventListener("pointerup",finish);head.addEventListener("pointercancel",finish);
+  attachResize(info,el);
   el.addEventListener("dblclick",async function(e){e.stopPropagation();const a=api();if(a&&a.spatial_window_focus)try{await a.spatial_window_focus(Number(info.handle));}catch(_){}});
   return el;
+}
+function attachResize(info,el){
+  const grip=el.querySelector(".jn-window-resize");if(!grip)return;
+  grip.addEventListener("pointerdown",function(e){
+    e.stopPropagation();grip.setPointerCapture(e.pointerId);grip.dataset.dragging="1";
+    grip.dataset.startX=String(e.clientX);grip.dataset.startY=String(e.clientY);
+    grip.dataset.startScale=String(Number(el.dataset.scale)||1);
+  });
+  const end=function(){
+    if(grip.dataset.dragging!=="1")return;grip.dataset.dragging="0";
+    const key="window:"+info.handle;const scale=Math.max(.20,Math.min(4,Number(el.dataset.scale)||1));
+    const x=Number(el.dataset.x)||0,y=Number(el.dataset.y)||0;
+    const apiObj=api();if(apiObj&&apiObj.neural_window_set_state)apiObj.neural_window_set_state(key,{position:[x/70,-y/70,3.5],scale}).catch(function(){});
+  };
+  grip.addEventListener("pointermove",function(e){
+    if(grip.dataset.dragging!=="1")return;
+    const startScale=Number(grip.dataset.startScale)||1;
+    const delta=(e.clientX-Number(grip.dataset.startX))+(e.clientY-Number(grip.dataset.startY));
+    el.dataset.scale=String(Math.max(.20,Math.min(4,startScale+delta/420)));
+    applySurfaceTransform(el);
+  });
+  grip.addEventListener("pointerup",end);grip.addEventListener("pointercancel",end);
 }
 async function preview(info,el,index){
   if(index>2||S.quality==="minimal")return;
@@ -530,8 +561,15 @@ async function traceSelected(){
   }catch(_){}
 }
 async function search(value){
-  const a=api();if(!value.trim()||!a||!a.neural_search)return;
-  try{const r=await a.neural_search(value.trim(),null,null,null,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}}catch(_){}
+  const a=api();if(!value.trim()||!a)return;
+  try{
+    if(S.view==="earth"&&a.gods_eye_globe_search){
+      S.earthData=await a.gods_eye_globe_search(value.trim());
+      const box=ui.querySelector("#jn-response");box.textContent=(S.earthData.locators&&S.earthData.locators.length)?("Located "+S.earthData.locators[0].label):"No Earth locations found";box.classList.add("visible");return;
+    }
+    if(!a.neural_search)return;
+    const r=await a.neural_search(value.trim(),null,null,null,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
+  }catch(_){ }
 }
 async function chat(){
   const input=ui.querySelector("#jn-chat-input"),value=input.value.trim(),a=api();if(!value||!a||!a.submit_text)return;
