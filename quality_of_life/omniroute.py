@@ -7,6 +7,7 @@ starts the local `omniroute` command without opening a console window.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import shutil
 import subprocess
@@ -15,6 +16,19 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+
+def is_loopback_hostname(hostname: str | None) -> bool:
+    """Return whether a hostname is localhost or a syntactic loopback address."""
+    if not hostname:
+        return False
+    normalized = hostname.strip().lower().rstrip(".")
+    if normalized == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(normalized).is_loopback
+    except ValueError:
+        return False
 
 
 class OmniRouteConnection:
@@ -67,7 +81,8 @@ class OmniRouteConnection:
             return False
         command[0] = executable
         env = os.environ.copy()
-        env.setdefault("PORT", urllib.parse.urlparse(self.base_url).port and str(urllib.parse.urlparse(self.base_url).port) or "20128")
+        parsed = urllib.parse.urlparse(self.base_url)
+        env["PORT"] = str(parsed.port or 20128)
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             self._process = subprocess.Popen(
@@ -92,7 +107,7 @@ class OmniRouteConnection:
             if self.probe():
                 self._ready = True
                 return True
-            if not self.enabled or not urllib.parse.urlparse(self.base_url).hostname in {"127.0.0.1", "localhost"}:
+            if not self.enabled or not is_loopback_hostname(urllib.parse.urlparse(self.base_url).hostname):
                 return False
             if self._process is None or self._process.poll() is not None:
                 if not self._start():
