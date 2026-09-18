@@ -317,6 +317,13 @@ class NeuralWorld:
         if domain == "simulation":
             if op == "generate": return self.advanced.simulation.generate(**{key: int(value) for key, value in data.items() if key in {"neurons", "windows", "tasks", "relationships"}})
             if op == "benchmark": return self.advanced.simulation_run(str(data.get("scenario", "cpu_stress")), count=int(data.get("count", 1000)))
+        if domain == "completeness":
+            if op == "status":
+                return self.advanced.completeness.status()
+            if op == "smoke":
+                return self.advanced.completeness.smoke_all()
+            if op == "execute":
+                return self.advanced.completeness.execute(str(data["feature"]), dict(data.get("payload", {})))
         if domain == "fullstack":
             return self.advanced.fullstack.command(str(data.get("domain", "core_neural")), op, data.get("payload", data))
         raise ValueError(f"unknown advanced command: {domain}.{operation}")
