@@ -150,7 +150,12 @@ _BINDINGS = (
     *_bind((REMAINING_SCOPE["advanced_optimization"][5],), "optimization_intelligence", "compare"),
 
     *_bind(REMAINING_SCOPE["accessibility"], "accessibility", "update"),
-    *_bind(REMAINING_SCOPE["multi_monitor"], "multi_monitor", "update"),
+    *_bind(REMAINING_SCOPE["multi_monitor"][0:3], "multi_monitor", "update"),
+    *_bind((REMAINING_SCOPE["multi_monitor"][3],), "multi_monitor", "placement"),
+    *_bind((REMAINING_SCOPE["multi_monitor"][4],), "multi_monitor", "update"),
+    *_bind((REMAINING_SCOPE["multi_monitor"][5],), "multi_monitor", "save_layout"),
+    *_bind((REMAINING_SCOPE["multi_monitor"][6],), "multi_monitor", "placement"),
+    *_bind((REMAINING_SCOPE["multi_monitor"][7],), "multi_monitor", "update"),
     *_bind((REMAINING_SCOPE["remote_computing"][0],), "remote_computing", "application"),
     *_bind((REMAINING_SCOPE["remote_computing"][1],), "remote_computing", "workflow"),
     *_bind((REMAINING_SCOPE["remote_computing"][2],), "remote_computing", "sync"),
@@ -323,6 +328,53 @@ class NeuralFeatureCompleteness:
                 return self.executor.command(domain, "region", {"id": str(data.get("id", "brain:shared")), "state": {"owner": str(data.get("owner", "user-a")), "shared": True}})
             return self.executor.command(domain, "resource", {"id": str(data.get("id", "resource:shared")), "owner": str(data.get("owner", "user-a")), "shared": True})
         raise ValueError(f"no completeness executor for {domain}.{op}")
+
+    def smoke_all(self) -> dict[str, Any]:
+        """Execute every registered remaining-scope capability through its runtime binding."""
+        self.executor.history.capture("snapshot:latest", {"performance": {"frame_ms": 16.6}})
+        self.executor.history.capture("snapshot:t1", {"performance": {"frame_ms": 12.0}, "layout": {"mode": "desktop"}})
+        self.executor.history.capture("snapshot:t2", {"performance": {"frame_ms": 18.0}, "layout": {"mode": "3d"}})
+        self.executor.remote.application("app:remote", machine_id="machine:remote")
+        self.executor.multi_user.profile("user-a", theme="neural")
+        self.executor.xr_accessibility.device("xr:controller", kind="controller", connected=True)
+        self.executor.displays.upsert("display-1", width=1920, height=1080, dpi=144, refresh_hz=120, x=0, y=0)
+        self.executor.simulation.create("sandbox:jarvis")
+        self.executor.streaming.index("region:indexed", (0, 0, 0))
+        results: list[dict[str, Any]] = []
+        failures: list[dict[str, Any]] = []
+        for feature in (name for values in REMAINING_SCOPE.values() for name in values):
+            payload: dict[str, Any] = {}
+            binding = self.binding(feature)
+            if binding.name == "Complete historical-world comparison":
+                payload = {"left": "snapshot:t1", "right": "snapshot:t2"}
+            elif binding.name == "Full historical replay":
+                payload = {"id": "snapshot:latest"}
+            elif binding.domain == "remote_computing" and binding.operation == "control":
+                payload = {"id": "app:remote", "confirmed": True}
+            elif binding.domain == "xr_full" and binding.operation == "haptic":
+                payload = {"id": "xr:controller", "intensity": 0.3}
+            elif binding.domain == "multi_monitor" and binding.operation in {"placement"}:
+                payload = {"display_id": "display-1", "target_display": "display-1", "logical": (320, 240)}
+            elif binding.domain == "multi_monitor" and binding.operation == "save_layout":
+                payload = {"id": "display-1", "state": {}}
+            elif binding.domain == "large_world_proof":
+                payload = {"count": 1000}
+            elif binding.domain == "simulation_world":
+                payload = {"id": "sandbox:jarvis", "neurons": 32, "windows": 8, "tasks": 4, "relationships": 64}
+            try:
+                output = self.execute(feature, payload)
+                results.append({"feature": feature, "status": "executed", "result": output["result"]})
+            except Exception as exc:
+                failures.append({"feature": feature, "domain": binding.domain, "operation": binding.operation, "error": type(exc).__name__, "detail": str(exc)})
+            finally:
+                if binding.domain == "world_streaming" and binding.operation == "start":
+                    self.executor.command("world_streaming", "stop", {})
+        return {
+            "status": "pass" if not failures else "fail",
+            "requested": self.total,
+            "executed": len(results),
+            "failures": failures,
+        }
 
     @staticmethod
     def _audio_kind(feature: str) -> str:
