@@ -41,6 +41,7 @@ NEURAL_MESH_BUILTIN = {
 #jn-surfaces{position:absolute;inset:0;pointer-events:none;perspective:1600px;transform-style:preserve-3d;overflow:hidden}
 .jn-spatial-window{position:absolute;left:0;top:0;width:360px;height:250px;transform-style:preserve-3d;pointer-events:auto;border:1px solid rgba(92,200,255,.25);border-radius:14px;background:rgba(4,16,30,.62);box-shadow:0 18px 70px rgba(0,0,0,.42),0 0 32px rgba(31,151,238,.09),inset 0 0 24px rgba(37,155,232,.05);overflow:hidden;backdrop-filter:blur(7px)}
 .jn-spatial-window.giant{width:740px;height:470px}
+.jn-spatial-window.shape-circle{border-radius:50%}.jn-spatial-window.shape-oval{border-radius:48%}.jn-spatial-window.shape-pill{border-radius:999px}.jn-spatial-window.shape-hex{clip-path:polygon(25% 4%,75% 4%,98% 50%,75% 96%,25% 96%,2% 50%)}.jn-spatial-window.shape-diamond{clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)}.jn-spatial-window.shape-triangle{clip-path:polygon(50% 0%,100% 100%,0% 100%)}.jn-spatial-window.shape-star{clip-path:polygon(50% 0%,61% 36%,98% 36%,68% 58%,79% 100%,50% 74%,21% 100%,32% 58%,2% 36%,39% 36%)}
 .jn-window-head{height:28px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;border-bottom:1px solid rgba(92,200,255,.12);background:rgba(3,12,24,.57);font-size:8px;letter-spacing:.08em;color:#86c4e2;user-select:none;cursor:grab}
 .jn-window-head:active{cursor:grabbing}
 .jn-window-resize{position:absolute;right:2px;bottom:2px;width:18px;height:18px;cursor:nwse-resize;opacity:.5}
@@ -514,6 +515,7 @@ async function preview(info,el,index){
   const a=api();if(!a||!a.spatial_window_capture)return;
   try{const cap=await a.spatial_window_capture(Number(info.handle),S.giant?1000:720);if(!cap||!cap.png_base64)return;const img=document.createElement("img");img.className="jn-window-preview";img.alt="";img.src="data:image/png;base64,"+cap.png_base64;const old=el.querySelector(".jn-window-empty,.jn-window-preview");if(old)old.replaceWith(img);}catch(_){}
 }
+function surfaceShapeClass(shape){const n=String(shape&&shape.name||"rectangle").toLowerCase();const m={circle:"circle",sphere:"circle",oval:"oval",pill:"pill",hexagon:"hex",hex:"hex",diamond:"diamond",triangle:"triangle",star:"star"};return m[n]||"";}
 function applySurfaceTransform(el){
   const x=Number(el.dataset.x)||0,y=Number(el.dataset.y)||0,scale=Number(el.dataset.scale)||1,z=Number(el.dataset.z)||0;
   el.style.transform="translate3d("+x+"px,"+y+"px,"+z+"px) scale("+scale+")";
@@ -524,7 +526,10 @@ function renderSpatialWindows(){
   S.windows.slice().sort(function(a,b){return(Number(Boolean(a.minimized))-Number(Boolean(b.minimized)))}).forEach(function(info,index){
     const key=String(info.handle);keep.add(key);let el=current.get(key);if(!el)el=makeSurface(info);
     el.classList.toggle("giant",S.giant);
+    for(const cls of ["shape-circle","shape-oval","shape-pill","shape-hex","shape-diamond","shape-triangle","shape-star"])el.classList.remove(cls);
     const saved=S.layouts.get("window:"+info.handle);
+    if(saved&&saved.shape){const cls=surfaceShapeClass(saved.shape);if(cls)el.classList.add("shape-"+cls);}
+
     if(saved&&Array.isArray(saved.position)){
       el.dataset.x=String(Number(saved.position[0]||0)*70);
       el.dataset.y=String(-Number(saved.position[1]||0)*70);
