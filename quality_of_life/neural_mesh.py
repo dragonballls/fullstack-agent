@@ -86,7 +86,7 @@ const S={
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
   quality:"maximum",mode:"foreground",view:"network",frozen:false,giant:false,showWindows:true,
-  earthData:{locators:[]},earthLastPoll:0,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
+  earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),
   surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200
