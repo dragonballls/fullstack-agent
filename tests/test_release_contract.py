@@ -28,6 +28,9 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("build_vendor\\backtalk\\source", workflow)
         self.assertIn("build_vendor\\ai-visualizer\\source", workflow)
         self.assertIn("scripts/jarvis_desktop.pyw", workflow)
+        self.assertIn("JARVIS_UI_SMOKE", workflow)
+        self.assertIn("headless frozen Jarvis native window contract validated", Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8"))
+        self.assertIn("webview.create_window(**window_kwargs)", Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8"))
 
     def test_attestation_verification_precedes_release_publication(self):
         workflow = Path(".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")
