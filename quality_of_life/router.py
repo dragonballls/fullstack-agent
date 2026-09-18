@@ -14,6 +14,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
+from .omniroute import OmniRouteConnection
 from .orchestration import RequestProfile
 
 
@@ -98,6 +99,8 @@ class CloudModelRouter:
     _latency_ewma_ms: dict[tuple[str, str, str], float] = {}
     _latency_samples: dict[tuple[str, str, str], int] = {}
     _EWMA_ALPHA = 0.25
+    _omniroute_lock = threading.Lock()
+    _omniroute_connections: dict[tuple[str, str], OmniRouteConnection] = {}
 
     def __init__(self, targets: Iterable[ProviderTarget]) -> None:
         self.targets = tuple(targets)
@@ -131,6 +134,19 @@ class CloudModelRouter:
     def omniroute_target(cls, model: str | None = None) -> ProviderTarget:
         """Build the default OmniRoute target."""
         return ProviderTarget("omniroute", cls.omniroute_base_url(), cls.omniroute_api_key_env(), model or cls.omniroute_model())
+
+    @classmethod
+    def _ensure_omniroute(cls, target: ProviderTarget) -> bool:
+        """Lazily connect to local OmniRoute and start it when configured."""
+        if target.name.casefold() != "omniroute" or not target.is_loopback:
+            return True
+        key = (target.base_url.rstrip("/"), target.api_key_env)
+        with cls._omniroute_lock:
+            connection = cls._omniroute_connections.get(key)
+            if connection is None:
+                connection = OmniRouteConnection(target.base_url, target.api_key_env, timeout_seconds=min(2.0, target.timeout_seconds))
+                cls._omniroute_connections[key] = connection
+        return connection.ensure_ready()
 
     @staticmethod
     def prepare_messages(messages: list[dict[str, str]], system_prompt: str | None = None) -> list[dict[str, str]]:
@@ -222,6 +238,8 @@ class CloudModelRouter:
         started = time.monotonic()
         if self._cooldown_active(target):
             return ProviderResult(False, None, target.name, 0, "target temporarily cooling down after a recent failure")
+        if not self._ensure_omniroute(target):
+            return ProviderResult(False, None, target.name, int((time.monotonic() - started) * 1000), "omniroute is not reachable and could not be started")
         key = os.environ.get(target.api_key_env)
         headers = {"Content-Type": "application/json"}
         if key:
