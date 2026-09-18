@@ -1595,10 +1595,26 @@ class NeuralAdvancedRuntime:
                     battery=float(data.get("battery", 0.9)),
                     thermal=float(data.get("thermal", 0.25)),
                 )
+            if "before" in lower and "after" in lower:
+                result["before_after"] = self.performance.compare(
+                    str(data.get("name", "master")),
+                    float(data.get("before", 10.0)),
+                    float(data.get("after", 8.0)),
+                )
             if "heatmap" in lower:
                 result["heatmap"] = self.performance.resource_heatmap(str(data.get("metric", "frame_ms")))
             if "regression" in lower:
                 result["alerts"] = self.performance.regression_alerts()
+            if "background" in lower or "throttling" in lower or "driver" in lower or "assignment" in lower or "mixed" in lower or "device" in lower:
+                result["adaptive_policy"] = self.performance.optimization_policy(
+                    gpu_pressure=float(data.get("gpu_pressure", 0.45)),
+                    cpu_pressure=float(data.get("cpu_pressure", 0.35)),
+                    ram_pressure=float(data.get("ram_pressure", 0.30)),
+                    battery=float(data.get("battery", 0.90)),
+                    thermal=float(data.get("thermal", 0.25)),
+                )
+            if "capture" in lower:
+                result["capture_policy"] = self.fullstack.graphics.frame_policy()
             return self._record_master(category, name, result, data)
 
         if category == "hardware_display" or category == "multi_monitor":
@@ -1612,7 +1628,19 @@ class NeuralAdvancedRuntime:
                 result = self.displays.save_arrangement()
             else:
                 result = self.displays.upsert(display_id, **state)
-            result["fullstack_display"] = self.fullstack.displays.upsert(display_id, **state)
+            if "monitor workspaces" in lower or ("workspace" in lower and "monitor" in lower):
+                result["workspace"] = self.workspace.monitor_wall(
+                    display_id,
+                    [str(v) for v in data.get("surface_ids", ("master:s1", "master:s2", "master:s3"))],
+                    width=float(state.get("width", 1920)),
+                    height=float(state.get("height", 1080)),
+                )
+            result["fullstack_display"] = self.fullstack.displays.upsert(
+                display_id,
+                quality=str(state.get("quality", "balanced")),
+                ultrawide=bool(state.get("ultrawide", False)),
+                **{key: value for key, value in state.items() if key not in {"quality", "ultrawide"}},
+            )
             if "placement" in lower:
                 result["placement"] = self.fullstack.displays.placement(display_id, data.get("logical", (100, 100)), target_display=data.get("target_display"))
             return self._record_master(category, name, result, data)
