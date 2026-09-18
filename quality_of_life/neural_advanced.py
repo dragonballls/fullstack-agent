@@ -1513,6 +1513,8 @@ class NeuralAdvancedRuntime:
                     result = self.workspace.restore_visible(ids)
             elif "tether" in lower or "anchor" in lower:
                 result = self.workspace.tether(ids[0], ids[1], rest_length=float(data.get("rest_length", 120.0)))
+            elif "detach" in lower or "reattach" in lower:
+                result = self.workspace.detach(ids[0]) if "detach" in lower else self.workspace.attach(ids[0], display_id=data.get("display_id"))
             elif "wall" in lower:
                 result = self.workspace.giant_wall(ids, curvature=float(data.get("curvature", 0.18)))
             elif "monitor" in lower:
@@ -1571,6 +1573,14 @@ class NeuralAdvancedRuntime:
                 result["baseline"] = self.performance.baseline_comparison(str(data.get("name", "master")), float(data.get("value", 16.6)))
             if "profile" in lower or "learning" in lower:
                 result["profile"] = self.performance.profile(str(data.get("application", data.get("name", "master"))), **metrics)
+            if "task" in lower and "resource" in lower:
+                result["task_resource_allocation"] = self.performance.optimization_policy(
+                    gpu_pressure=float(data.get("gpu_pressure", 0.4)),
+                    cpu_pressure=float(data.get("cpu_pressure", 0.3)),
+                    ram_pressure=float(data.get("ram_pressure", 0.3)),
+                    battery=float(data.get("battery", 0.9)),
+                    thermal=float(data.get("thermal", 0.25)),
+                )
             if "zero-copy" in lower:
                 result["graphics"] = self.fullstack.graphics.capabilities(zero_copy=True)
             if "free-threaded" in lower:
@@ -1618,8 +1628,11 @@ class NeuralAdvancedRuntime:
             return self._record_master(category, name, {"results": result, "navigation": dict(self._navigation_state)}, data)
 
         if category == "lifecycle":
-            self._behavior.setdefault(str(data.get("source", "master")), {}).update({"continuous": True, "reprofile_count": self._behavior.get(str(data.get("source", "master")), {}).get("reprofile_count", 0) + 1, "last_seen": time.time()})
+            source = str(data.get("source", "master"))
+            self._behavior.setdefault(source, {}).update({"continuous": True, "reprofile_count": self._behavior.get(source, {}).get("reprofile_count", 0) + 1, "last_seen": time.time()})
             result = self.fullstack.organism.step(float(data.get("activity", 0.6)))
+            if "migration" in lower:
+                result["profile_migration"] = self.browser_games.migrate_profile("game" if "game" in lower else "browser", str(data.get("name", "master")), str(data.get("version", "latest")))
             result["behavior_learning"] = dict(self._behavior)
             if "regeneration" in lower or "growth" in lower:
                 result["regeneration"] = {"generation": result.get("generation"), "regenerated": True}
