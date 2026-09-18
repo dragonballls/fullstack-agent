@@ -1628,6 +1628,9 @@ class NeuralAdvancedRuntime:
                 result = self.workspace.tether(ids[0], ids[1], rest_length=float(data.get("rest_length", 120.0)))
             elif "detach" in lower or "reattach" in lower:
                 result = self.workspace.detach(ids[0]) if "detach" in lower else self.workspace.attach(ids[0], display_id=data.get("display_id"))
+            elif "monitor-wall" in lower or "monitor wall" in lower:
+                result = self.workspace.monitor_wall(str(data.get("display_id", "display-1")), ids, width=float(data.get("width", 1920)), height=float(data.get("height", 1080)))
+                result = {"surfaces": result, "navigation": self.workspace.navigate_wall(str(data.get("display_id", "display-1")), dx=float(data.get("dx", 0.0)), dy=float(data.get("dy", 0.0)))}
             elif "wall" in lower:
                 result = self.workspace.giant_wall(ids, curvature=float(data.get("curvature", 0.18)))
             elif "monitor" in lower:
@@ -1654,7 +1657,14 @@ class NeuralAdvancedRuntime:
             elif "suggest" in lower or "destination" in lower:
                 result = self.cross_app.suggest(str(data.get("kind", "artifact")), str(data.get("source", "master")), destinations=list(data.get("destinations", ("browser", "editor", "workflow", "repository"))))
             else:
-                result = self.cross_app.transfer(str(data.get("kind", "file" if "file" in lower else "artifact")), str(data.get("source", "master:source")), str(data.get("destination", "master:destination")), data.get("payload_ref"))
+                kind = str(data.get("kind", "file" if "file" in lower else "artifact"))
+                result = self.cross_app.transfer(kind, str(data.get("source", "master:source")), str(data.get("destination", "master:destination")), data.get("payload_ref"))
+                if "workflow" in lower:
+                    result["workflow"] = {"accepted": True, "trigger": str(data.get("workflow_id", "workflow:master"))}
+                if "browser" in lower and "code" in lower:
+                    result["semantic_route"] = {"from": "browser", "to": "code", "kind": kind}
+                if "build" in lower and "arbitrary" in lower:
+                    result["semantic_route"] = {"from": "build", "to": "application", "kind": kind}
             return self._record_master(category, name, result, data)
 
         if category == "browser":
@@ -1754,8 +1764,10 @@ class NeuralAdvancedRuntime:
                 ultrawide=bool(state.get("ultrawide", False)),
                 **{key: value for key, value in state.items() if key not in {"quality", "ultrawide"}},
             )
-            if "placement" in lower:
-                result["placement"] = self.fullstack.displays.placement(display_id, data.get("logical", (100, 100)), target_display=data.get("target_display"))
+            if "placement" in lower or "move-between" in lower:
+                result["placement"] = self.fullstack.displays.placement(display_id, data.get("logical", (100, 100)), target_display=data.get("target_display") or display_id)
+            if "monitor-wall" in lower:
+                result["monitor_wall_navigation"] = self.workspace.navigate_wall(display_id, dx=float(data.get("dx", 0.0)), dy=float(data.get("dy", 0.0)))
             return self._record_master(category, name, result, data)
 
         if category == "search_navigation":
@@ -1790,9 +1802,11 @@ class NeuralAdvancedRuntime:
                 result = self.history.decay_relationships(float(data.get("half_life_seconds", 86400)))
             elif "prun" in lower:
                 result = self.history.prune(int(data.get("keep_recent", 128)))
-            elif "restor" in lower:
+            elif "restor" in lower or "historical layout restoration" in lower or "historical application restoration" in lower:
                 snapshot_id = str(data.get("snapshot_id", "master:t1"))
-                result = self.history.restore_layout(snapshot_id) or {"restored": False}
+                restored = self.history.restore_layout(snapshot_id)
+                result = restored or {"restored": False}
+                result["restored_from"] = snapshot_id
             elif "health" in lower:
                 result = self.history.health()
             else:
@@ -1920,6 +1934,8 @@ class NeuralAdvancedRuntime:
                 compare=(str(data.get("left", "master:t1")), str(data.get("right", "master:t2"))) if "comparison" in lower or "compare" in lower else None,
                 replay_id=str(data.get("id", "master:t1")) if "replay" in lower else None,
             )
+            if "performance" in lower:
+                result["performance"] = self.fullstack.history.performance_analytics()
             if "interface" in lower:
                 result["interface"] = {"mode": "time-machine", "controls": ["timeline", "compare", "replay", "restore", "performance"]}
             return self._record_master(category, name, result, data)
@@ -1974,12 +1990,25 @@ class NeuralAdvancedRuntime:
         if category == "optimization_intelligence":
             app = str(data.get("name", "Jarvis"))
             metrics = dict(data.get("metrics", {"frame_ms": 16.6, "ram": 40, "gpu": 35}))
+            strategy = str(data.get("strategy", "adaptive"))
+            before = float(data.get("before", 10))
+            after = float(data.get("after", 8))
             learned = self.performance.profile(app, **metrics)
-            measurement = self.performance.compare(app, float(data.get("before", 10)), float(data.get("after", 8)))
-            result = {"profile": learned, "measurement": measurement, "rollback": measurement["after"] > measurement["before"], "history": list(self._optimization_history)[-32:]}
+            measurement = self.performance.compare(app, before, after)
+            self.fullstack.optimization.learn(app, metrics)
+            result = {"profile": learned, "measurement": measurement, "history": list(self._optimization_history)[-32:]}
+            if "strategy" in lower or "comparison" in lower:
+                result["strategy_comparison"] = self.fullstack.optimization.compare(app, strategy, before, after)
+            if "application performance learning" in lower or "learned application" in lower or "long term" in lower:
+                result["learned_profile"] = self.fullstack.optimization.learn(app, metrics)
+            if "rollback" in lower:
+                applied = self.fullstack.optimization.apply(app, strategy, before_state=dict(data.get("before_state", {"quality": "maximum"})), after_state=dict(data.get("after_state", {"quality": "balanced"})))
+                result["apply"] = applied
+                result["rollback"] = self.fullstack.optimization.rollback(app)
             if "loop" in lower:
-                result["loop_guard"] = str(data.get("strategy", "adaptive")) != str(getattr(self, "_last_optimization_strategy", ""))
-                self._last_optimization_strategy = str(data.get("strategy", "adaptive"))
+                result["loop_guard"] = self.fullstack.optimization.compare(app, strategy, before, before)["loop_prevented"]
+            if "diminishing" in lower:
+                result["diminishing_returns"] = measurement["percent_change"] == 0 or abs(measurement["percent_change"]) < 3.0
             self._optimization_history.append({"timestamp": _now(), "feature": name, "result": result})
             return self._record_master(category, name, result, data)
 
@@ -1990,8 +2019,18 @@ class NeuralAdvancedRuntime:
             return self._record_master(category, name, result, data)
 
         if category == "simulation_world":
-            result = self.simulation_run(str(data.get("scenario", "neurons")), count=int(data.get("count", 1000)))
-            result["isolated_world"] = True
+            world_id = str(data.get("world_id", "sandbox:jarvis"))
+            created = self.fullstack.simulation.create(world_id, seed=int(data.get("seed", 7)))
+            populated = self.fullstack.simulation.populate(
+                world_id,
+                neurons=int(data.get("neurons", 256)),
+                windows=int(data.get("windows", 32)),
+                tasks=int(data.get("tasks", 16)),
+                relationships=int(data.get("relationships", 512)),
+            )
+            result = {"world": created, "population": populated, "isolated_world": True}
+            if "benchmark" in lower or "mass" in lower:
+                result["benchmark"] = self.fullstack.simulation.benchmark("massive_windows" if "window" in lower else "massive_neurons", int(data.get("count", 1000)))
             return self._record_master(category, name, result, data)
 
         if category == "multi_user_shared":
