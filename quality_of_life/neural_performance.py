@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import subprocess
+import shutil
 import threading
 import time
 
@@ -62,6 +63,18 @@ class SystemPressure:
         }
 
 
+_NVIDIA_SMI: str | None | bool = None
+
+def _nvidia_smi_path() -> str | None:
+    global _NVIDIA_SMI
+    if _NVIDIA_SMI is False:
+        return None
+    if isinstance(_NVIDIA_SMI, str):
+        return _NVIDIA_SMI
+    _NVIDIA_SMI = shutil.which("nvidia-smi") or False
+    return _NVIDIA_SMI if isinstance(_NVIDIA_SMI, str) else None
+
+
 class AdaptivePerformanceController:
     """Hysteresis-controlled performance budgets with throttled sampling."""
 
@@ -97,10 +110,13 @@ class AdaptivePerformanceController:
 
     @staticmethod
     def _nvidia() -> tuple[float | None, float | None]:
+        executable = _nvidia_smi_path()
+        if executable is None:
+            return None, None
         try:
             result = subprocess.run(
                 [
-                    "nvidia-smi",
+                    executable,
                     "--query-gpu=utilization.gpu,memory.used,memory.total",
                     "--format=csv,noheader,nounits",
                 ],
@@ -108,6 +124,7 @@ class AdaptivePerformanceController:
                 text=True,
                 check=False,
                 timeout=0.5,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             if result.returncode != 0 or not result.stdout.strip():
                 return None, None
