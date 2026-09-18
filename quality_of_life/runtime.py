@@ -72,17 +72,31 @@ class JarvisRuntime:
         world = self._neural_world_service
         if world is None:
             raise RuntimeError("neural world is unavailable")
-        from .neural_shapes import normalize_shape
-        with world._lock:
-            entity = world._entities.get(str(entity_id))
-            if entity is None:
-                raise KeyError("unknown neural entity")
-            registry = getattr(self._neural_world_service, "shape_registry", None)
-            normalized = (registry.resolve(shape) if registry is not None else normalize_shape(shape)).as_dict()
-            entity.shape = normalized
-            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-            world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
-            return {"id": entity.id, "shape": normalized}
+        return world.neural_shape_apply(entity_id, shape)
+
+    def neural_shape_create(self, label: str, shape: object, **kwargs: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_create(label, shape, **kwargs)
+
+    def neural_shape_apply(self, target: str, shape: object, **kwargs: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_apply(target, shape, **kwargs)
+
+    def neural_shape_remove(self, target: str) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_remove(target)
+
+    def neural_shape_revert_all(self) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_revert_all()
 
     def neural_task_started(self, title: str) -> str | None:
         world = self._neural_world_service
