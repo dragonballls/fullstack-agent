@@ -181,12 +181,22 @@ class NeuralWorld:
             ("jarvis.system", "System"), ("jarvis.gods-eye", "God's Eye"),
             ("jarvis.workflows", "Workflows"), ("jarvis.memory", "Memory"),
             ("jarvis.agents", "Agents"), ("jarvis.devices", "Devices"),
+            ("jarvis.neural-command", "Neural Command"),
         ):
+            is_command = entity_id == "jarvis.neural-command"
             node = self.upsert(
-                entity_id, EntityKind.SUBSYSTEM, label, source="jarvis",
-                parent_id=core.id, energy=0.6, scale=1.35,
+                entity_id,
+                EntityKind.SUBSYSTEM,
+                label,
+                source="jarvis",
+                parent_id=core.id,
+                energy=0.96 if is_command else 0.6,
+                scale=0.62 if is_command else 1.35,
+                position=(0.0, -2.15, 0.85) if is_command else None,
+                shape="orbital" if is_command else _UNSET,
+                metadata={"ui_surface": "neural_command", "always_visible": True} if is_command else None,
             )
-            self.relate(core.id, node.id, "subsystem", 0.95)
+            self.relate(core.id, node.id, "neural-command-surface" if is_command else "subsystem", 0.98 if is_command else 0.95)
 
     def upsert(
         self, entity_id: str, kind: EntityKind | str, label: str, *,
