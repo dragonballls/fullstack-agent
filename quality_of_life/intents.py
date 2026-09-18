@@ -65,9 +65,9 @@ def parse_intent(text: str) -> Intent:
         return Intent("neural_shape_revert_all", {})
     match = _SHAPE_REVERT.match(value)
     if match:
+        return Intent("neural_shape_revert", {"target": match.group(1).strip()})
     if _SHAPE_REMOVE.match(value):
         return Intent("neural_shape_remove", {})
-        return Intent("neural_shape_revert", {"target": match.group(1).strip()})
     match = _SHAPE_APPLY.match(value)
     if match:
         target = match.group(1).strip()
