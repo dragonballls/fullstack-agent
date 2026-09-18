@@ -44,7 +44,20 @@ def normalize_shape(value: object) -> ShapeSpec:
             raise ValueError("unsupported shape family")
         return ShapeSpec(name=name, family=family, parameters=params)
     name = str(value or "").strip()[:120] or "droplet"
-    return ShapeSpec(name=name, family="primitive" if name.casefold() in BUILTIN_SHAPES else "freeform")
+    folded = name.casefold()
+    aliases = (
+        ("icosphere", "sphere"), ("globe", "sphere"), ("planet", "sphere"), ("ball", "sphere"),
+        ("donut", "torus"), ("ring", "ring"), ("box", "cube"), ("cube", "cube"),
+        ("neuron", "droplet"), ("cell", "droplet"), ("brain", "droplet"),
+        ("cone", "cone"), ("cylinder", "cylinder"), ("tube", "cylinder"),
+        ("octahedron", "octahedron"), ("diamond", "crystal"), ("pyramid", "pyramid"),
+        ("star", "star"), ("heart", "heart"), ("spiral", "spiral"), ("wave", "wave"),
+        ("dna", "dna"), ("molecule", "molecule"),
+    )
+    for needle, canonical in aliases:
+        if needle in folded:
+            return ShapeSpec(name=canonical, family="primitive")
+    return ShapeSpec(name=name, family="primitive" if folded in BUILTIN_SHAPES else "freeform")
 
 
 
