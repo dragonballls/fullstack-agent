@@ -446,7 +446,7 @@ class NeuralWorldBridgeMixin:
         now = time.monotonic()
         if now - self._last_discovery >= 8.0:
             try:
-                self._discovery.sync()
+                self._discovery.sync_extended()
             except Exception:
                 pass
             self._last_discovery = now
