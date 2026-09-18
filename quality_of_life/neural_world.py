@@ -316,6 +316,8 @@ class NeuralWorld:
         if domain == "simulation":
             if op == "generate": return self.advanced.simulation.generate(**{key: int(value) for key, value in data.items() if key in {"neurons", "windows", "tasks", "relationships"}})
             if op == "benchmark": return self.advanced.simulation_run(str(data.get("scenario", "cpu_stress")), count=int(data.get("count", 1000)))
+        if domain == "fullstack":
+            return self.advanced.fullstack.command(str(data.get("domain", "core_neural")), op, data.get("payload", data))
         raise ValueError(f"unknown advanced command: {domain}.{operation}")
 
     def retire(self, entity_id: str, *, remove: bool = False) -> bool:
@@ -826,6 +828,7 @@ class NeuralWorldBridgeMixin:
             "reliability": Capability.SYSTEM_MAINTENANCE,
             "accessibility": Capability.SYSTEM_SETTINGS,
             "multi_user": Capability.ACCOUNT_WRITE,
+            "fullstack": Capability.SYSTEM_DIAGNOSTICS,
         }.get(str(domain))
         if required is not None:
             self.host.controller.runtime.policy.check(required)
