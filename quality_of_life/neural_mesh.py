@@ -7,8 +7,8 @@ bridge. It is rendered as an additive UI build and does not replace Jarvis core.
 NEURAL_MESH_BUILTIN = {
     "id": "neural-mesh",
     "name": "Neural JARVIS",
-    "version": "0.4.0",
-    "description": "Blue fully 3D JARVIS world with instanced liquid-cell neurons, lifecycle pulses, fluid grab/return, spatial windows, search, zoom, performance culling, and a camera-facing persistent neural command surface.",
+    "version": "0.5.0",
+    "description": "Blue fully 3D JARVIS world with instanced liquid-cell neurons, lifecycle pulses, fluid grab/return, spatial windows, search, zoom, performance culling, and a camera-facing persistent neural command surface with universal procedural object shaping, reversible transforms, and persistent rotation motion.",
     "protected": True,
     "css": r"""
 #jarvis-text-shell,#jarvis-workspace-shell{display:none!important}
