@@ -18,7 +18,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
     def test_webgl_and_chat_contract(self):
         from quality_of_life.neural_mesh import NEURAL_MESH_BUILTIN
         script = NEURAL_MESH_BUILTIN["script"]
-        for token in ("webgl2", "pointerdown", "wheel", "drawElementsInstanced", "neural_world_snapshot", "neural_events", "neural_search", "submit_text", "spatial_windows_catalog", "gods_eye_globe", "neural_observation_state", "jn-earth", "shapeCode", "earthYaw", "earthDistance", "renderEarth", "neural_advanced_tick", "FLUID ECOLOGY", "jn-neural-console", "jn-console-tether", "renderNeuralConsolePlacement", "F13", "jarvis.neuralCommand.collapsed", "ALWAYS IN VIEW", "jn-console-float", "toggle_text_link", "jarvisNeuralCommandSurface"):
+        for token in ("webgl2", "pointerdown", "wheel", "drawElementsInstanced", "neural_world_snapshot", "neural_events", "neural_search", "submit_text", "spatial_windows_catalog", "gods_eye_globe", "neural_observation_state", "jn-earth", "shapeCode", "earthYaw", "earthDistance", "renderEarth", "neural_advanced_tick", "FLUID ECOLOGY", "jn-neural-console", "jn-console-tether", "renderNeuralConsolePlacement", "F13", "jarvis.neuralCommand.collapsed", "ALWAYS IN VIEW", "jn-console-float", "toggle_text_link", "jarvisNeuralCommandSurface", "aRot", "aAngular", "angular_velocity", "globe"):
             self.assertIn(token, script)
 
     def test_build_2_uses_persistent_camera_facing_command_surface(self):
