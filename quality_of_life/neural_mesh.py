@@ -106,7 +106,7 @@ const S={
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
-  earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
+  earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),
   surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200
@@ -320,6 +320,20 @@ function render(now){
   }
   rootStatus("AUTO QUALITY · "+S.quality.toUpperCase()+" · "+Math.round(1000/Math.max(1,S.frameMs))+" FPS · "+nodes.length+" ACTIVE");
 }
+function pickEarthLocator(x,y){
+  const oldYaw=S.yaw,oldPitch=S.pitch,oldDistance=S.distance,oldTarget=S.target.slice();
+  S.yaw=S.earthYaw;S.pitch=S.earthPitch;S.distance=S.earthDistance;S.target=[0,0,0];
+  let best=null,bestD=Infinity;
+  for(const item of (Array.isArray(S.earthData.locators)?S.earthData.locators:[])){
+    const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;
+    const rr=Math.cos(lat)*1.075,p=[rr*Math.cos(lon),Math.sin(lat)*1.075,rr*Math.sin(lon)],screen=worldToScreen(p);
+    if(!screen)continue;
+    const d=Math.hypot(screen[0]-x,screen[1]-y);
+    if(d<bestD){bestD=d;best=item;}
+  }
+  S.yaw=oldYaw;S.pitch=oldPitch;S.distance=oldDistance;S.target=oldTarget;
+  return bestD<55?best:null;
+}
 function renderEarthLabels(){
   const box=ui.querySelector("#jn-focus");
   const locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
@@ -389,6 +403,15 @@ async function pollObservation(){
     }
   }catch(_){}
 }
+async function moveHandWindow(el,dx,dy){
+  const key=String(el&&el.dataset.handle||"");if(!key)return;
+  const x=(Number(el.dataset.x)||0)+dx,y=(Number(el.dataset.y)||0)+dy;
+  el.dataset.x=String(x);el.dataset.y=String(y);applySurfaceTransform(el);
+  const info=S.windows.find(function(item){return String(item.handle)===key}),a=api();
+  if(info&&a&&a.spatial_window_move_resize&&info.embedded){
+    const rect=el.getBoundingClientRect();try{await a.spatial_window_move_resize(Number(info.handle),Math.round(x),Math.round(y),Math.max(80,Math.round(rect.width)),Math.max(60,Math.round(rect.height)));}catch(_){}
+  }
+}
 async function pollHand(){
   if(S.view==="earth")return;
   try{
@@ -401,9 +424,11 @@ async function pollHand(){
     const x=Math.max(0,Math.min(1,Number(sample.x)||0))*canvas.clientWidth;
     const y=Math.max(0,Math.min(1,Number(sample.y)||0))*canvas.clientHeight;
     if(Boolean(sample.pinch)&&!S.handPinching){
-      const node=pick(x,y);
-      if(node){S.handNode=node.id;S.selected=node.id;S.handX=x;S.handY=y;}
+      const target=document.elementFromPoint(x,y);const surface=target&&target.closest?target.closest(".jn-spatial-window"):null;
+      if(surface){S.handWindow=surface;S.handX=x;S.handY=y;}else{const node=pick(x,y);if(node){S.handNode=node.id;S.selected=node.id;S.handX=x;S.handY=y;}}
       S.handPinching=true;
+    }else if(Boolean(sample.pinch)&&S.handPinching&&S.handWindow){
+      const dx=x-S.handX,dy=y-S.handY;await moveHandWindow(S.handWindow,dx,dy);S.handX=x;S.handY=y;
     }else if(Boolean(sample.pinch)&&S.handPinching&&S.handNode){
       const dx=x-S.handX,dy=y-S.handY;
       const node=S.nodes.find(function(item){return item.id===S.handNode});
@@ -417,6 +442,7 @@ async function pollHand(){
       }
       S.handX=x;S.handY=y;
     }else if(!Boolean(sample.pinch)&&S.handPinching){
+      if(S.handWindow){S.handWindow=null;}
       if(S.handNode){
         const id=S.handNode,from=S.localOffsets.get(id)||[0,0,0],start=performance.now();S.handNode=null;
         function settleHand(){const t=Math.min(1,(performance.now()-start)/780),e=t*t*(3-2*t);S.localOffsets.set(id,[from[0]*(1-e),from[1]*(1-e),from[2]*(1-e)]);if(t<1)requestAnimationFrame(settleHand);else S.localOffsets.delete(id);}
@@ -638,7 +664,7 @@ async function chat(){
   finally{input.disabled=false;input.focus();}
 }
 canvas.addEventListener("pointerdown",function(e){
-  if(S.view==="earth"){S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
+  if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
   const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;
   if(n){S.dragNode=n.id;S.selected=n.id;canvas.setPointerCapture(e.pointerId);return;}
   S.orbit=true;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);
