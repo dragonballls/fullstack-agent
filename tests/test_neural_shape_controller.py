@@ -77,6 +77,12 @@ class NeuralShapeControllerTests(unittest.TestCase):
         self.assertTrue(controller.revert("window:88")["reverted"])
         self.assertIsNone(layout.get("window:88"))
 
+    def test_builtin_globe_keeps_named_shape_identity(self):
+        from quality_of_life.neural_shapes import normalize_shape
+        spec = normalize_shape("globe")
+        self.assertEqual(spec.name, "globe")
+        self.assertEqual(spec.family, "primitive")
+
     def test_rotation_units_are_normalized(self):
         self.assertAlmostEqual(parse_rotation_speed(30, "degrees per second"), 0.5235987756, places=6)
         self.assertAlmostEqual(parse_rotation_speed(2, "rps"), 12.5663706144, places=6)
