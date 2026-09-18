@@ -37,6 +37,21 @@ class FloatingCommandBarContractTests(unittest.TestCase):
         self.assertIn("_save_floating_position", self.desktop)
         self.assertIn('json.dumps({"x": x, "y": y})', self.desktop)
 
+    def test_main_window_close_destroys_hidden_floating_window(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, visualizer=Mock(), voice=Mock(), hands=Mock())
+        floating = SimpleNamespace(x=120, y=80, destroy=Mock())
+        host._floating_window = floating
+        host._save_floating_position = Mock()
+
+        host._on_main_window_closing()
+
+        self.assertTrue(host._shutting_down)
+        self.assertFalse(host._floating_visible)
+        host._save_floating_position.assert_called_once_with()
+        floating.destroy.assert_called_once_with()
+        self.assertIsNone(host._floating_window)
+
     def test_release_smoke_requires_floating_window_creation(self):
         self.assertIn("floating command bar window object created;", self.smoke)
         self.assertIn("did not create the floating command bar window object", self.smoke)
