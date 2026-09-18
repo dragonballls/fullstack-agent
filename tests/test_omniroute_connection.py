@@ -4,13 +4,22 @@ import os
 import unittest
 from unittest.mock import patch
 
-from quality_of_life.omniroute import OmniRouteConnection
+from quality_of_life.omniroute import OmniRouteConnection, is_loopback_hostname
 from quality_of_life.router import CloudModelRouter, ProviderTarget
 
 
 class OmniRouteConnectionTests(unittest.TestCase):
     def test_default_endpoint_is_loopback_and_autostart_enabled(self) -> None:
-        target = CloudModelRouter.omniroute_target()
+        with patch.dict(
+            os.environ,
+            {
+                "JARVIS_OMNIROUTE_BASE_URL": "http://127.0.0.1:20128/v1",
+                "JARVIS_OMNIROUTE_API_KEY_ENV": "OMNIROUTE_API_KEY",
+                "JARVIS_OMNIROUTE_MODEL": "auto",
+            },
+            clear=False,
+        ):
+            target = CloudModelRouter.omniroute_target()
         self.assertEqual(target.base_url, "http://127.0.0.1:20128/v1")
         self.assertTrue(target.is_loopback)
         self.assertEqual(target.model, "auto")
@@ -26,6 +35,19 @@ class OmniRouteConnectionTests(unittest.TestCase):
                 request = urlopen.call_args.args[0]
                 self.assertEqual(request.full_url, "http://127.0.0.1:20128/v1/models")
                 self.assertEqual(request.get_header("Authorization"), "Bearer test-key")
+
+    def test_loopback_aliases_are_supported(self) -> None:
+        self.assertTrue(is_loopback_hostname("localhost"))
+        self.assertTrue(is_loopback_hostname("127.0.0.2"))
+        self.assertTrue(is_loopback_hostname("::1"))
+        self.assertFalse(is_loopback_hostname("example.com"))
+
+    def test_autostart_overrides_inherited_port(self) -> None:
+        connection = OmniRouteConnection("http://127.0.0.1:20129/v1", "OMNIROUTE_API_KEY")
+        with patch("quality_of_life.omniroute.shutil.which", return_value="omniroute"):
+            with patch("quality_of_life.omniroute.subprocess.Popen") as popen:
+                self.assertTrue(connection._start())
+                self.assertEqual(popen.call_args.kwargs["env"]["PORT"], "20129")
 
     def test_non_loopback_http_remains_rejected(self) -> None:
         with self.assertRaises(ValueError):
