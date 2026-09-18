@@ -1,5 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock
 
 
 class FloatingCommandBarContractTests(unittest.TestCase):
