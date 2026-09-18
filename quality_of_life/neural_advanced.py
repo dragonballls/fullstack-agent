@@ -366,6 +366,7 @@ class SpatialWorkspace:
         self._displays: dict[str, dict[str, Any]] = {}
         self._mode = "desktop"
         self._camera = {"position": [0.0, 0.0, 12.0], "target": [0.0, 0.0, 0.0]}
+        self._layout_history: deque[dict[str, Any]] = deque(maxlen=256)
         self._lock = threading.RLock()
 
     def upsert(self, surface_id: str, title: str = "Surface", **kwargs: Any) -> WorkspaceSurface:
@@ -507,6 +508,29 @@ class SpatialWorkspace:
                 "camera_handoff": dict(self._camera),
                 "layout_handoff": [s.as_dict() for s in self._surfaces.values()],
             }
+
+    def set_z_order(self, surface_id: str, z_order: int) -> dict[str, Any]:
+        with self._lock:
+            surface = self._surfaces[surface_id]
+            surface.z_order = int(z_order)
+            return surface.as_dict()
+
+    def resolve_collisions(self, *, gap: float = 8.0) -> dict[str, Any]:
+        with self._lock:
+            adjustments = []
+            items = [s for s in self._surfaces.values() if s.visible]
+            for i, left in enumerate(items):
+                for right in items[i + 1:]:
+                    if abs(left.position.x - right.position.x) < (left.width + right.width) * 0.5 and abs(left.position.y - right.position.y) < (left.height + right.height) * 0.5:
+                        right.position = Vector3(right.position.x + float(gap), right.position.y + float(gap), right.position.z)
+                        adjustments.append({"a": left.id, "b": right.id, "moved": right.id})
+            return {"resolved": len(adjustments), "adjustments": adjustments}
+
+    def save_layout(self, reason: str = "manual") -> dict[str, Any]:
+        with self._lock:
+            snapshot = {"reason": str(reason), "timestamp": _now(), "mode": self._mode, "camera": dict(self._camera), "surfaces": [s.as_dict() for s in self._surfaces.values()]}
+            self._layout_history.append(snapshot)
+            return snapshot
 
     def collision_report(self) -> dict[str, Any]:
         with self._lock:
