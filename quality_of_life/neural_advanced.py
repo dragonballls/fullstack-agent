@@ -1736,10 +1736,15 @@ class NeuralAdvancedRuntime:
             return self._record_master(category, name, result, data)
 
         if category == "games":
+            game_name = str(data.get("name", "Minecraft"))
             if "migration" in lower:
-                result = self.browser_games.migrate_profile("game", str(data.get("name", "Minecraft")), str(data.get("version", "latest")))
+                result = self.browser_games.migrate_profile("game", game_name, str(data.get("version", "latest")))
             else:
-                result = self.browser_games.learn_game(str(data.get("name", "Minecraft")), **data.get("metrics", {"fps": 60, "frame_ms": 16.6, "gpu": 0.5, "ram": 0.5}))
+                result = self.browser_games.learn_game(game_name, **data.get("metrics", {"fps": 60, "frame_ms": 16.6, "gpu": 0.5, "ram": 0.5}))
+            if "capture" in lower:
+                result["capture_strategy"] = self.fullstack.graphics.optimize(gpu_pressure=float(data.get("gpu_pressure", 0.4)), frame_ms=float(data.get("frame_ms", 16.6)), memory_pressure=float(data.get("memory_pressure", 0.3)), task=game_name)
+            if "immersive" in lower or "giant" in lower:
+                result["immersive_surface"] = self.workspace.giant_wall(["master:s1", "master:s2", "master:s3"], curvature=float(data.get("curvature", 0.12)))
             return self._record_master(category, name, result, data)
 
         if category in {"performance", "performance_intelligence"}:
@@ -1797,6 +1802,13 @@ class NeuralAdvancedRuntime:
                     ram_pressure=float(data.get("ram_pressure", 0.30)),
                     battery=float(data.get("battery", 0.90)),
                     thermal=float(data.get("thermal", 0.25)),
+                )
+            if any(token in lower for token in ("occlusion", "texture", "geometry", "prewarm", "refraction", "bloom", "glow", "variable-rate", "capture")):
+                result["graphics_policy"] = self.fullstack.graphics.optimize(
+                    gpu_pressure=float(data.get("gpu_pressure", 0.45)),
+                    frame_ms=float(data.get("frame_ms", 16.6)),
+                    memory_pressure=float(data.get("memory_pressure", 0.30)),
+                    task=str(data.get("task", "neural")),
                 )
             if "capture" in lower:
                 result["capture_policy"] = self.fullstack.graphics.frame_policy()
@@ -2195,27 +2207,129 @@ class NeuralAdvancedRuntime:
         }
 
     def verify_master_feature(self, feature: str, payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        """Execute one feature and validate its observable result, not just its registration."""
+        """Execute one feature and validate the named behavior, not merely registration."""
         proof = MASTER_BEHAVIOR_PROOFS.get(str(feature))
         if proof is None:
             raise KeyError(feature)
         result = self.execute_master_feature(feature, payload)
         value = result.get("result")
-        passed = value is not None and bool(result.get("implemented"))
-        if proof.category == "audio":
-            passed = passed and ("event" in value or "enabled" in value or "mode" in value)
-        elif proof.category in {"multi_user", "multi_user_shared"}:
-            passed = passed and any(k in value for k in ("id", "owner", "profiles", "resources"))
-        elif proof.category == "world_streaming":
-            passed = passed and any(k in value for k in ("id", "status", "loaded", "started", "stopped", "indexed"))
-        elif proof.category == "testing" or proof.category == "large_world_proof" or proof.category == "simulation":
-            passed = passed and ("scenario" in value or "deterministic_digest" in value)
-        elif proof.category in {"accessibility", "accessibility_full", "xr", "xr_full"}:
-            passed = passed and any(k in value for k in ("accessibility", "xr", "settings", "devices", "adapter"))
+        lower = proof.feature.casefold()
+        passed = bool(result.get("implemented")) and value is not None
+
+        if proof.category == "core_neural":
+            if "mitosis" in lower:
+                passed = isinstance(value, list) and bool(value) and all("child" in item for item in value)
+            elif "apoptosis" in lower:
+                passed = isinstance(value, list) and len(value) >= 2 and value[-1].get("kind") == "apoptosis"
+            elif "growth" in lower:
+                passed = isinstance(value, list) and len(value) >= 2 and value[-1].get("progress", 0) > value[0].get("progress", 0)
+            elif "reconnection" in lower:
+                passed = isinstance(value, dict) and value.get("phases") == ["detach", "seek", "reform", "stabilize"]
+            elif "magnetic" in lower:
+                passed = isinstance(value, dict) and "force" in value
+            elif "satellite" in lower:
+                passed = isinstance(value, dict) and value.get("kind") == "satellite"
+            elif "filament" in lower:
+                passed = isinstance(value, dict) and bool(value.get("filaments"))
+            else:
+                passed = isinstance(value, dict) and ("ripples" in value or "waves" in value or "organism" in value or "fluid_environment" in value)
+
+        elif proof.category == "spatial_windows":
+            if "z-order" in lower:
+                passed = isinstance(value, dict) and int(value.get("z_order", -1)) >= 0
+            elif "collision" in lower or "occlusion" in lower:
+                passed = isinstance(value, dict) and ("report" in value or "collisions" in value)
+            elif "monitor-wall" in lower:
+                passed = isinstance(value, dict) and ("surfaces" in value or "navigation" in value)
+            elif "hybrid compositor" in lower:
+                passed = isinstance(value, dict) and value.get("compositor") == "hybrid"
+            elif "orientation persistence" in lower:
+                passed = isinstance(value, dict) and bool(value.get("surfaces"))
+            elif "detach" in lower or "reattach" in lower:
+                passed = isinstance(value, dict) and value.get("state") in {"detached", "attached"}
+            else:
+                passed = isinstance(value, (dict, list))
+
+        elif proof.category == "desktop_3d":
+            passed = isinstance(value, dict) and value.get("to") in {"3d", "desktop"} and "camera_handoff" in value or (isinstance(value, dict) and "camera" in value)
+
+        elif proof.category == "cross_application":
+            if "clipboard" in lower:
+                passed = isinstance(value, dict) and "payload" in value
+            elif "destination" in lower or "suggestion" in lower:
+                passed = isinstance(value, dict) and "suggestions" in value
+            else:
+                passed = isinstance(value, dict) and value.get("semantic") is True
+
+        elif proof.category in {"browser", "games"}:
+            passed = isinstance(value, dict) and any(k in value for k in ("samples", "pages", "layout", "version", "capture_strategy", "immersive_surface"))
+
         elif proof.category in {"performance", "performance_intelligence", "advanced_analytics"}:
-            passed = passed and bool(value)
+            passed = isinstance(value, dict) and bool(value)
+            if "graphics_policy" in value:
+                passed = passed and "capture" in value["graphics_policy"]
+            if "heatmap" in lower:
+                passed = passed and ("heatmap" in value or "bins" in value)
+            if "regression" in lower:
+                passed = passed and "alerts" in value
+            if "window cost" in lower:
+                passed = passed and "window_cost" in value
+            if "neuron cost" in lower:
+                passed = passed and "neuron_cost" in value
+
+        elif proof.category in {"hardware_display", "multi_monitor"}:
+            passed = isinstance(value, dict) and ("fullstack_display" in value or "displays" in value or "placement" in value or "workspace" in value)
+
+        elif proof.category == "search_navigation":
+            passed = isinstance(value, dict) and "navigation" in value
+
+        elif proof.category == "lifecycle":
+            passed = isinstance(value, dict) and ("behavior_learning" in value or "regeneration" in value or "drift_detection" in value or "profile_migration" in value)
+
+        elif proof.category == "memory_history":
+            if "restoration" in lower:
+                passed = isinstance(value, dict) and value.get("restored_from") is not None
+            elif "performance history" in lower:
+                passed = isinstance(value, dict) and ("performance" in value or "snapshots" in value)
+            else:
+                passed = isinstance(value, dict) and bool(value)
+
+        elif proof.category == "planning":
+            passed = isinstance(value, dict) and (bool(value.get("actions")) or value.get("restored") is not None)
+
+        elif proof.category == "reliability":
+            passed = isinstance(value, dict) and ("state" in value or "schema_version" in value or "region_generation" in value)
+
+        elif proof.category == "testing" or proof.category == "large_world_proof" or proof.category == "simulation":
+            passed = isinstance(value, dict) and ("scenario" in value or "deterministic_digest" in value)
+
         elif proof.category == "developer_tools":
-            passed = passed and "inspector" in value
+            passed = isinstance(value, dict) and value.get("inspector") is not None
+
+        elif proof.category in {"remote", "remote_computing"}:
+            passed = isinstance(value, dict) and any(k in value for k in ("id", "machine_id", "machine", "synchronized", "control"))
+
+        elif proof.category in {"accessibility", "accessibility_full"}:
+            passed = isinstance(value, dict) and ("accessibility" in value or "reduced_motion" in value or "settings" in value)
+
+        elif proof.category in {"xr", "xr_full"}:
+            passed = isinstance(value, dict) and ("xr" in value or "adapter" in value or "settings" in value or "sent" in value)
+
+        elif proof.category == "audio":
+            passed = isinstance(value, dict) and ("event" in value or "enabled" in value or "mode" in value)
+
+        elif proof.category in {"multi_user", "multi_user_shared", "multi_user_shared_world"}:
+            passed = isinstance(value, dict) and any(k in value for k in ("id", "owner", "profiles", "resources", "pinned_neurons"))
+
+        elif proof.category == "time_machine":
+            passed = isinstance(value, dict) and any(k in value for k in ("timeline", "left", "right", "snapshot", "performance", "interface"))
+
+        elif proof.category == "world_streaming":
+            passed = isinstance(value, dict) and any(k in value for k in ("id", "region_id", "loaded", "started", "stopped", "virtual_world"))
+
+        elif proof.category == "simulation_world":
+            passed = isinstance(value, dict) and value.get("isolated_world") is True and "population" in value
+
         return {
             "feature": proof.feature,
             "category": proof.category,
@@ -2241,8 +2355,9 @@ class NeuralAdvancedRuntime:
             "metrics": {"ram_mb": 40, "vram_mb": 25, "gpu": 40, "frame_ms": 16.6, "network_mb": 2},
             "pages": ["about:blank", "about:blank#2"], "count": 1000,
         }
-        self.history.save_snapshot("master:t1", {"layout": self.workspace.snapshot(), "performance": {"frame_ms": 12.0}})
-        self.history.save_snapshot("master:t2", {"layout": {"mode": "3d"}, "performance": {"frame_ms": 18.0}})
+        self.history.save_snapshot("master:t1", {"layout": self.workspace.snapshot(), "applications": {"master:app": {"state": "running"}}, "performance": {"frame_ms": 12.0}})
+        self.history.save_snapshot("master:t2", {"layout": {"mode": "3d"}, "applications": {"master:app": {"state": "stopped"}}, "performance": {"frame_ms": 18.0}})
+        dry_run = self.planner.dry_run([{"operation": "window.move"}], known_good={"layout": self.workspace.snapshot(), "applications": {"master:app": {"state": "running"}}})
         self.displays.upsert("display-1", width=1920, height=1080, dpi=144, refresh_hz=120, x=0, y=0)
         self.multi_user.profile("user-a")
         self.fullstack.xr_accessibility.device("xr:controller", kind="controller", connected=True)
@@ -2256,6 +2371,10 @@ class NeuralAdvancedRuntime:
                 payload.update({"left": "master:t1", "right": "master:t2"})
             if "replay" in lower:
                 payload.update({"id": "master:t1"})
+            if "known-good" in lower or ("restoration" in lower and proof.category == "memory_history"):
+                payload.update({"snapshot_id": "master:t1"})
+            if "restore" in lower and proof.category == "planning":
+                payload.update({"simulation_id": dry_run["id"]})
             if "time-machine" in lower or "historical" in lower:
                 payload.setdefault("id", "master:t1")
             if "haptic" in lower:
