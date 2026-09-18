@@ -38,7 +38,45 @@ class JarvisRuntime:
         self._health_monitor: Any | None = None
         self._background_mode = BackgroundModeController()
         self._activity = ActivityStore()
+        self._neural_event_sink: Callable[..., Any] | None = None
+        self._neural_observation: Any | None = None
         self._register_actions()
+
+    def set_neural_event_sink(self, sink: Callable[..., Any] | None) -> None:
+        self._neural_event_sink = sink
+
+    def publish_neural_observation(self, stage: str, message: str, **details: object) -> None:
+        controller = self._neural_observation
+        if controller is None or not controller.snapshot().get("enabled", False):
+            return
+        sink = self._neural_event_sink
+        if sink is None:
+            return
+        payload = {
+            "stage": str(stage)[:100],
+            "message": str(message)[:500],
+            **{str(key)[:50]: str(value)[:240] for key, value in details.items()},
+        }
+        try:
+            sink("observation." + payload["stage"], payload=payload)
+        except Exception:
+            pass
+
+    def neural_observation_start(self, focus: str = "auto", reason: str = "") -> dict[str, object]:
+        if self._neural_observation is None:
+            from .neural_observation import NeuralObservationController
+            self._neural_observation = NeuralObservationController()
+        return self._neural_observation.start(focus, reason)
+
+    def neural_observation_stop(self) -> dict[str, object]:
+        if self._neural_observation is None:
+            return {"enabled": False, "focus": "auto", "reason": "", "started_at": None}
+        return self._neural_observation.stop()
+
+    def neural_observation_state(self) -> dict[str, object]:
+        if self._neural_observation is None:
+            return {"enabled": False, "focus": "auto", "reason": "", "started_at": None}
+        return self._neural_observation.snapshot()
 
     def available_tools(self) -> tuple[str, ...]:
         return self.registry.names()
