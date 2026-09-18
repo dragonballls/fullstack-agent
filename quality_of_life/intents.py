@@ -39,6 +39,11 @@ _SHAPE_REVERT = re.compile(r"^(?:revert|restore|reset)\s+(?:the\s+)?(.+?)(?:\s+t
 _SHAPE_REMOVE = re.compile(r"^(?:remove|delete)\s+(?:it|this\s+(?:object|shape|neuron|node|surface|tab|window)|the\s+(?:object|shape|neuron|node|surface|tab|window))$", re.IGNORECASE)
 _SHAPE_CREATE = re.compile(r"^(?:create|generate|build|make)\s+(?:a|an|the)?\s*(.+?)(?:\s+(?:called|named)\s+(.+))?$", re.IGNORECASE)
 _SHAPE_APPLY = re.compile(r"^(?:make|turn|change|reshape)\s+(.+?)\s+(?:into|as|to|the shape of)\s+(?:a|an|the)?\s*(.+)$", re.IGNORECASE)
+_SHAPE_TERM = re.compile(
+    r"\b(?:droplet|sphere|crystal|cube|torus|capsule|ring|star|orbital|core|heart|gear|spiral|pyramid|wave|dna|molecule|arrow|globe|planet|cone|cylinder|disk|octahedron|icosphere|donut|box|diamond|tube|cell|neuron|brain)\b",
+    re.IGNORECASE,
+)
+_SHAPE_MARKER = re.compile(r"(?:\bshape\b|\b3d\s+(?:object|shape|model)\b)", re.IGNORECASE)
 _ROTATION_SPEED = re.compile(r"^(.*?)\s+and\s+(?:give|set)\s+(?:it\s+)?(?:a\s+)?(?:rotational|rotation|angular)\s+speed\s+(-?\d+(?:\.\d+)?)\s*(rpm|rps|degrees?\s*(?:per|/)\s*second|rad(?:ian)?s?\s*(?:per|/)\s*second)?(?:\s+(?:around|on)\s+([xyz]|xyz))?\s*$", re.IGNORECASE)
 
 _SHAPE_SAVE = re.compile(r"^(?:save|remember)\s+(?:this\s+)?shape\s+(.+?)\s+(?:as|named)\s+(.+)$", re.IGNORECASE)
@@ -72,6 +77,10 @@ def parse_intent(text: str) -> Intent:
     if match:
         target = match.group(1).strip()
         requested_shape = match.group(2).strip()
+        if not (_SHAPE_TERM.search(target) or _SHAPE_TERM.search(requested_shape) or _SHAPE_MARKER.search(target) or _SHAPE_MARKER.search(requested_shape)):
+            match = None
+        if match is None:
+            requested_shape = ""
         rotation_speed = 0.0
         rotation_unit = None
         rotation_axis = "y"
@@ -86,10 +95,13 @@ def parse_intent(text: str) -> Intent:
             requested_shape = requested_shape[2:].strip()
         elif requested_shape.casefold().startswith("an "):
             requested_shape = requested_shape[3:].strip()
-        return Intent("neural_shape", {"target": target, "shape": requested_shape, "rotation_speed": rotation_speed, "rotation_unit": rotation_unit, "rotation_axis": rotation_axis})
+        if requested_shape:
+            return Intent("neural_shape", {"target": target, "shape": requested_shape, "rotation_speed": rotation_speed, "rotation_unit": rotation_unit, "rotation_axis": rotation_axis})
     match = _SHAPE_CREATE.match(value)
     if match:
-        return Intent("neural_shape_create", {"shape": match.group(1).strip(), "name": (match.group(2) or "").strip()})
+        requested_shape = match.group(1).strip()
+        if _SHAPE_TERM.search(requested_shape) or _SHAPE_MARKER.search(requested_shape):
+            return Intent("neural_shape_create", {"shape": requested_shape, "name": (match.group(2) or "").strip()})
     if _HAND_START.match(value):
         return Intent("hand_control_start", {})
     if _HAND_STOP.match(value):
