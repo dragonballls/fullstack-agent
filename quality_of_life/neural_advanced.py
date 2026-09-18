@@ -319,6 +319,38 @@ class LiquidEcology:
         with self._lock:
             return [{"id": p.id, "magnitude": round(_clamp(p.energy) * min(1.0, p.velocity.length() / 4.0 + 0.1), 6), "direction": p.velocity.normalized().as_dict()} for p in self._particles.values()]
 
+    def evict_distant(self, keep: Iterable[str]) -> dict[str, Any]:
+        keep_ids = {str(value) for value in keep}
+        removed = []
+        for rid in list(self.loaded):
+            if rid not in keep_ids:
+                self.unload(rid)
+                removed.append(rid)
+        return {"evicted": removed}
+
+    def start_worker(self, interval: float = 0.05) -> bool:
+        if self._worker is not None and self._worker.is_alive():
+            return False
+        self._worker_stop.clear()
+        def run() -> None:
+            while not self._worker_stop.wait(max(0.01, float(interval))):
+                try:
+                    self.pump(8)
+                except Exception:
+                    break
+        self._worker = threading.Thread(target=run, name="jarvis-advanced-stream", daemon=True)
+        self._worker.start()
+        return True
+
+    def stop_worker(self) -> bool:
+        self._worker_stop.set()
+        worker = self._worker
+        self._worker = None
+        if worker is not None:
+            worker.join(timeout=1.0)
+            return True
+        return False
+
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
@@ -1268,6 +1300,22 @@ class WorldStreamer:
         self.loaded: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self.cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self.pending: deque[dict[str, Any]] = deque()
+        self.index_cells: dict[tuple[int, int, int], set[str]] = defaultdict(set)
+        self._worker_stop = threading.Event()
+        self._worker: threading.Thread | None = None
+
+    @staticmethod
+    def _cell(position: Sequence[float]) -> tuple[int, int, int]:
+        values = list(position)[:3]
+        while len(values) < 3:
+            values.append(0.0)
+        return tuple(math.floor(float(value) / 32.0) for value in values)
+
+    def index(self, region_id: str, position: Sequence[float]) -> dict[str, Any]:
+        cell = self._cell(position)
+        rid = str(region_id)
+        self.index_cells[cell].add(rid)
+        return {"region_id": rid, "cell": list(cell), "indexed": True}
 
     def virtual_regions(self, center: Sequence[float], *, radius: int = 2, priority: float = 0.7) -> dict[str, Any]:
         values = list(center)[:3]
@@ -1319,7 +1367,7 @@ class WorldStreamer:
         return {"id": rid, "status": "cached" if item is not None else "absent"}
 
     def snapshot(self) -> dict[str, Any]:
-        return {"loaded": list(self.loaded.values()), "cache": list(self.cache.values()), "pending": list(self.pending), "max_regions": self.max_regions}
+        return {"loaded": list(self.loaded.values()), "cache": list(self.cache.values()), "pending": list(self.pending), "max_regions": self.max_regions, "spatial_index_cells": len(self.index_cells), "async_worker": bool(self._worker and self._worker.is_alive())}
 
 
 class SimulationLab:
