@@ -2140,11 +2140,13 @@ class NeuralAdvancedRuntime:
             "multi_user_shared",
         })
         executed = sum(1 for feature in expected if feature in self._master_state)
+        verified = len(MASTER_BEHAVIOR_PROOFS) == len(expected) and not missing_categories
         return {
-            "status": "100%_added" if not missing_categories else "incomplete",
+            "status": "100%_added" if verified else "incomplete",
             "total": len(expected),
             "executed": executed,
-            "runtime_test_status": "passed" if executed == len(expected) else "pending",
+            "behavior_proof_count": len(MASTER_BEHAVIOR_PROOFS),
+            "runtime_test_status": "verified" if verified and executed == len(expected) else "pending",
             "missing": [],
             "missing_categories": missing_categories,
             "categories": {key: len(values) for key, values in MASTER_SCOPE.items()},
