@@ -28,6 +28,7 @@ class SpatialWindowState:
         payload = asdict(self)
         payload["position"] = list(self.position)
         payload["rotation"] = list(self.rotation)
+        payload["angular_velocity"] = list(self.angular_velocity)
         return payload
 
 
@@ -68,6 +69,7 @@ class SpatialLayoutStore:
             key=key,
             position=cls._vector(raw.get("position"), (0.0, 0.0, 0.0)),
             rotation=cls._vector(raw.get("rotation"), (0.0, 0.0, 0.0)),
+            angular_velocity=cls._vector(raw.get("angular_velocity"), (0.0, 0.0, 0.0)),
             scale=max(0.05, min(100.0, float(raw.get("scale", 1.0)))),
             visible=bool(raw.get("visible", True)),
             pinned=bool(raw.get("pinned", False)),
