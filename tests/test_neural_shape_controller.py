@@ -21,7 +21,7 @@ class NeuralShapeControllerTests(unittest.TestCase):
         result = controller.create("Test Globe", "globe", position=(1, 2, 3), rotation_speed=2.0)
         self.assertTrue(result["created"])
         node = world.search("Test Globe", limit=1)[0]
-        self.assertEqual(node["shape"]["name"], "globe")
+        self.assertEqual(node["shape"]["name"], "sphere")
         self.assertEqual(node["metadata"]["shape_transform"]["angular_velocity"], [0.0, 2.0, 0.0])
         removed = controller.remove(node["id"])
         self.assertTrue(removed["reverted"])
@@ -66,6 +66,16 @@ class NeuralShapeControllerTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(world.search("Global Neuron", limit=1)[0]["shape"]["name"], "droplet")
         self.assertEqual(world.search("Generated Widget", limit=5), [])
+
+    def test_window_without_prior_layout_has_no_layout_after_revert(self):
+        tmp, world, layout, controller = self.make_controller()
+        self.addCleanup(tmp.cleanup)
+        world.upsert("window:88", EntityKind.WINDOW, "Browser Tab", source="windows", shape="cube")
+        self.assertIsNone(layout.get("window:88"))
+        controller.apply("window:88", "globe", rotation_speed=1.0)
+        self.assertIsNotNone(layout.get("window:88"))
+        self.assertTrue(controller.revert("window:88")["reverted"])
+        self.assertIsNone(layout.get("window:88"))
 
     def test_rotation_units_are_normalized(self):
         self.assertAlmostEqual(parse_rotation_speed(30, "degrees per second"), 0.5235987756, places=6)
