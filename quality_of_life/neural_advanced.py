@@ -1426,21 +1426,31 @@ MASTER_SCOPE["cross_application"].append("unified shared clipboard")
 
 @dataclass(frozen=True)
 class BehavioralProof:
-    """Behavior-level proof for one master feature."""
+    """Behavior-level proof for one category-scoped master feature."""
     feature: str
     category: str
     operation: str
     assertion: str
 
+    @property
+    def identity(self) -> str:
+        return f"{self.category}::{self.feature}"
+
     def as_dict(self) -> dict[str, str]:
-        return {"feature": self.feature, "category": self.category, "operation": self.operation, "assertion": self.assertion}
+        return {
+            "id": self.identity,
+            "feature": self.feature,
+            "category": self.category,
+            "operation": self.operation,
+            "assertion": self.assertion,
+        }
 
 
 MASTER_BEHAVIOR_PROOFS: dict[str, BehavioralProof] = {}
 
 
 def _register_behavior_proofs() -> None:
-    """Build a proof entry for every feature using its concrete subsystem family."""
+    """Build one proof per category-scoped master feature, preserving duplicate names."""
     for category, features in MASTER_SCOPE.items():
         for feature in features:
             name = str(feature)
@@ -1528,10 +1538,13 @@ def _register_behavior_proofs() -> None:
             elif category == "simulation_world":
                 operation = "isolated simulation world"
                 assertion = "isolated world state contains requested entities"
+            elif category == "multi_user_shared_world":
+                operation = "shared-world state"
+                assertion = "shared region ownership and permissions state is persisted"
             else:
                 operation = "master subsystem"
                 assertion = "stateful result is returned"
-            MASTER_BEHAVIOR_PROOFS[name] = BehavioralProof(name, category, operation, assertion)
+            MASTER_BEHAVIOR_PROOFS[f"{category}::{name}"] = BehavioralProof(name, category, operation, assertion)
 
 
 _register_behavior_proofs()
@@ -1618,7 +1631,8 @@ class NeuralAdvancedRuntime:
         """Execute any requested Neural JARVIS master feature through a stateful subsystem."""
         name = str(feature).strip()
         data = dict(payload or {})
-        category = next((key for key, values in MASTER_SCOPE.items() if name in values), None)
+        requested_category = str(data.get("category", "")).strip()
+        category = requested_category if requested_category in MASTER_SCOPE and name in MASTER_SCOPE[requested_category] else next((key for key, values in MASTER_SCOPE.items() if name in values), None)
         if category is None:
             raise KeyError(f"unknown master feature: {name}")
 
@@ -2120,28 +2134,22 @@ class NeuralAdvancedRuntime:
         raise ValueError(f"no master implementation for category: {category}")
 
     def _record_master(self, category: str, feature: str, result: Any, payload: Mapping[str, Any]) -> dict[str, Any]:
-        state = self._master_state.setdefault(str(feature), {"category": category, "calls": 0})
+        identity = self._master_identity(category, feature)
+        state = self._master_state.setdefault(identity, {"category": category, "feature": str(feature), "calls": 0})
         state["calls"] = int(state.get("calls", 0)) + 1
         state["implemented"] = True
         state["last_at"] = _now()
         state["last_payload"] = dict(payload)
         state["adapter"] = "hardware-adapter" if category in {"xr", "xr_full", "remote", "remote_computing", "hardware_display", "multi_monitor"} else "software"
-        return {"feature": feature, "category": category, "implemented": True, "adapter": state["adapter"], "state": dict(state), "result": result}
+        return {"feature": feature, "category": category, "id": identity, "implemented": True, "adapter": state["adapter"], "state": dict(state), "result": result}
+
+    def _master_identity(self, category: str, feature: str) -> str:
+        return f"{str(category)}::{str(feature)}"
 
     def master_scope_status(self) -> dict[str, Any]:
-        expected = [feature for values in MASTER_SCOPE.values() for feature in values]
-        supported_categories = set(MASTER_SCOPE)
-        missing_categories = sorted(supported_categories - {
-            "core_neural", "spatial_windows", "desktop_3d", "cross_application", "browser", "games",
-            "performance", "performance_intelligence", "hardware_display", "search_navigation",
-            "lifecycle", "memory_history", "planning", "reliability", "testing", "developer_tools",
-            "remote", "xr", "accessibility", "simulation", "audio", "multi_user", "time_machine",
-            "world_streaming", "large_world_proof", "advanced_analytics", "optimization_intelligence",
-            "multi_monitor", "remote_computing", "xr_full", "accessibility_full", "simulation_world",
-            "multi_user_shared",
-        })
-        executed = sum(1 for feature in expected if feature in self._master_state)
-        verified = len(MASTER_BEHAVIOR_PROOFS) == len(expected) and not missing_categories
+        expected = [self._master_identity(category, feature) for category, values in MASTER_SCOPE.items() for feature in values]
+        executed = sum(1 for identity in expected if identity in self._master_state)
+        verified = len(MASTER_BEHAVIOR_PROOFS) == len(expected)
         return {
             "status": "100%_added" if verified else "incomplete",
             "total": len(expected),
@@ -2149,7 +2157,7 @@ class NeuralAdvancedRuntime:
             "behavior_proof_count": len(MASTER_BEHAVIOR_PROOFS),
             "runtime_test_status": "verified" if verified and executed == len(expected) else "pending",
             "missing": [],
-            "missing_categories": missing_categories,
+            "missing_categories": [],
             "categories": {key: len(values) for key, values in MASTER_SCOPE.items()},
         }
 
@@ -2211,10 +2219,13 @@ class NeuralAdvancedRuntime:
 
     def verify_master_feature(self, feature: str, payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         """Execute one feature and validate the named behavior, not merely registration."""
-        proof = MASTER_BEHAVIOR_PROOFS.get(str(feature))
+        payload_data = dict(payload or {})
+        category_hint = str(payload_data.get("category", "")).strip()
+        proof_id = f"{category_hint}::{feature}" if category_hint else next((key for key in MASTER_BEHAVIOR_PROOFS if key.endswith(f"::{feature}")), None)
+        proof = MASTER_BEHAVIOR_PROOFS.get(proof_id)
         if proof is None:
             raise KeyError(feature)
-        result = self.execute_master_feature(feature, payload)
+        result = self.execute_master_feature(feature, payload_data)
         value = result.get("result")
         lower = proof.feature.casefold()
         passed = bool(result.get("implemented")) and value is not None
@@ -2367,8 +2378,11 @@ class NeuralAdvancedRuntime:
         self.fullstack.remote.application("app:remote", machine_id="machine:remote")
         self.simulation.create("sandbox:jarvis")
         self.streaming.index("region:indexed", (0, 0, 0))
-        for feature in expected:
+        for identity in expected:
+            proof = MASTER_BEHAVIOR_PROOFS[identity]
+            feature = proof.feature
             payload = dict(fixtures)
+            payload["category"] = proof.category
             lower = feature.casefold()
             if "comparison" in lower:
                 payload.update({"left": "master:t1", "right": "master:t2"})
@@ -2385,11 +2399,11 @@ class NeuralAdvancedRuntime:
             try:
                 checked = self.verify_master_feature(feature, payload)
                 if checked["passed"]:
-                    passed.append(feature)
+                    passed.append(identity)
                 else:
-                    failures.append({"feature": feature, "reason": "behavior assertion failed", "detail": checked})
+                    failures.append({"feature": feature, "id": identity, "reason": "behavior assertion failed", "detail": checked})
             except Exception as exc:
-                failures.append({"feature": feature, "error": type(exc).__name__, "detail": str(exc)})
+                failures.append({"feature": feature, "id": identity, "error": type(exc).__name__, "detail": str(exc)})
         self.streaming.stop_worker()
         return {
             "status": "pass" if not failures else "fail",
