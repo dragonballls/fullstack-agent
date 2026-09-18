@@ -45,6 +45,8 @@ def normalize_shape(value: object) -> ShapeSpec:
         return ShapeSpec(name=name, family=family, parameters=params)
     name = str(value or "").strip()[:120] or "droplet"
     folded = name.casefold()
+    if folded in BUILTIN_SHAPES:
+        return ShapeSpec(name=folded, family="primitive")
     aliases = (
         ("icosphere", "sphere"), ("globe", "sphere"), ("planet", "sphere"), ("ball", "sphere"),
         ("donut", "torus"), ("ring", "ring"), ("box", "cube"), ("cube", "cube"),
