@@ -234,11 +234,11 @@ const earthIndexCount=buildEarthSphere();
 
 function shapeCode(node){const name=String(node.shape&&node.shape.name||"droplet").toLowerCase();const codes={sphere:2,capsule:3,crystal:4,torus:5,ring:6,star:7,orbital:8,core:9,heart:10,gear:11,spiral:12,pyramid:13,wave:14,dna:15,molecule:16,arrow:17};return codes[name]||((name.length%11)+18);}
 function nodePosition(n){const o=S.localOffsets.get(n.id);return o?[n.position[0]+o[0],n.position[1]+o[1],n.position[2]+o[2]]:n.position;}
-function activeNodes(){
+function activeNodes(cam){
   const max=S.mode==="background"?320:S.quality==="performance"?720:1500;
-  const c=camera();
+  const c=cam||camera();
   const visible=S.nodes.filter(function(n){
-    const p=worldToScreen(nodePosition(n));
+    const p=worldToScreen(nodePosition(n),c);
     return p!==null&&p[0]>-140&&p[0]<canvas.clientWidth+140&&p[1]>-140&&p[1]<canvas.clientHeight+140;
   });
   return visible.slice().sort(function(a,b){
@@ -295,11 +295,12 @@ function render(now){
   if(S.mode==="foreground"&&S.frameMs>28)S.quality="performance";
   if(S.mode==="foreground"&&S.frameMs<18&&S.nodes.length<800)S.quality="maximum";
   resize();
-  const nodesForPhysics=activeNodes();simulateFluid(dt,nodesForPhysics);
-  const c=camera(),aspect=canvas.width/Math.max(1,canvas.height),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
+  const c=camera();
+  const nodes=activeNodes(c);simulateFluid(dt,nodes);
+  const aspect=canvas.width/Math.max(1,canvas.height),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
   perspective(proj,Math.PI/3,aspect,.05,2000);lookAt(view,c.eye,S.target);multiply(mvp,proj,view);
   gl.clearColor(0,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-  const nodes=activeNodes(),nowMs=performance.now();
+  const nowMs=performance.now();
   const cp=new Float32Array(nodes.length*3),cs=new Float32Array(nodes.length),ce=new Float32Array(nodes.length),ph=new Float32Array(nodes.length),se=new Float32Array(nodes.length),sh=new Float32Array(nodes.length),bi=new Float32Array(nodes.length);
   nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);cs[i]=(n.scale||1)*(n.kind==="core"?1.75:n.kind==="subsystem"?1.30:.72);ce[i]=n.energy||.2;ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;});
   upload(centerBuf,cp);upload(scaleBuf,cs);upload(energyBuf,ce);upload(phaseBuf,ph);upload(selectedBuf,se);upload(shapeBuf,sh);upload(birthBuf,bi);
@@ -447,7 +448,7 @@ function worldToScreen(p){
 function screenDelta(dx,dy,depth){const c=camera(),f=canvas.clientHeight/(2*Math.tan(Math.PI/6));return add(mul3(c.right,dx*depth/f),mul3(c.up,-dy*depth/f))}
 function pick(x,y){
   let best=null,bestD=Infinity;
-  for(const n of activeNodes()){const p=worldToScreen(nodePosition(n));if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bestD){bestD=d;best=n;}}
+  for(const n of activeNodes()){const p=worldToScreen(nodePosition(n),camera());if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bestD){bestD=d;best=n;}}
   return bestD<75?best:null;
 }
 function focus(n){
