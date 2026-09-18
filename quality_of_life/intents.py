@@ -37,7 +37,7 @@ _SHAPE = re.compile(r"^(?:make|turn|change)\s+(?:the\s+)?(.+?)\s+(?:neuron|node)
 _SHAPE_REVERT_ALL = re.compile(r"^(?:revert|restore|reset)\s+(?:everything|all)\s+(?:to\s+)?(?:the\s+)?(?:original|original\s+state)(?:\s+state)?$", re.IGNORECASE)
 _SHAPE_REVERT = re.compile(r"^(?:revert|restore|reset)\s+(?:the\s+)?(.+?)(?:\s+to\s+)?(?:its\s+)?original(?:\s+state)?$", re.IGNORECASE)
 _SHAPE_CREATE = re.compile(r"^(?:create|generate|build|make)\s+(?:a|an|the)?\s*(.+?)(?:\s+(?:called|named)\s+(.+))?$", re.IGNORECASE)
-_SHAPE_APPLY = re.compile(r"^(?:make|turn|change|reshape)\s+(?:this|the)?\s*(.+?)\s+(?:into|as|to|the shape of)\s+(?:a|an|the)?\s*(.+)$", re.IGNORECASE)
+_SHAPE_APPLY = re.compile(r"^(?:make|turn|change|reshape)\s+(.+?)\s+(?:into|as|to|the shape of)\s+(?:a|an|the)?\s*(.+)$", re.IGNORECASE)
 _ROTATION_SPEED = re.compile(r"^(.*?)\s+and\s+(?:give|set)\s+(?:it\s+)?(?:a\s+)?(?:rotational|rotation|angular)\s+speed\s+(-?\d+(?:\.\d+)?)\s*(rpm|rps|degrees?\s*(?:per|/)\s*second|rad(?:ian)?s?\s*(?:per|/)\s*second)?(?:\s+(?:around|on)\s+([xyz]|xyz))?\s*$", re.IGNORECASE)
 
 _SHAPE_SAVE = re.compile(r"^(?:save|remember)\s+(?:this\s+)?shape\s+(.+?)\s+(?:as|named)\s+(.+)$", re.IGNORECASE)
