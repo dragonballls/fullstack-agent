@@ -20,6 +20,8 @@ NEURAL_MESH_BUILTIN = {
 #jn-status{margin-top:5px;font-size:9px;letter-spacing:.15em;color:#58a8d7;text-transform:uppercase}
 #jn-focus{position:absolute;left:24px;top:86px;max-width:420px;font-size:10px;color:#78b9dc;pointer-events:none}
 #jn-search{position:absolute;right:24px;top:20px;width:min(340px,36vw);box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:12px;padding:11px 13px;outline:none;color:#dff6ff;background:rgba(2,12,24,.72);box-shadow:0 0 28px rgba(20,130,220,.1);backdrop-filter:blur(10px)}
+#jn-kind,#jn-life{position:absolute;top:63px;width:145px;box-sizing:border-box;padding:7px 8px;border:1px solid rgba(91,190,255,.18);border-radius:9px;color:#88cfff;background:rgba(2,12,24,.68);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.1em;pointer-events:auto;text-transform:uppercase}
+#jn-kind{right:322px}#jn-life{right:165px}
 #jn-actions{position:absolute;right:24px;top:63px;display:flex;gap:7px;pointer-events:auto;flex-wrap:wrap;justify-content:flex-end;max-width:450px}
 .jn-btn{border:1px solid rgba(91,190,255,.2);border-radius:9px;padding:7px 9px;color:#88cfff;background:rgba(2,12,24,.52);cursor:pointer;font:9px/1.2 Inter,Segoe UI,sans-serif;letter-spacing:.12em;text-transform:uppercase}
 .jn-btn:hover{border-color:rgba(124,210,255,.6);box-shadow:0 0 18px rgba(39,151,239,.1)}
@@ -58,6 +60,8 @@ NEURAL_MESH_BUILTIN = {
   <div id="jn-hud"><div id="jn-title">JARVIS</div><div id="jn-status">NEURAL MESH · 3D WORLD · ONLINE</div></div>
   <div id="jn-focus"></div>
   <input id="jn-search" autocomplete="off" spellcheck="false" placeholder="Search the neural world…" />
+  <select id="jn-kind" aria-label="Neural type filter"><option value="">ALL TYPES</option><option value="file">FILES</option><option value="application">APPS</option><option value="window">WINDOWS</option><option value="page">PAGES</option><option value="repository">REPOS</option><option value="agent">AGENTS</option><option value="task">TASKS</option><option value="memory">MEMORY</option><option value="location">LOCATIONS</option><option value="process">PROCESSES</option></select>
+  <select id="jn-life" aria-label="Neural lifecycle filter"><option value="">ALL STATES</option><option value="active">ACTIVE</option><option value="waiting">WAITING</option><option value="mature">MATURE</option><option value="dormant">DORMANT</option><option value="failed">FAILED</option><option value="retired">RETIRED</option></select>
   <div id="jn-actions">
     <button class="jn-btn" id="jn-home">CORE</button>
   <button class="jn-btn" id="jn-trace">TRACE</button>
@@ -566,14 +570,14 @@ async function traceSelected(){
   }catch(_){}
 }
 async function search(value){
-  const a=api();if(!value.trim()||!a)return;
+  const a=api();if(!value.trim()&& !ui.querySelector("#jn-kind").value && !ui.querySelector("#jn-life").value||!a)return;
   try{
-    if(S.view==="earth"&&a.gods_eye_globe_search){
+    if(S.view==="earth"&&a.gods_eye_globe_search&&value.trim()){
       S.earthData=await a.gods_eye_globe_search(value.trim());
       const box=ui.querySelector("#jn-response");box.textContent=(S.earthData.locators&&S.earthData.locators.length)?("Located "+S.earthData.locators[0].label):"No Earth locations found";box.classList.add("visible");return;
     }
     if(!a.neural_search)return;
-    const r=await a.neural_search(value.trim(),null,null,null,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
+    const r=await a.neural_search(value.trim(),ui.querySelector("#jn-kind").value||null,null,null,ui.querySelector("#jn-life").value||null,null,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
   }catch(_){ }
 }
 async function chat(){
@@ -611,6 +615,8 @@ canvas.addEventListener("pointercancel",function(){release()});
 canvas.addEventListener("wheel",function(e){e.preventDefault();S.distance=Math.max(3.5,Math.min(180,S.distance*Math.exp(e.deltaY*.001)));},{passive:false});
 canvas.addEventListener("dblclick",function(e){const n=pick(e.clientX,e.clientY);if(n)focus(n)});
 ui.querySelector("#jn-search").addEventListener("input",function(e){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(e.target.value)},260)});
+ui.querySelector("#jn-kind").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
+ui.querySelector("#jn-life").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
 ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
