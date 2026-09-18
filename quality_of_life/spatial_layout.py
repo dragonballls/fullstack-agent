@@ -16,6 +16,7 @@ class SpatialWindowState:
     key: str
     position: tuple[float, float, float] = (0.0, 0.0, 0.0)
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    angular_velocity: tuple[float, float, float] = (0.0, 0.0, 0.0)
     scale: float = 1.0
     visible: bool = True
     pinned: bool = False
