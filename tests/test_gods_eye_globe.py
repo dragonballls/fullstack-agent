@@ -22,6 +22,35 @@ class GlobeTests(unittest.TestCase):
         self.assertTrue(payload["authorized_current"])
         self.assertEqual(len(payload["locators"]), 2)
 
+    def test_provider_locations_are_added(self):
+        class Provider:
+            def status(self):
+                return {"available": True, "authorized": True, "live": True, "source": "phone"}
+            def locations(self):
+                return [{"label": "Phone", "point": {"latitude": 1, "longitude": 2}, "authorized": True, "source": "phone"}]
+
+        class Eye:
+            def provider_locations(self, kind):
+                return [{"label": "Phone", "point": {"latitude": 1, "longitude": 2}, "authorized": True, "source": "phone"}] if kind == "phone" else []
+
+        class Runtime:
+            def __init__(self):
+                self.eye = Eye()
+            def dispatch(self, capability, operation):
+                if operation == "locations.current":
+                    return LocationSnapshot(None, None, False, "test")
+                if operation == "locations.list":
+                    return []
+                raise AssertionError(operation)
+            def _tool(self, name):
+                if name == "gods_eye":
+                    return self.eye
+                raise AssertionError(name)
+
+        payload = globe_payload(Runtime())
+        self.assertEqual(len(payload["locators"]), 1)
+        self.assertEqual(payload["locators"][0]["kind"], "phone")
+
     def test_unpermitted_current_is_hidden(self):
         class Runtime:
             def dispatch(self, capability, operation):
