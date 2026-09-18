@@ -78,12 +78,19 @@ class GodsEye:
     def __init__(self, geocoder: Geocoder, location_provider: LocationProvider) -> None:
         self.geocoder = geocoder
         self.location_provider = location_provider
+        self.provider_registry = LocationProviderRegistry()
 
     def search(self, query: str) -> list[Place]:
         normalized = query.strip()
         if not normalized:
             raise ValueError("location query cannot be empty")
         return self.geocoder.search(normalized)
+
+    def register_location_provider(self, kind: str, provider: object) -> None:
+        self.provider_registry.register(kind, provider)
+
+    def provider_locations(self, kind: str) -> list[dict[str, object]]:
+        return self.provider_registry.locations(kind)
 
     def locate_me(self) -> LocationSnapshot:
         return self.location_provider.current()
