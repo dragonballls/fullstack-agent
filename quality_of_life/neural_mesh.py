@@ -333,6 +333,7 @@ function render(now){
   requestAnimationFrame(render);
   if(document.hidden)return;
   renderMinimap();
+  animateSurfaceTransforms();
   renderNeuralConsolePlacement(false);
   if(S.view==="earth"){resize();renderEarth(now);return;}
   const dt=now-S.lastFrame;S.lastFrame=now;S.frameMs=S.frameMs*.92+dt*.08;
@@ -509,6 +510,7 @@ function renderMinimap(){
   nodes.forEach(function(n){const x=sx+n.position[0]*4.2,y=sy+n.position[2]*3.0;g.fillStyle=n.id===S.selected?"#dff6ff":"#3aa8ee";g.globalAlpha=Math.max(.18,Math.min(.9,(n.energy||.2)));g.fillRect(x,y,n.id===S.selected?3:1.5,n.id===S.selected?3:1.5);});
   g.globalAlpha=.5;g.strokeStyle="#3aa8ee";g.strokeRect(sx-2,sy-2,4,4);
 }
+function animateSurfaceTransforms(){ui.querySelectorAll(".jn-spatial-window").forEach(function(el){applySurfaceTransform(el);});}
 function rootStatus(text){ui.querySelector("#jn-perf").textContent=text}
 function worldToScreen(p){
   const c=camera(),rel=sub(p,c.eye),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];if(depth<=.1)return null;
