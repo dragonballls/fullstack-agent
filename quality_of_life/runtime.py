@@ -46,7 +46,7 @@ class JarvisRuntime:
     def set_neural_world_service(self, world: Any | None) -> None:
         self._neural_world_service = world
 
-    def neural_entity_search(self, query: str, **filters: object) -> list[dict[str, object]]:
+    def neural_entity_search(self, query: str = "", **filters: object) -> list[dict[str, object]]:
         world = self._neural_world_service
         if world is None:
             return []
