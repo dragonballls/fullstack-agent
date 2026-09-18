@@ -442,7 +442,19 @@ class AgentOrchestrator:
             verified = False
         self._observe("request.completed", "Request execution completed", verified=verified, confirmation=needs_confirmation, errors=len(errors))
         if task_id:
-            self.runtime.neural_task_finished(task_id, success=verified, message=synthesis_text[:300])
+            if needs_confirmation:
+                self.runtime.neural_task_update(
+                    task_id,
+                    status="waiting",
+                    step="Waiting for confirmation",
+                    progress=28,
+                )
+            else:
+                self.runtime.neural_task_finished(
+                    task_id,
+                    success=verified,
+                    message=synthesis_text[:300],
+                )
         return OrchestrationResult(synthesis_text, plan.primary.profile.value, verified, needs_confirmation, parallel_completed, tuple(dict.fromkeys(providers)), int((time.monotonic() - started) * 1000), tuple(errors))
 
     def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:
