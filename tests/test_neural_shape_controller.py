@@ -21,7 +21,7 @@ class NeuralShapeControllerTests(unittest.TestCase):
         result = controller.create("Test Globe", "globe", position=(1, 2, 3), rotation_speed=2.0)
         self.assertTrue(result["created"])
         node = world.search("Test Globe", limit=1)[0]
-        self.assertEqual(node["shape"]["name"], "sphere")
+        self.assertEqual(node["shape"]["name"], "globe")
         self.assertEqual(node["metadata"]["shape_transform"]["angular_velocity"], [0.0, 2.0, 0.0])
         removed = controller.remove(node["id"])
         self.assertTrue(removed["reverted"])
