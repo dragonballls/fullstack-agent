@@ -1469,6 +1469,7 @@ FEATURES = {
 # Canonical Build #2 master scope: every unique feature is tracked by category + feature name.
 # The shared clipboard is already part of FEATURES and is not appended a second time.
 MASTER_SCOPE: dict[str, list[str]] = {key: list(values) for key, values in FEATURES.items()}
+MASTER_SCOPE_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -2225,6 +2226,8 @@ class NeuralAdvancedRuntime:
             "missing": [],
             "missing_categories": [],
             "categories": {key: len(values) for key, values in MASTER_SCOPE.items()},
+            "scope_version": MASTER_SCOPE_VERSION,
+            "unique_feature_identities": True,
         }
 
     def master_smoke_test(self, *, limit: int | None = None) -> dict[str, Any]:
