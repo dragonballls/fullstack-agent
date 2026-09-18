@@ -8,7 +8,7 @@ from typing import Mapping
 
 BUILTIN_SHAPES = (
     "droplet", "sphere", "crystal", "cube", "torus",
-    "capsule", "ring", "star", "orbital", "core",
+    "capsule", "ring", "star", "orbital", "core", "heart", "gear", "spiral", "pyramid", "wave", "dna", "molecule", "arrow",
 )
 
 
