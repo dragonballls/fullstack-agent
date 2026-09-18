@@ -151,7 +151,7 @@ const S={
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
-  frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),consoleCollapsed:false,lastConsoleLayout:0,consoleLayoutMs:50,
+  frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),consoleCollapsed:false,consoleSubmitting:false,lastConsoleLayout:0,consoleLayoutMs:50,
   surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200,advanced:{physics:{}}
 };
 
@@ -333,12 +333,12 @@ function render(now){
   requestAnimationFrame(render);
   if(document.hidden)return;
   renderMinimap();
+  renderNeuralConsolePlacement(false);
   if(S.view==="earth"){resize();renderEarth(now);return;}
   const dt=now-S.lastFrame;S.lastFrame=now;S.frameMs=S.frameMs*.92+dt*.08;
   if(S.mode==="foreground"&&S.frameMs>28)S.quality="performance";
   if(S.mode==="foreground"&&S.frameMs<18&&S.nodes.length<800)S.quality="maximum";
   resize();
-  renderNeuralConsolePlacement(false);
   const c=camera();
   const nodes=activeNodes(c);simulateFluid(dt,nodes);
   const aspect=canvas.width/Math.max(1,canvas.height),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
@@ -555,10 +555,17 @@ function renderNeuralConsolePlacement(force){
   if(S.view==="earth"){y=height-132;}
   else if(anchorScreen){x=anchorScreen[0];y=anchorScreen[1];depth=anchorScreen[2]||16;}
   else if(coreScreen){x=coreScreen[0];y=coreScreen[1]+115;depth=coreScreen[2]||16;}
-  const w=el.offsetWidth||520,h=el.offsetHeight||(S.consoleCollapsed?46:156);
   const margin=14,top=76,bottom=16;
+  const effectiveTop=Math.min(top,Math.max(margin,height-bottom-64));
+  const availableHeight=Math.max(46,height-effectiveTop-bottom);
+  const w=el.offsetWidth||520;
+  el.style.maxHeight=Math.round(availableHeight)+"px";
+  const body=ui.querySelector("#jn-console-body");
+  if(body){body.style.maxHeight=Math.round(Math.max(34,availableHeight-(S.consoleCollapsed?46:54)))+"px";body.style.overflowY="auto";}
+  const h=Math.min(el.offsetHeight||(S.consoleCollapsed?46:156),availableHeight);
   x=clampNumber(x-w*.5,margin,Math.max(margin,width-w-margin));
-  y=clampNumber(y-h*.5,top,Math.max(top,height-h-bottom));
+  const maxY=Math.max(effectiveTop,height-h-bottom);
+  y=clampNumber(y-h*.5,effectiveTop,maxY);
   const scale=clampNumber(.88+18/(depth+42),.88,1.04);
   el.style.transform="translate3d("+Math.round(x)+"px,"+Math.round(y)+"px,0) scale("+scale.toFixed(3)+")";
   if(tether){
@@ -786,7 +793,9 @@ async function search(value){
   }catch(_){ }
 }
 async function chat(){
+  if(S.consoleSubmitting)return;
   const input=ui.querySelector("#jn-chat-input"),value=input.value.trim(),a=api();if(!value||!a||!a.submit_text)return;
+  S.consoleSubmitting=true;
   appendConsoleMessage("user",value);
   input.disabled=true;
   setConsoleStatus("PROCESSING · NEURAL LINK ACTIVE");
@@ -812,6 +821,7 @@ async function chat(){
     const box=ui.querySelector("#jn-response");box.textContent=message;box.classList.add("visible");
     setConsoleStatus("LINK ERROR · RETRY READY");
   }finally{
+    S.consoleSubmitting=false;
     input.disabled=false;input.focus();
     resizeNeuralComposer();
     renderNeuralConsolePlacement(true);
