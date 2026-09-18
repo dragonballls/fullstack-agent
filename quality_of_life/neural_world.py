@@ -16,6 +16,7 @@ from .neural_discovery import NeuralDiscovery
 from .neural_events import NeuralEventBus
 from .neural_persistence import NeuralPersistence
 from .neural_shapes import normalize_shape
+from .neural_performance import AdaptivePerformanceController
 from .spatial_layout import SpatialLayoutStore
 from .permissions import Capability
 
@@ -389,36 +390,26 @@ class NeuralWorld:
 
 
 class PerformanceGovernor:
-    """Read-only adaptive-quality signal for the frontend."""
+    """Compatibility wrapper around the adaptive rendering controller."""
 
     def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._mode = "foreground"
+        self._controller = AdaptivePerformanceController()
 
     def set_mode(self, mode: str) -> str:
-        normalized = str(mode).strip().lower()
-        if normalized not in {"foreground", "background"}:
-            raise ValueError("mode must be foreground or background")
-        with self._lock:
-            self._mode = normalized
-            return normalized
+        return self._controller.set_mode(mode)
 
     def sample(self) -> PerformanceSnapshot:
-        cpu = memory = None
-        process_count = None
-        try:
-            import psutil  # type: ignore
-            cpu = float(psutil.cpu_percent(interval=None))
-            memory = float(psutil.virtual_memory().percent)
-            process_count = len(psutil.pids())
-        except (ImportError, OSError):
-            pass
-        with self._lock:
-            mode = self._mode
-        pressure = max([x for x in (cpu, memory) if x is not None], default=0.0)
-        quality = "minimal" if mode == "background" else "maximum" if pressure < 65 else "balanced" if pressure < 82 else "performance"
-        return PerformanceSnapshot(cpu, memory, process_count, quality, mode)
+        payload = self._controller.snapshot()
+        return PerformanceSnapshot(
+            payload.get("cpu_percent"),
+            payload.get("memory_percent"),
+            None,
+            str(payload.get("quality", "balanced")),
+            str(payload.get("mode", "foreground")),
+        )
 
+    def detail(self) -> dict[str, object]:
+        return self._controller.snapshot()
 
 def _safe_window_dict(window: Mapping[str, object]) -> dict[str, object]:
     allowed = ("handle", "title", "process_id", "rect", "visible", "minimized", "presentation")
@@ -440,8 +431,21 @@ class NeuralWorldBridgeMixin:
             snapshot["windows"] = [_safe_window_dict(item) for item in self._spatial_windows.list_windows()]
         except (PermissionError, RuntimeError, OSError):
             snapshot["windows"] = []
-        snapshot["performance"] = self._performance.sample().as_dict()
+        snapshot["performance"] = self._performance.detail()
         return snapshot
+
+    def gods_eye_globe(self) -> dict[str, object]:
+        from .gods_eye_globe import globe_payload
+        return globe_payload(self.host.controller.runtime)
+
+    def neural_observation_start(self, focus: str = "auto", reason: str = "") -> dict[str, object]:
+        return self.host.controller.runtime.neural_observation_start(focus, reason)
+
+    def neural_observation_stop(self) -> dict[str, object]:
+        return self.host.controller.runtime.neural_observation_stop()
+
+    def neural_observation_state(self) -> dict[str, object]:
+        return self.host.controller.runtime.neural_observation_state()
 
     def neural_shape_catalog(self) -> list[str]:
         from .neural_shapes import BUILTIN_SHAPES
@@ -561,11 +565,15 @@ def install(desktop_module: Any) -> None:
     class NeuralWorldWebApi(NeuralWorldBridgeMixin, base_api):
         def __init__(self, host: Any) -> None:
             super().__init__(host)
-            self._neural_world = NeuralWorld()
+            self._neural_world = NeuralWorld(persistence=NeuralPersistence())
             self._performance = PerformanceGovernor()
             self._layout = SpatialLayoutStore()
             self._discovery = NeuralDiscovery(self._neural_world, host.controller.runtime)
             self._last_discovery = 0.0
+            try:
+                host.controller.runtime.set_neural_event_sink(self._neural_world.events.publish)
+            except Exception:
+                pass
             try:
                 policy = host.controller.runtime.policy
             except Exception:
