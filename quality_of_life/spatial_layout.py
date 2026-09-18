@@ -20,6 +20,7 @@ class SpatialWindowState:
     visible: bool = True
     pinned: bool = False
     mode: str = "flat"
+    shape: dict[str, object] | None = None
     workspace: str = "default"
     z_priority: int = 0
 
@@ -61,6 +62,8 @@ class SpatialLayoutStore:
         if mode not in {"flat", "portal", "mirror", "desktop"}:
             raise ValueError("unsupported spatial window mode")
         workspace = str(raw.get("workspace", "default")).strip()[:120] or "default"
+        raw_shape = raw.get("shape")
+        shape = dict(raw_shape) if isinstance(raw_shape, Mapping) else {"name": "rectangle", "family": "primitive", "parameters": {}}
         return SpatialWindowState(
             key=key,
             position=cls._vector(raw.get("position"), (0.0, 0.0, 0.0)),
@@ -69,6 +72,7 @@ class SpatialLayoutStore:
             visible=bool(raw.get("visible", True)),
             pinned=bool(raw.get("pinned", False)),
             mode=mode,
+            shape=shape,
             workspace=workspace,
             z_priority=max(-1_000_000, min(1_000_000, int(raw.get("z_priority", 0)))),
         )
