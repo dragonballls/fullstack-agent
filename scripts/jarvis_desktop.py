@@ -856,6 +856,7 @@ class FullstackJarvisHost:
 
     def _on_main_window_closing(self, *_args: Any, **_kwargs: Any) -> None:
         """Destroy the hidden floating bar when the main Jarvis window closes."""
+        self._shutting_down = True
         self._floating_visible = False
         with self._floating_lock:
             self._save_floating_position()
