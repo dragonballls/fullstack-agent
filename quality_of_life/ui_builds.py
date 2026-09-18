@@ -272,7 +272,7 @@ class UIBuildStore:
                     existing = self._read_build(builtin.id)
                 except (KeyError, ValueError):
                     existing = None
-                if existing is None or existing.protected != builtin.protected:
+                if existing is None or existing.protected != builtin.protected or (existing.protected and existing.version != builtin.version):
                     stamp = self._now()
                     self._write_build(UIBuild(**{**builtin.payload(), "created_at": stamp, "updated_at": stamp}))
             state = self._state()

@@ -52,6 +52,12 @@ class JarvisRuntime:
             return []
         return world.search(query, **filters)
 
+    def set_neural_selection(self, entity_id: str | None) -> None:
+        self._neural_selection = str(entity_id).strip() if entity_id else None
+
+    def neural_current_selection(self) -> str | None:
+        return getattr(self, "_neural_selection", None)
+
     def neural_shape_library(self) -> list[dict[str, object]]:
         world = self._neural_world_service
         return world.neural_shape_library() if world is not None else []
@@ -72,17 +78,37 @@ class JarvisRuntime:
         world = self._neural_world_service
         if world is None:
             raise RuntimeError("neural world is unavailable")
-        from .neural_shapes import normalize_shape
-        with world._lock:
-            entity = world._entities.get(str(entity_id))
-            if entity is None:
-                raise KeyError("unknown neural entity")
-            registry = getattr(self._neural_world_service, "shape_registry", None)
-            normalized = (registry.resolve(shape) if registry is not None else normalize_shape(shape)).as_dict()
-            entity.shape = normalized
-            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-            world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
-            return {"id": entity.id, "shape": normalized}
+        return world.neural_shape_apply(entity_id, shape)
+
+    def neural_shape_create(self, label: str, shape: object, **kwargs: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_create(label, shape, **kwargs)
+
+    def neural_shape_apply(self, target: str, shape: object, **kwargs: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_apply(target, shape, **kwargs)
+
+    def neural_shape_revert(self, target: str) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_revert(target)
+
+    def neural_shape_remove(self, target: str) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_remove(target)
+
+    def neural_shape_revert_all(self) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_revert_all()
 
     def neural_task_started(self, title: str) -> str | None:
         world = self._neural_world_service
@@ -411,6 +437,11 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.simulation.run", lambda scenario="cpu_stress", count=1000: self._neural_advanced_command("simulation", "benchmark", {"scenario": scenario, "count": count})))
         self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.accessibility.update", lambda **settings: self._neural_advanced_command("accessibility", "update", settings)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.fullstack.command", lambda domain, operation, payload=None, confirmed=False: self._neural_fullstack_execute(domain, operation, payload, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.create", lambda label, shape, position=(0.0, 0.0, 0.0), scale=1.0, rotation_speed=0.0, rotation_unit=None, rotation_axis="y": self.neural_shape_create(label, shape, position=position, scale=scale, rotation_speed=rotation_speed, rotation_unit=rotation_unit, rotation_axis=rotation_axis)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.apply", lambda target, shape, rotation_speed=0.0, rotation_unit=None, rotation_axis="y": self.neural_shape_apply(target, shape, rotation_speed=rotation_speed, rotation_unit=rotation_unit, rotation_axis=rotation_axis)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.remove", lambda target: self.neural_shape_remove(target)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.revert", lambda target: self.neural_shape_revert(target)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.revert_all", lambda: self.neural_shape_revert_all()))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status", lambda: self._neural_advanced_command("master", "status", {})))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None, confirmed=False: self._neural_master_execute(feature, payload, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.smoke", lambda limit=None: self._neural_advanced_command("master", "smoke", {"limit": limit} if limit is not None else {})))

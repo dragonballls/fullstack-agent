@@ -8,7 +8,7 @@ from typing import Mapping
 
 BUILTIN_SHAPES = (
     "droplet", "sphere", "crystal", "cube", "torus",
-    "capsule", "ring", "star", "orbital", "core", "heart", "gear", "spiral", "pyramid", "wave", "dna", "molecule", "arrow",
+    "capsule", "ring", "star", "orbital", "core", "heart", "gear", "spiral", "pyramid", "wave", "dna", "molecule", "arrow", "globe", "planet", "cone", "cylinder", "disk", "octahedron", "icosphere",
 )
 
 
@@ -44,7 +44,22 @@ def normalize_shape(value: object) -> ShapeSpec:
             raise ValueError("unsupported shape family")
         return ShapeSpec(name=name, family=family, parameters=params)
     name = str(value or "").strip()[:120] or "droplet"
-    return ShapeSpec(name=name, family="primitive" if name.casefold() in BUILTIN_SHAPES else "freeform")
+    folded = name.casefold()
+    if folded in BUILTIN_SHAPES:
+        return ShapeSpec(name=folded, family="primitive")
+    aliases = (
+        ("icosphere", "sphere"), ("globe", "sphere"), ("planet", "sphere"), ("ball", "sphere"),
+        ("donut", "torus"), ("ring", "ring"), ("box", "cube"), ("cube", "cube"),
+        ("neuron", "droplet"), ("cell", "droplet"), ("brain", "droplet"),
+        ("cone", "cone"), ("cylinder", "cylinder"), ("tube", "cylinder"),
+        ("octahedron", "octahedron"), ("diamond", "crystal"), ("pyramid", "pyramid"),
+        ("star", "star"), ("heart", "heart"), ("spiral", "spiral"), ("wave", "wave"),
+        ("dna", "dna"), ("molecule", "molecule"),
+    )
+    for needle, canonical in aliases:
+        if needle in folded:
+            return ShapeSpec(name=canonical, family="primitive")
+    return ShapeSpec(name=name, family="primitive" if folded in BUILTIN_SHAPES else "freeform")
 
 
 

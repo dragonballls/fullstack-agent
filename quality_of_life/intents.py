@@ -34,6 +34,18 @@ _DEVICE_SCREEN = re.compile(r"^(?:show|view)\s+(?:me\s+)?(?:(?:my|the)\s+)?(?:ph
 _OBSERVE_START = re.compile(r"^(?:show(?:\s+me)?|let\s+me\s+see|walk\s+me\s+through|take\s+me\s+through)\s+(?:what\s+(?:you['’]?re|you\s+are)\s+doing|your\s+process|the\s+process|what\s+you\s+are\s+working\s+on)(?:\s+(.+))?$", re.IGNORECASE)
 _OBSERVE_STOP = re.compile(r"^(?:stop|hide|close)\s+(?:the\s+)?(?:live\s+)?(?:process|observation|activity\s+view)$|^(?:stop|hide)\s+showing\s+me\s+(?:what\s+you['’]?re|what\s+you\s+are)\s+doing$", re.IGNORECASE)
 _SHAPE = re.compile(r"^(?:make|turn|change)\s+(?:the\s+)?(.+?)\s+(?:neuron|node)?\s*(?:into|as)\s+(.+)$", re.IGNORECASE)
+_SHAPE_REVERT_ALL = re.compile(r"^(?:revert|restore|reset)\s+(?:everything|all)\s+(?:to\s+)?(?:the\s+)?(?:original|original\s+state)(?:\s+state)?$", re.IGNORECASE)
+_SHAPE_REVERT = re.compile(r"^(?:revert|restore|reset)\s+(?:the\s+)?(.+?)(?:\s+to\s+)?(?:its\s+)?original(?:\s+state)?$", re.IGNORECASE)
+_SHAPE_REMOVE = re.compile(r"^(?:remove|delete)\s+(?:it|this\s+(?:object|shape|neuron|node|surface|tab|window)|the\s+(?:object|shape|neuron|node|surface|tab|window))$", re.IGNORECASE)
+_SHAPE_CREATE = re.compile(r"^(?:create|generate|build|make)\s+(?:a|an|the)?\s*(.+?)(?:\s+(?:called|named)\s+(.+))?$", re.IGNORECASE)
+_SHAPE_APPLY = re.compile(r"^(?:make|turn|change|reshape)\s+(.+?)\s+(?:into|as|to|the shape of)\s+(?:a|an|the)?\s*(.+)$", re.IGNORECASE)
+_SHAPE_TERM = re.compile(
+    r"\b(?:droplet|sphere|crystal|cube|torus|capsule|ring|star|orbital|core|heart|gear|spiral|pyramid|wave|dna|molecule|arrow|globe|planet|cone|cylinder|disk|octahedron|icosphere|donut|box|diamond|tube|cell|neuron|brain)\b",
+    re.IGNORECASE,
+)
+_SHAPE_MARKER = re.compile(r"(?:\bshape\b|\b3d\s+(?:object|shape|model)\b)", re.IGNORECASE)
+_ROTATION_SPEED = re.compile(r"^(.*?)\s+and\s+(?:give|set)\s+(?:it\s+)?(?:a\s+)?(?:rotational|rotation|angular)\s+speed\s+(-?\d+(?:\.\d+)?)\s*(rpm|rps|degrees?\s*(?:per|/)\s*second|rad(?:ian)?s?\s*(?:per|/)\s*second)?(?:\s+(?:around|on)\s+([xyz]|xyz))?\s*$", re.IGNORECASE)
+
 _SHAPE_SAVE = re.compile(r"^(?:save|remember)\s+(?:this\s+)?shape\s+(.+?)\s+(?:as|named)\s+(.+)$", re.IGNORECASE)
 _SPATIAL_OPEN = re.compile(r"^(?:open|launch|start|put)\s+(?:the\s+)?(.+?)\s+(?:in|inside|within)\s+(?:the\s+)?(?:3d\s+)?(?:space|spatial\s+space|jarvis\s+space|neural\s+space)$", re.IGNORECASE)
 
@@ -54,15 +66,42 @@ def parse_intent(text: str) -> Intent:
     match = _SHAPE_SAVE.match(value)
     if match:
         return Intent("neural_shape_save", {"shape": match.group(1).strip(), "name": match.group(2).strip()})
-    match = _SHAPE.match(value)
+    if _SHAPE_REVERT_ALL.match(value) or lowered in {"revert everything", "restore everything", "reset all shapes", "restore original state"}:
+        return Intent("neural_shape_revert_all", {})
+    match = _SHAPE_REVERT.match(value)
+    if match:
+        return Intent("neural_shape_revert", {"target": match.group(1).strip()})
+    if _SHAPE_REMOVE.match(value):
+        return Intent("neural_shape_remove", {})
+    match = _SHAPE_APPLY.match(value)
     if match:
         target = match.group(1).strip()
         requested_shape = match.group(2).strip()
+        if not (_SHAPE_TERM.search(target) or _SHAPE_TERM.search(requested_shape) or _SHAPE_MARKER.search(target) or _SHAPE_MARKER.search(requested_shape)):
+            match = None
+        if match is None:
+            requested_shape = ""
+        rotation_speed = 0.0
+        rotation_unit = None
+        rotation_axis = "y"
+        speed_match = _ROTATION_SPEED.match(requested_shape)
+        if speed_match:
+            requested_shape = speed_match.group(1).strip()
+            rotation_speed = float(speed_match.group(2))
+            rotation_unit = speed_match.group(3)
+            rotation_axis = (speed_match.group(4) or "y").lower()
+        requested_shape = re.sub(r"^(?:the\s+)?shape\s+of\s+", "", requested_shape, flags=re.IGNORECASE).strip()
         if requested_shape.casefold().startswith("a "):
             requested_shape = requested_shape[2:].strip()
         elif requested_shape.casefold().startswith("an "):
             requested_shape = requested_shape[3:].strip()
-        return Intent("neural_shape", {"target": target, "shape": requested_shape})
+        if requested_shape:
+            return Intent("neural_shape", {"target": target, "shape": requested_shape, "rotation_speed": rotation_speed, "rotation_unit": rotation_unit, "rotation_axis": rotation_axis})
+    match = _SHAPE_CREATE.match(value)
+    if match:
+        requested_shape = match.group(1).strip()
+        if _SHAPE_TERM.search(requested_shape) or _SHAPE_MARKER.search(requested_shape):
+            return Intent("neural_shape_create", {"shape": requested_shape, "name": (match.group(2) or "").strip()})
     if _HAND_START.match(value):
         return Intent("hand_control_start", {})
     if _HAND_STOP.match(value):

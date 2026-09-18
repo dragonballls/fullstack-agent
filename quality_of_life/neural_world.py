@@ -21,6 +21,7 @@ from .neural_fullstack import FullStackNeuralExperience
 from .spatial_layout import SpatialLayoutStore
 from .permissions import Capability
 from .neural_advanced import NeuralAdvancedRuntime
+from .neural_shape_controller import NeuralShapeController
 
 
 class EntityKind(str, Enum):
@@ -181,12 +182,22 @@ class NeuralWorld:
             ("jarvis.system", "System"), ("jarvis.gods-eye", "God's Eye"),
             ("jarvis.workflows", "Workflows"), ("jarvis.memory", "Memory"),
             ("jarvis.agents", "Agents"), ("jarvis.devices", "Devices"),
+            ("jarvis.neural-command", "Neural Command"),
         ):
+            is_command = entity_id == "jarvis.neural-command"
             node = self.upsert(
-                entity_id, EntityKind.SUBSYSTEM, label, source="jarvis",
-                parent_id=core.id, energy=0.6, scale=1.35,
+                entity_id,
+                EntityKind.SUBSYSTEM,
+                label,
+                source="jarvis",
+                parent_id=core.id,
+                energy=0.96 if is_command else 0.6,
+                scale=0.62 if is_command else 1.35,
+                position=(0.0, -2.15, 0.85) if is_command else None,
+                shape="orbital" if is_command else _UNSET,
+                metadata={"ui_surface": "neural_command", "always_visible": True} if is_command else None,
             )
-            self.relate(core.id, node.id, "subsystem", 0.95)
+            self.relate(core.id, node.id, "neural-command-surface" if is_command else "subsystem", 0.98 if is_command else 0.95)
 
     def upsert(
         self, entity_id: str, kind: EntityKind | str, label: str, *,
@@ -604,6 +615,15 @@ class NeuralWorldBridgeMixin:
     def neural_observation_state(self) -> dict[str, object]:
         return self.host.controller.runtime.neural_observation_state()
 
+    def neural_selection_set(self, entity_id: str | None) -> dict[str, object]:
+        value = str(entity_id).strip() if entity_id else ""
+        if value:
+            with self._neural_world._lock:
+                if value not in self._neural_world._entities:
+                    raise KeyError("unknown neural selection")
+        self.host.controller.runtime.set_neural_selection(value or None)
+        return {"ok": True, "selected": value or None}
+
     def neural_shape_catalog(self) -> list[str]:
         from .neural_shapes import BUILTIN_SHAPES
         return list(BUILTIN_SHAPES) + [item["name"] for item in self._shape_registry.catalog()]
@@ -620,6 +640,47 @@ class NeuralWorldBridgeMixin:
 
     def neural_shape_delete(self, name: str) -> dict[str, object]:
         return {"name": str(name).strip(), "deleted": self._shape_registry.delete(name)}
+
+    def neural_shape_create(self, label: str, shape: object, position: object = (0.0, 0.0, 0.0), scale: float = 1.0, rotation_speed: float = 0.0, rotation_unit: str | None = None, rotation_axis: str = "y") -> dict[str, object]:
+        from .neural_shape_controller import parse_rotation_speed
+        return self._shape_controller.create(
+            label,
+            shape,
+            position=position if isinstance(position, (list, tuple)) else (0.0, 0.0, 0.0),
+            scale=scale,
+            rotation_speed=parse_rotation_speed(rotation_speed, rotation_unit),
+            rotation_axis=rotation_axis,
+        )
+
+    def neural_shape_apply(self, target: str, shape: object, rotation_speed: float = 0.0, rotation_unit: str | None = None, rotation_axis: str = "y") -> dict[str, object]:
+        from .neural_shape_controller import parse_rotation_speed
+        targets = self._shape_controller.resolve_targets(target)
+        if len(targets) == 1 and targets[0] == str(target).strip().casefold() and "brain" in targets[0]:
+            return self._shape_controller.apply_to_scope(targets[0], shape, rotation_speed=parse_rotation_speed(rotation_speed, rotation_unit), rotation_axis=rotation_axis)
+        if not targets:
+            raise KeyError(f"unknown neural target: {target}")
+        if len(targets) > 1:
+            labels = self._neural_world.search(target, limit=5)
+            if len(labels) != 1:
+                raise ValueError(f"neural target is ambiguous: {target}")
+        return self._shape_controller.apply(targets[0], shape, rotation_speed=parse_rotation_speed(rotation_speed, rotation_unit), rotation_axis=rotation_axis)
+
+    def neural_shape_remove(self, target: str) -> dict[str, object]:
+        targets = self._shape_controller.resolve_targets(target)
+        if not targets:
+            raise KeyError(f"unknown neural target: {target}")
+        if len(targets) > 1:
+            raise ValueError(f"neural target is ambiguous: {target}")
+        return self._shape_controller.remove(targets[0])
+
+    def neural_shape_revert(self, target: str) -> dict[str, object]:
+        return self.neural_shape_remove(target)
+
+    def neural_shape_revert_all(self) -> dict[str, object]:
+        return self._shape_controller.revert_all()
+
+    def neural_shape_history(self) -> list[dict[str, object]]:
+        return self._shape_controller.history()
 
     def neural_shape_set(self, entity_id: str, shape: object) -> dict[str, object]:
         with self._neural_world._lock:
@@ -910,6 +971,7 @@ def install(desktop_module: Any) -> None:
             self._performance = PerformanceGovernor()
             self._layout = SpatialLayoutStore()
             self._shape_registry = self._neural_world.shape_registry
+            self._shape_controller = NeuralShapeController(self._neural_world, self._layout)
             self._discovery = NeuralDiscovery(self._neural_world, host.controller.runtime)
             self._last_discovery = 0.0
             try:

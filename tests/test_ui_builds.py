@@ -79,6 +79,19 @@ class UIBuildStoreTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 store.get("..\\outside")
 
+    def test_protected_builtin_migrates_when_a_new_version_is_shipped(self):
+        with TemporaryDirectory() as tmp:
+            first = UIBuildStore(tmp)
+            build_dir = Path(tmp) / "neural-mesh"
+            manifest_path = build_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["version"] = "0.3.0"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            (build_dir / "script.js").write_text("old-neural-mesh", encoding="utf-8")
+            second = UIBuildStore(tmp)
+            self.assertEqual(second.get("neural-mesh").version, "0.5.0")
+            self.assertNotEqual((build_dir / "script.js").read_text(encoding="utf-8"), "old-neural-mesh")
+
     def test_protected_builds_cannot_be_overwritten_or_deleted(self):
         with TemporaryDirectory() as tmp:
             store = UIBuildStore(tmp)

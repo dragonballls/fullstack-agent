@@ -97,6 +97,45 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertEqual(len(router.calls), 3)
         self.assertTrue(result.verified)
 
+    def test_neural_shape_mutations_use_guarded_dispatch_and_selection(self):
+        router = FakeRouter()
+        runtime = FakeRuntime()
+        runtime.execute_result = {"ok": True, "created": True, "reverted": True}
+        runtime.neural_current_selection = lambda: "window:77"
+        agent = AgentOrchestrator(router, runtime)
+
+        _, verified, errors, needs_confirmation = agent._deterministic_context(
+            "make it into a sphere",
+            confirmed=True,
+        )
+        self.assertTrue(verified)
+        self.assertFalse(errors)
+        self.assertFalse(needs_confirmation)
+        self.assertEqual(runtime.dispatch_calls[-1][0], Capability.SYSTEM_DIAGNOSTICS)
+        self.assertEqual(runtime.dispatch_calls[-1][1], "neural.shape.apply")
+        self.assertEqual(runtime.dispatch_calls[-1][3]["target"], "window:77")
+
+        runtime.dispatch_calls.clear()
+        _, verified, errors, needs_confirmation = agent._deterministic_context(
+            "revert it to original state",
+            confirmed=True,
+        )
+        self.assertTrue(verified)
+        self.assertFalse(errors)
+        self.assertFalse(needs_confirmation)
+        self.assertEqual(runtime.dispatch_calls[-1][1], "neural.shape.revert")
+        self.assertEqual(runtime.dispatch_calls[-1][3]["target"], "window:77")
+
+    def test_shape_mutation_without_selection_fails_cleanly(self):
+        router = FakeRouter()
+        runtime = FakeRuntime()
+        runtime.neural_current_selection = lambda: None
+        agent = AgentOrchestrator(router, runtime)
+        _, verified, errors, _ = agent._deterministic_context("make it into a sphere", confirmed=True)
+        self.assertFalse(verified)
+        self.assertTrue(errors)
+        self.assertEqual(runtime.dispatch_calls, [])
+
     def test_maintenance_diagnosis_uses_existing_read_only_runtime_action(self):
         router = FakeRouter()
         runtime = FakeRuntime(FakeResult("real diagnostic report"))

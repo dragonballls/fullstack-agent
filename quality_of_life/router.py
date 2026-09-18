@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import ipaddress
 import json
 import os
 import threading
@@ -14,20 +13,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
+from .omniroute import OmniRouteConnection, is_loopback_hostname
 from .orchestration import RequestProfile
-
-
-def _is_loopback_hostname(hostname: str | None) -> bool:
-    """Return True when a hostname resolves syntactically to a loopback address."""
-    if not hostname:
-        return False
-    normalized = hostname.strip().lower().rstrip(".")
-    if normalized == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(normalized).is_loopback
-    except ValueError:
-        return False
 
 
 @dataclass(frozen=True)
@@ -44,7 +31,7 @@ class ProviderTarget:
         parsed = urllib.parse.urlparse(self.base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
             raise ValueError("base_url must be an absolute HTTP(S) URL without embedded credentials")
-        if parsed.scheme == "http" and not _is_loopback_hostname(parsed.hostname):
+        if parsed.scheme == "http" and not is_loopback_hostname(parsed.hostname):
             raise ValueError("HTTPS is required for non-loopback cloud targets")
         if not self.name.strip():
             raise ValueError("name must be non-empty")
@@ -58,7 +45,7 @@ class ProviderTarget:
     @property
     def is_loopback(self) -> bool:
         """Return whether the target is local/loopback and therefore may use HTTP."""
-        return _is_loopback_hostname(urllib.parse.urlparse(self.base_url).hostname)
+        return is_loopback_hostname(urllib.parse.urlparse(self.base_url).hostname)
 
 
 @dataclass(frozen=True)
@@ -98,6 +85,8 @@ class CloudModelRouter:
     _latency_ewma_ms: dict[tuple[str, str, str], float] = {}
     _latency_samples: dict[tuple[str, str, str], int] = {}
     _EWMA_ALPHA = 0.25
+    _omniroute_lock = threading.Lock()
+    _omniroute_connections: dict[tuple[str, str], OmniRouteConnection] = {}
 
     def __init__(self, targets: Iterable[ProviderTarget]) -> None:
         self.targets = tuple(targets)
@@ -131,6 +120,19 @@ class CloudModelRouter:
     def omniroute_target(cls, model: str | None = None) -> ProviderTarget:
         """Build the default OmniRoute target."""
         return ProviderTarget("omniroute", cls.omniroute_base_url(), cls.omniroute_api_key_env(), model or cls.omniroute_model())
+
+    @classmethod
+    def _ensure_omniroute(cls, target: ProviderTarget) -> bool:
+        """Lazily connect to local OmniRoute and start it when configured."""
+        if target.name.casefold() != "omniroute" or not target.is_loopback:
+            return True
+        key = (target.base_url.rstrip("/"), target.api_key_env)
+        with cls._omniroute_lock:
+            connection = cls._omniroute_connections.get(key)
+            if connection is None:
+                connection = OmniRouteConnection(target.base_url, target.api_key_env, timeout_seconds=min(2.0, target.timeout_seconds))
+                cls._omniroute_connections[key] = connection
+        return connection.ensure_ready()
 
     @staticmethod
     def prepare_messages(messages: list[dict[str, str]], system_prompt: str | None = None) -> list[dict[str, str]]:
@@ -222,6 +224,9 @@ class CloudModelRouter:
         started = time.monotonic()
         if self._cooldown_active(target):
             return ProviderResult(False, None, target.name, 0, "target temporarily cooling down after a recent failure")
+        if not self._ensure_omniroute(target):
+            self._record_failure(target)
+            return ProviderResult(False, None, target.name, int((time.monotonic() - started) * 1000), "omniroute is not reachable and could not be started")
         key = os.environ.get(target.api_key_env)
         headers = {"Content-Type": "application/json"}
         if key:
