@@ -203,12 +203,12 @@ class SpatialWindowManager:
         ok = self.user32.SetWindowPos(
             handle, 0, int(x), int(y), bounded_width, bounded_height, flags,
         )
+        if not ok:
+            raise SpatialWindowUnavailable("native spatial surface could not be presented")
         if visible:
             self.user32.ShowWindow(handle, self.SW_SHOW)
         else:
             self.user32.ShowWindow(handle, self.SW_HIDE)
-        if not ok:
-            raise SpatialWindowUnavailable("native spatial surface could not be presented")
         return {
             "ok": True,
             "handle": handle,
