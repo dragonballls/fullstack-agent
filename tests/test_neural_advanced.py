@@ -59,6 +59,18 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         death = ecology.apoptosis("b")
         self.assertEqual(death["kind"], "apoptosis")
 
+    def test_core_physics_commands(self):
+        from quality_of_life.neural_world import NeuralWorld
+        world = NeuralWorld()
+        world.advanced.liquid.seed([{"id": "core-a", "position": (0, 0, 0), "energy": 0.9}, {"id": "core-b", "position": (1, 0, 0), "energy": 0.6}])
+        reorganized = world.neural_advanced_command("core", "reorganize", {"priorities": {"coding": 0.9, "browser": 0.4}})
+        self.assertEqual(reorganized["kind"], "core.reorganization")
+        children = world.neural_advanced_command("core", "mitosis", {"id": "core-a"})
+        self.assertTrue(children["events"])
+        self.assertTrue(world.neural_advanced_command("core", "satellite", {"id": "core-a"})["id"])
+        self.assertEqual(world.neural_advanced_command("core", "magnetic", {"source": "core-a", "target": "core-b"})["kind"], "magnetic")
+        self.assertEqual(world.neural_advanced_command("fluid", "tick", {"activity": 0.7})["fluid_environment"], "active")
+
     def test_spatial_workspace_composition(self):
         workspace = SpatialWorkspace()
         for i in range(4):
