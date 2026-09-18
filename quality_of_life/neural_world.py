@@ -317,6 +317,10 @@ class NeuralWorld:
         if domain == "simulation":
             if op == "generate": return self.advanced.simulation.generate(**{key: int(value) for key, value in data.items() if key in {"neurons", "windows", "tasks", "relationships"}})
             if op == "benchmark": return self.advanced.simulation_run(str(data.get("scenario", "cpu_stress")), count=int(data.get("count", 1000)))
+        if domain == "master":
+            if op == "status": return self.advanced.master_scope_status()
+            if op == "execute": return self.advanced.execute_master_feature(str(data["feature"]), dict(data.get("payload", {})))
+            if op == "smoke": return self.advanced.master_smoke_test(limit=int(data["limit"]) if data.get("limit") is not None else None)
         if domain == "completeness":
             if op == "status":
                 return self.advanced.completeness.status()
