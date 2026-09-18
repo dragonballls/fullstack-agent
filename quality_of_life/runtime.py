@@ -134,11 +134,6 @@ class JarvisRuntime:
             entity.visible = success
             entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
         world.events.publish("task.finished", entity_id=task_id, payload={"success": bool(success), "message": str(message)[:500]})
-        if not success:
-            try:
-                world.retire(task_id, remove=False)
-            except Exception:
-                pass
 
     def set_neural_event_sink(self, sink: Callable[..., Any] | None) -> None:
         self._neural_event_sink = sink
