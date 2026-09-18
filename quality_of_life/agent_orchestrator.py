@@ -199,6 +199,13 @@ class AgentOrchestrator:
         if intent.kind == "neural_observe_stop":
             state = self.runtime.neural_observation_stop()
             return "Observation mode disabled.", True, [], False
+        if intent.kind == "neural_shape_save":
+            shape = str(intent.arguments.get("shape", "droplet")).strip()
+            name = str(intent.arguments.get("name", "")).strip()
+            if not name:
+                return "", False, ["Shape name is required"], False
+            result = self.runtime.neural_shape_save(name, shape)
+            return f"Saved shape {result['name']}.", True, [], False
         if intent.kind == "neural_shape":
             target_query = str(intent.arguments.get("target", "")).strip()
             shape = str(intent.arguments.get("shape", "droplet")).strip()
