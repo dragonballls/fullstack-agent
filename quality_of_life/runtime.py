@@ -52,6 +52,12 @@ class JarvisRuntime:
             return []
         return world.search(query, **filters)
 
+    def set_neural_selection(self, entity_id: str | None) -> None:
+        self._neural_selection = str(entity_id).strip() if entity_id else None
+
+    def neural_current_selection(self) -> str | None:
+        return getattr(self, "_neural_selection", None)
+
     def neural_shape_library(self) -> list[dict[str, object]]:
         world = self._neural_world_service
         return world.neural_shape_library() if world is not None else []
