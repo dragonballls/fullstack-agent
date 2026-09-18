@@ -13,6 +13,8 @@ class NeuralDiscovery:
         self.runtime = runtime
         self._seen_apps: set[str] = set()
         self._seen_processes: set[str] = set()
+        self._seen_pages: set[str] = set()
+        self._seen_accounts: set[str] = set()
 
     @staticmethod
     def _app_id(app: Any) -> str:
@@ -85,8 +87,73 @@ class NeuralDiscovery:
         self._seen_processes = seen
         return count
 
+    def sync_browser_pages(self) -> int:
+        from .neural_world import EntityKind, LifecycleState
+        try:
+            pages = self.runtime._tool("browser").pages()
+        except Exception:
+            return 0
+        seen: set[str] = set()
+        count = 0
+        for index, url in enumerate(pages or ()):
+            page_url = str(url).strip()
+            if not page_url:
+                continue
+            entity_id = "browser:" + __import__("hashlib").sha256(page_url.encode("utf-8")).hexdigest()[:20]
+            seen.add(entity_id)
+            node = self.world.upsert(
+                entity_id, EntityKind.PAGE, page_url[:220], source="browser",
+                status="open", lifecycle=LifecycleState.ACTIVE,
+                energy=0.5, scale=0.75,
+                parent_id="jarvis.browser",
+                metadata={"url": page_url[:1000], "index": index},
+            )
+            try:
+                self.world.relate("jarvis.browser", node.id, "open_page", 0.65)
+            except KeyError:
+                pass
+            count += 1
+        for stale in self._seen_pages - seen:
+            self.world.retire(stale, remove=False)
+        self._seen_pages = seen
+        return count
+
+    def sync_accounts(self) -> int:
+        from .neural_world import EntityKind, LifecycleState
+        try:
+            accounts = self.runtime._tool("account_manager").list_accounts()
+        except Exception:
+            return 0
+        seen: set[str] = set()
+        count = 0
+        for account in accounts or ():
+            provider = str(getattr(account, "provider", "unknown"))
+            account_id = str(getattr(account, "account_id", getattr(account, "id", "")))
+            if not account_id:
+                continue
+            entity_id = "account:" + provider.casefold() + ":" + account_id.casefold()
+            seen.add(entity_id)
+            node = self.world.upsert(
+                entity_id, EntityKind.ACCOUNT,
+                str(getattr(account, "label", account_id))[:180],
+                source="accounts", status=str(getattr(account, "state", "authorized"))[:80],
+                lifecycle=LifecycleState.MATURE, energy=0.4, scale=0.8,
+                metadata={"provider": provider[:80], "authorized": True},
+            )
+            try:
+                self.world.relate("jarvis.core", node.id, "authorized_account", 0.45)
+            except KeyError:
+                pass
+            count += 1
+        for stale in self._seen_accounts - seen:
+            self.world.retire(stale, remove=False)
+        self._seen_accounts = seen
+        return count
+
     def sync(self) -> dict[str, int]:
         return {
             "applications": self.sync_applications(),
             "processes": self.sync_processes(),
+            "browser_pages": self.sync_browser_pages(),
+            "accounts": self.sync_accounts(),
         }
