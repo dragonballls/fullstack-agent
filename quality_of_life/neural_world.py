@@ -15,7 +15,7 @@ from typing import Any, Mapping
 from .neural_discovery import NeuralDiscovery
 from .neural_events import NeuralEventBus
 from .neural_persistence import NeuralPersistence
-from .neural_shapes import normalize_shape
+from .neural_shapes import ShapeRegistry, normalize_shape
 from .neural_performance import AdaptivePerformanceController
 from .spatial_layout import SpatialLayoutStore
 from .permissions import Capability
@@ -475,7 +475,20 @@ class NeuralWorldBridgeMixin:
 
     def neural_shape_catalog(self) -> list[str]:
         from .neural_shapes import BUILTIN_SHAPES
-        return list(BUILTIN_SHAPES)
+        return list(BUILTIN_SHAPES) + [item["name"] for item in self._shape_registry.catalog()]
+
+    def neural_shape_library(self) -> list[dict[str, object]]:
+        from .neural_shapes import BUILTIN_SHAPES
+        return [{"name": name, "builtin": True} for name in BUILTIN_SHAPES] + [
+            {"name": item["name"], "builtin": False, "shape": item["shape"]} for item in self._shape_registry.catalog()
+        ]
+
+    def neural_shape_save(self, name: str, shape: object) -> dict[str, object]:
+        spec = self._shape_registry.save(name, shape)
+        return {"name": str(name).strip(), "shape": spec.as_dict(), "saved": True}
+
+    def neural_shape_delete(self, name: str) -> dict[str, object]:
+        return {"name": str(name).strip(), "deleted": self._shape_registry.delete(name)}
 
     def neural_shape_set(self, entity_id: str, shape: object) -> dict[str, object]:
         with self._neural_world._lock:
@@ -608,6 +621,7 @@ def install(desktop_module: Any) -> None:
             self._neural_world = NeuralWorld(persistence=NeuralPersistence())
             self._performance = PerformanceGovernor()
             self._layout = SpatialLayoutStore()
+            self._shape_registry = ShapeRegistry()
             self._discovery = NeuralDiscovery(self._neural_world, host.controller.runtime)
             self._last_discovery = 0.0
             try:
