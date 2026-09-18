@@ -47,6 +47,7 @@ OPERATION_CATALOG: tuple[OperationSpec, ...] = (
     OperationSpec("neural.streaming.region", Capability.SYSTEM_DIAGNOSTICS, OperationRisk.MUTATE, "Queue or release a bounded virtual-world region"),
     OperationSpec("neural.simulation.run", Capability.SYSTEM_DIAGNOSTICS, OperationRisk.READ, "Run a deterministic synthetic Neural JARVIS benchmark scenario"),
     OperationSpec("neural.accessibility.update", Capability.SYSTEM_SETTINGS, OperationRisk.MUTATE, "Update accessibility and XR readiness settings"),
+    OperationSpec("neural.fullstack.command", Capability.SYSTEM_DIAGNOSTICS, OperationRisk.MUTATE, "Route a full-stack Neural JARVIS subsystem through its domain-specific guarded executor"),
     OperationSpec("hand_control.start", Capability.MOUSE_CONTROL, OperationRisk.MUTATE, "Enable webcam-driven pointer control"),
     OperationSpec("hand_control.stop", Capability.MOUSE_CONTROL, OperationRisk.MUTATE, "Stop webcam-driven pointer control"),
     OperationSpec("screen.capture", Capability.SCREEN_READ, OperationRisk.READ, "Capture the current screen"),
