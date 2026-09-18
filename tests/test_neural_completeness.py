@@ -12,7 +12,7 @@ class NeuralCompletenessTests(unittest.TestCase):
         self.assertEqual(status["missing"], [])
         self.assertEqual(status["extra"], [])
         self.assertEqual(status["bound"], status["total_requested"])
-        self.assertGreater(status["total_requested"], 80)
+        self.assertEqual(status["total_requested"], 89)
         self.assertTrue(all(item["domain"] in FULLSTACK_EXECUTION_DOMAINS for item in status["features"]))
 
     def test_scope_count_matches_registry(self):
