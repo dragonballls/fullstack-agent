@@ -1615,14 +1615,13 @@ class FullStackNeuralExperience:
                 "executor": handler,
                 "feature_count": len(feature_names),
                 "status": "implemented",
-                "features": [
-                    self.mark(domain, str(feature)) for feature in feature_names
-                ],
+                "features": [str(feature) for feature in feature_names],
             }
         return {
             "status": "implemented",
             "domains": matrix,
             "unbound_domains": sorted(set(features) - set(FULLSTACK_EXECUTION_DOMAINS)),
+            "feature_count": sum(len(values) for values in features.values()),
         }
 
     def snapshot(self) -> dict[str, Any]:
