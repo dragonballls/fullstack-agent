@@ -1636,6 +1636,9 @@ class NeuralAdvancedRuntime:
                 result = self.history.decay_relationships(float(data.get("half_life_seconds", 86400)))
             elif "prun" in lower:
                 result = self.history.prune(int(data.get("keep_recent", 128)))
+            elif "restor" in lower:
+                snapshot_id = str(data.get("snapshot_id", "master:t1"))
+                result = self.history.restore_layout(snapshot_id) or {"restored": False}
             elif "health" in lower:
                 result = self.history.health()
             else:
@@ -1681,7 +1684,17 @@ class NeuralAdvancedRuntime:
                 "relationship", "permission", "lifecycle", "performance", "render_cost", "physics_cost",
                 "capture_cost", "event_origin", "task", "provider", "spatial_coordinate", "world_state", "timeline"
             ) if value.replace("_", " ") in lower), "world_state")
-            result = self.inspectors.inspect({"feature": name, "state": dict(data), "performance": self.performance.analytics()}, inspector=inspector)
+            payload = {"feature": name, "state": dict(data), "performance": self.performance.analytics()}
+            fields = {
+                "relationship": "relationships", "permission": "permissions", "lifecycle": "lifecycle",
+                "performance": "performance", "render_cost": "render", "physics_cost": "physics",
+                "capture_cost": "capture", "event_origin": "events", "task": "tasks",
+                "provider": "providers", "spatial_coordinate": "coordinates", "world_state": "world",
+                "timeline": "timeline",
+            }
+            kwargs = {value: payload for key, value in fields.items() if key == inspector}
+            result = self.inspectors.inspect(**kwargs) if kwargs else self.inspectors.inspect(world=payload)
+            result["inspector"] = inspector
             return self._record_master(category, name, result, data)
 
         if category in {"remote", "remote_computing"}:
