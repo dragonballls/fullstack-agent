@@ -25,5 +25,7 @@ jobs:
         run: python -m pip install -r quality_of_life/requirements.txt
       - name: Compile quality-of-life modules
         run: python -m compileall quality_of_life tests
+      - name: Run neural completeness gate
+        run: python -m unittest tests.test_neural_completeness -v
       - name: Run regression tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
