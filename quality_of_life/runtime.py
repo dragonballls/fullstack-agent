@@ -410,10 +410,43 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.streaming.region", lambda id, priority=0.5: self._neural_advanced_command("streaming", "request", {"id": id, "priority": priority})))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.simulation.run", lambda scenario="cpu_stress", count=1000: self._neural_advanced_command("simulation", "benchmark", {"scenario": scenario, "count": count})))
         self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.accessibility.update", lambda **settings: self._neural_advanced_command("accessibility", "update", settings)))
-        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.fullstack.command", lambda domain, operation, payload=None: self._neural_advanced_command("fullstack", "route", {"domain": domain, "operation": operation, "payload": payload or {}})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.fullstack.command", lambda domain, operation, payload=None, confirmed=False: self._neural_fullstack_execute(domain, operation, payload, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status", lambda: self._neural_advanced_command("master", "status", {})))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None, confirmed=False: self._neural_master_execute(feature, payload, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.smoke", lambda limit=None: self._neural_advanced_command("master", "smoke", {"limit": limit} if limit is not None else {})))
+
+    def _neural_domain_capability(self, domain: str, operation: str = "") -> Capability:
+        name = str(domain).strip().casefold()
+        op = str(operation).strip().casefold()
+        if name in {"spatial_windows", "desktop_3d"}:
+            return Capability.WINDOW_CONTROL
+        if name == "cross_application":
+            return Capability.CLIPBOARD if "clipboard" in op else Capability.FILE_WRITE
+        if name == "browser":
+            return Capability.BROWSER_CONTROL
+        if name in {"hardware_display", "multi_monitor", "accessibility", "accessibility_full"}:
+            return Capability.SYSTEM_SETTINGS
+        if name == "memory_history":
+            return Capability.FILE_WRITE
+        if name == "reliability":
+            return Capability.SYSTEM_MAINTENANCE
+        if name in {"multi_user", "multi_user_shared"}:
+            return Capability.ACCOUNT_WRITE
+        if name in {"remote", "remote_computing"} and ("control" in op or "sync" in op):
+            return Capability.SYSTEM_MAINTENANCE
+        if name in {"xr", "xr_full"} and op == "haptic":
+            return Capability.DEVICE_INPUT
+        if name == "xr":
+            return Capability.SYSTEM_SETTINGS
+        return Capability.SYSTEM_DIAGNOSTICS
+
+    def _neural_fullstack_execute(self, domain: str, operation: str, payload: Mapping[str, Any] | None = None, *, confirmed: bool = False) -> dict[str, object]:
+        capability = self._neural_domain_capability(domain, operation)
+        self.policy.check(capability)
+        if self.policy.needs_confirmation(capability) and not confirmed:
+            if self.confirmation is None or not self.confirmation(capability, "neural.fullstack.command"):
+                raise PermissionError(f"Confirmation is required: {capability.value}/neural.fullstack.command")
+        return self._neural_advanced_command("fullstack", "route", {"domain": domain, "operation": operation, "payload": dict(payload or {})})
 
     def _neural_master_capability(self, feature: str) -> Capability:
         from .neural_advanced import MASTER_SCOPE
