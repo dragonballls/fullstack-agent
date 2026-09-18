@@ -130,6 +130,9 @@ class PerformanceSnapshot:
         }
 
 
+_UNSET = object()
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -188,8 +191,8 @@ class NeuralWorld:
         lifecycle: LifecycleState | str = LifecycleState.MATURE,
         position: tuple[float, float, float] | None = None,
         scale: float = 1.0, energy: float = 0.35, visible: bool = True,
-        persistent: bool = True, parent_id: str | None = None,
-        shape: object = "droplet", metadata: Mapping[str, object] | None = None,
+        persistent: bool = True, parent_id: object = _UNSET,
+        shape: object = _UNSET, metadata: Mapping[str, object] | None = None,
     ) -> NeuralEntity:
         safe_id = str(entity_id).strip()
         if not safe_id or len(safe_id) > 256:
@@ -212,8 +215,10 @@ class NeuralWorld:
                 existing.energy = max(0.0, min(1.0, float(energy)))
                 existing.visible = bool(visible)
                 existing.persistent = bool(persistent)
-                existing.parent_id = parent_id
-                existing.shape = normalize_shape(shape).as_dict()
+                if parent_id is not _UNSET:
+                    existing.parent_id = str(parent_id) if parent_id is not None else None
+                if shape is not _UNSET:
+                    existing.shape = normalize_shape(shape).as_dict()
                 if metadata is not None:
                     existing.metadata = dict(metadata)
                 existing.updated_at = now
@@ -229,7 +234,9 @@ class NeuralWorld:
                 scale=max(0.1, min(8.0, float(scale))),
                 energy=max(0.0, min(1.0, float(energy))),
                 visible=bool(visible), persistent=bool(persistent),
-                parent_id=parent_id, shape=normalize_shape(shape).as_dict(), metadata=dict(metadata or {}),
+                parent_id=None if parent_id is _UNSET else (str(parent_id) if parent_id is not None else None),
+                shape=normalize_shape("droplet" if shape is _UNSET else shape).as_dict(),
+                metadata=dict(metadata or {}),
                 created_at=now, updated_at=now,
             )
             self._entities[safe_id] = node
