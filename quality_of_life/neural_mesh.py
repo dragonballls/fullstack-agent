@@ -44,6 +44,7 @@ NEURAL_MESH_BUILTIN = {
 #jn-chat button{width:44px;height:40px}
 #jn-help{position:absolute;left:50%;bottom:128px;transform:translateX(-50%);color:rgba(120,178,208,.56);font-size:8px;letter-spacing:.13em;pointer-events:none;white-space:nowrap}
 #jn-perf{position:absolute;bottom:22px;right:24px;font-size:8px;color:#438eb9;letter-spacing:.12em;pointer-events:none}
+#jn-ecology{position:absolute;left:24px;bottom:22px;font-size:8px;color:#438eb9;letter-spacing:.12em;pointer-events:none;text-transform:uppercase}
 #jn-surfaces{position:absolute;inset:0;pointer-events:none;perspective:1600px;transform-style:preserve-3d;overflow:hidden;transition:perspective .25s ease}
 #jn-surfaces.flat-2d{perspective:none;transform-style:flat}
 .jn-spatial-window{position:absolute;left:0;top:0;width:360px;height:250px;transform-style:preserve-3d;pointer-events:auto;border:1px solid rgba(92,200,255,.25);border-radius:14px;background:rgba(4,16,30,.62);box-shadow:0 18px 70px rgba(0,0,0,.42),0 0 32px rgba(31,151,238,.09),inset 0 0 24px rgba(37,155,232,.05);overflow:hidden;backdrop-filter:blur(7px)}
@@ -65,8 +66,6 @@ NEURAL_MESH_BUILTIN = {
   <div id="jn-hud"><div id="jn-title">JARVIS</div><div id="jn-status">NEURAL MESH · 3D WORLD · ONLINE</div></div>
   <div id="jn-focus"></div>
   <input id="jn-search" autocomplete="off" spellcheck="false" placeholder="Search the neural world…" />
-  <select id="jn-kind" aria-label="neuron type"><option value="">ALL TYPES</option><option value="application">APPS</option><option value="file">FILES</option><option value="repository">REPOS</option><option value="browser">BROWSERS</option><option value="task">TASKS</option><option value="agent">AGENTS</option><option value="location">LOCATIONS</option><option value="window">WINDOWS</option></select>
-  <select id="jn-life" aria-label="neuron lifecycle"><option value="">ALL STATES</option><option value="active">ACTIVE</option><option value="waiting">WAITING</option><option value="dormant">DORMANT</option><option value="failed">FAILED</option></select>
   <input id="jn-connected" autocomplete="off" spellcheck="false" placeholder="Connected to…" />
   <input id="jn-source" autocomplete="off" spellcheck="false" placeholder="Source…" />
   <select id="jn-age" aria-label="recency"><option value="">ANY TIME</option><option value="900">15 MIN</option><option value="3600">1 HR</option><option value="86400">24 HR</option><option value="604800">7 DAYS</option></select>
@@ -89,7 +88,7 @@ NEURAL_MESH_BUILTIN = {
   <div id="jn-observe"></div><canvas id="jn-minimap" width="180" height="110"></canvas>
   <div id="jn-help">DRAG · ORBIT · WHEEL · ZOOM · GRAB NEURON · TYPE TALK · SPATIAL WINDOWS</div>
   <div id="jn-chat"><input id="jn-chat-input" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…" /><button class="jn-btn" id="jn-chat-send">↵</button></div>
-  <div id="jn-perf">AUTO QUALITY</div>
+  <div id="jn-perf">AUTO QUALITY</div><div id="jn-ecology">FLUID ECOLOGY · STANDBY</div>
 </div>
 """,
     "script": r"""
@@ -104,12 +103,12 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
-  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
+  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),
-  surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200
+  surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200,advanced:{physics:{}}
 };
 
 function compile(type,src){
@@ -233,7 +232,7 @@ function buildEarthSphere(){
 const earthIndexCount=buildEarthSphere();
 
 function shapeCode(node){const name=String(node.shape&&node.shape.name||"droplet").toLowerCase();const codes={sphere:2,capsule:3,crystal:4,torus:5,ring:6,star:7,orbital:8,core:9,heart:10,gear:11,spiral:12,pyramid:13,wave:14,dna:15,molecule:16,arrow:17};return codes[name]||((name.length%11)+18);}
-function nodePosition(n){const o=S.localOffsets.get(n.id);return o?[n.position[0]+o[0],n.position[1]+o[1],n.position[2]+o[2]]:n.position;}
+function nodePosition(n){const o=S.localOffsets.get(n.id),b=o?[n.position[0]+o[0],n.position[1]+o[1],n.position[2]+o[2]]:n.position,p=S.advanced&&S.advanced.physics||{},wave=Number(p.waves&&p.waves[0]&&p.waves[0].amplitude)||0,ripple=Number(p.ripples&&p.ripples[0]&&p.ripples[0].strength)||0,t=performance.now()*.001+Number(n.id.length||0);return[b[0]+Math.sin(t+b[2])*wave*.32,b[1]+Math.cos(t*.83+b[0])*wave*.22,b[2]+Math.sin(t*.71+b[1])*ripple*.16];}
 function activeNodes(cam){
   const max=S.mode==="background"?320:S.quality==="performance"?720:1500;
   const c=cam||camera();
@@ -488,6 +487,17 @@ function spawn(pos,count){
   if(S.particles.length>180)S.particles.splice(0,S.particles.length-180);
 }
 function api(){return window.pywebview&&window.pywebview.api}
+async function pollAdvanced(){
+  const a=api();if(!a||!a.neural_advanced_tick)return;
+  try{
+    const active=S.nodes.length?Math.min(1,S.nodes.reduce(function(sum,n){return sum+(Number(n.energy)||0)},0)/Math.max(1,S.nodes.length)):0.35;
+    const d=await a.neural_advanced_tick(0.016,active);
+    S.advanced=d||{physics:{}};
+    const p=S.advanced.physics||{};
+    ui.querySelector("#jn-ecology").textContent="FLUID ECOLOGY · ENERGY "+Math.round((Number(p.energy_current)||0)*100)+"% · TURB "+Math.round((Number(p.local_turbulence)||0)*100)+"%";
+    S.lastAdvanced=performance.now();
+  }catch(_){}
+}
 async function pollSnapshot(){
   const a=api();if(!a||!a.neural_world_snapshot)return;
   try{
@@ -725,8 +735,8 @@ ui.querySelector("#jn-chat-send").addEventListener("click",chat);
 ui.querySelector("#jn-chat-input").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();chat()}});
 window.addEventListener("resize",resize);
 document.addEventListener("visibilitychange",function(){const hidden=document.hidden;canvas.style.visibility=hidden?"hidden":"visible";ui.querySelector("#jn-surfaces").style.visibility=hidden?"hidden":"visible";});
-function tick(){const now=performance.now();if(document.hidden){setTimeout(tick,1500);return;}syncEmbeddedVisibility();if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastHandPoll>S.handPollMs)pollHand();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
-pollSnapshot();pollEvents();pollWindows();pollLayouts();pollEarth();pollObservation();pollHand();tick();render(performance.now());
+function tick(){const now=performance.now();if(document.hidden){setTimeout(tick,1500);return;}syncEmbeddedVisibility();if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastHandPoll>S.handPollMs)pollHand();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.lastAdvanced>S.advancedPollMs)pollAdvanced();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
+pollSnapshot();pollEvents();pollWindows();pollLayouts();pollEarth();pollObservation();pollHand();pollAdvanced();tick();render(performance.now());
 })();
 """
 }
