@@ -440,6 +440,7 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.create", lambda label, shape, position=(0.0, 0.0, 0.0), scale=1.0, rotation_speed=0.0, rotation_unit=None, rotation_axis="y": self.neural_shape_create(label, shape, position=position, scale=scale, rotation_speed=rotation_speed, rotation_unit=rotation_unit, rotation_axis=rotation_axis)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.apply", lambda target, shape, rotation_speed=0.0, rotation_unit=None, rotation_axis="y": self.neural_shape_apply(target, shape, rotation_speed=rotation_speed, rotation_unit=rotation_unit, rotation_axis=rotation_axis)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.remove", lambda target: self.neural_shape_remove(target)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.revert", lambda target: self.neural_shape_revert(target)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.revert_all", lambda: self.neural_shape_revert_all()))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status", lambda: self._neural_advanced_command("master", "status", {})))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None, confirmed=False: self._neural_master_execute(feature, payload, confirmed=confirmed)))
