@@ -617,11 +617,10 @@ class FullstackJarvisHost:
         window_kwargs["js_api"] = self.web_api
 
         if headless_smoke:
-            # GitHub-hosted Windows runners do not provide an interactive desktop.
-            # Calling the real GUI backend there can block forever or depend on
-            # unavailable windowing state. Validate the frozen pywebview import and
-            # the exact production window contract instead, then keep the real EXE
-            # alive long enough for the runner to prove initialization/cleanup.
+            # GitHub-hosted Windows runners do not provide a trustworthy interactive
+            # desktop/visible HWND. Still exercise the real frozen pywebview
+            # construction path with the exact production kwargs, but do not start
+            # its GUI event loop in the hosted runner session.
             if VoiceAdapter._truthy("JARVIS_SMOKE_WEBVIEW"):
                 LOGGER.info("frozen pywebview import validation passed: %s", getattr(webview, "__version__", "unknown"))
             required = {"title", "url", "width", "height", "fullscreen", "resizable", "min_size", "js_api"}
@@ -629,8 +628,26 @@ class FullstackJarvisHost:
                 raise RuntimeError(f"native Jarvis window contract mismatch: {sorted(window_kwargs)}")
             if window_kwargs["title"] != "Jarvis" or window_kwargs["width"] < 800 or window_kwargs["height"] < 600:
                 raise RuntimeError("native Jarvis window contract has invalid title or size")
+
             LOGGER.info(
-                "headless frozen Jarvis native window contract validated; gui=%s url=%s size=%sx%s",
+                "constructing frozen Jarvis native window object; gui=%s url=%s size=%sx%s",
+                gui or "default",
+                window_kwargs["url"],
+                window_kwargs["width"],
+                window_kwargs["height"],
+            )
+            self._window = webview.create_window(**window_kwargs)
+            if self._window is None:
+                raise RuntimeError("pywebview returned no Jarvis window object")
+            if getattr(self._window, "title", "Jarvis") != "Jarvis":
+                raise RuntimeError("pywebview returned a native Jarvis window with the wrong title")
+            try:
+                self._window.events.before_show += self._on_window_before_show
+                self._window.events.loaded += self._on_window_loaded
+            except Exception:
+                LOGGER.exception("could not attach Jarvis text input loaded callback")
+            LOGGER.info(
+                "headless frozen Jarvis native window object created; gui=%s url=%s size=%sx%s",
                 gui or "default",
                 window_kwargs["url"],
                 window_kwargs["width"],
