@@ -150,10 +150,17 @@ class NeuralDiscovery:
         self._seen_accounts = seen
         return count
 
-    def sync(self) -> dict[str, int]:
+    def sync_extended(self) -> dict[str, int]:
         return {
             "applications": self.sync_applications(),
             "processes": self.sync_processes(),
             "browser_pages": self.sync_browser_pages(),
             "accounts": self.sync_accounts(),
+        }
+
+    def sync(self) -> dict[str, int]:
+        result = self.sync_extended()
+        return {
+            "applications": result["applications"],
+            "processes": result["processes"],
         }
