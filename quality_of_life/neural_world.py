@@ -19,6 +19,7 @@ from .neural_shapes import ShapeRegistry, normalize_shape
 from .neural_performance import AdaptivePerformanceController
 from .spatial_layout import SpatialLayoutStore
 from .permissions import Capability
+from .neural_advanced import NeuralAdvancedRuntime
 
 
 class EntityKind(str, Enum):
@@ -480,6 +481,7 @@ class NeuralWorldBridgeMixin:
         except (PermissionError, RuntimeError, OSError):
             snapshot["windows"] = []
         snapshot["performance"] = self._performance.detail()
+        snapshot["advanced"] = self._advanced.observe_snapshot(snapshot)
         return snapshot
 
     def gods_eye_globe(self) -> dict[str, object]:
@@ -644,6 +646,92 @@ class NeuralWorldBridgeMixin:
     def spatial_window_capture(self, handle: int, max_width: int = 720) -> dict[str, object]:
         return {"ok": True, "handle": int(handle), "png_base64": self._spatial_windows.capture_png(int(handle), max_width=max_width)}
 
+    def neural_advanced_snapshot(self) -> dict[str, object]:
+        return self._advanced.snapshot()
+
+    def neural_advanced_feature_status(self) -> dict[str, object]:
+        return self._advanced.feature_status()
+
+    def neural_advanced_tick(self, dt: float = 0.016, activity: float = 0.5) -> dict[str, object]:
+        return self._advanced.tick(dt, activity=activity)
+
+    def neural_workspace_command(self, operation: str, payload: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.command_workspace(operation, payload)
+
+    def neural_cross_application_suggest(self, kind: str, source: str, destinations: list[str]) -> list[dict[str, object]]:
+        return self._advanced.cross_app.suggest(kind, source, destinations=destinations)
+
+    def neural_cross_application_transfer(self, kind: str, source: str, destination: str, payload_ref: str = "") -> dict[str, object]:
+        return self._advanced.cross_app.transfer(kind, source, destination, payload_ref or None)
+
+    def neural_performance_sample(self, metrics: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.performance.sample(**dict(metrics))
+
+    def neural_performance_analytics(self) -> dict[str, object]:
+        return self._advanced.performance.analytics()
+
+    def neural_profile_learn(self, kind: str, name: str, metrics: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.profile_learning(kind, name, **dict(metrics))
+
+    def neural_display_update(self, display_id: str, state: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.displays.upsert(display_id, **dict(state))
+
+    def neural_display_save_layout(self) -> dict[str, object]:
+        return self._advanced.displays.save_arrangement()
+
+    def neural_history_bookmark(self, name: str, payload: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.history.bookmark(name, payload)
+
+    def neural_history_snapshot(self, snapshot_id: str, world: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.history.save_snapshot(snapshot_id, world)
+
+    def neural_time_machine(self, compare_left: str = "", compare_right: str = "", replay_id: str = "") -> dict[str, object]:
+        compare = (compare_left, compare_right) if compare_left and compare_right else None
+        return self._advanced.time_machine(compare=compare, replay_id=replay_id or None)
+
+    def neural_dry_run(self, actions: list[Mapping[str, object]], known_good: Mapping[str, object] | None = None) -> dict[str, object]:
+        return self._advanced.planner.dry_run(actions, known_good=known_good)
+
+    def neural_inspect(self) -> dict[str, object]:
+        return self._advanced.inspect()
+
+    def neural_simulation_run(self, scenario: str, count: int = 1000) -> dict[str, object]:
+        return self._advanced.simulation_run(scenario, count=count)
+
+    def neural_reliability_event(self, event: str, region: str = "") -> dict[str, object]:
+        if event == "sleep": return self._advanced.reliability.sleep()
+        if event == "wake": return self._advanced.reliability.wake()
+        if event == "monitor_change": return self._advanced.reliability.monitor_changed()
+        if event in {"reset", "region_reset"}: return self._advanced.reliability.reset(region or None)
+        raise ValueError("unknown reliability event")
+
+    def neural_accessibility_update(self, settings: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.xr_accessibility.update(**dict(settings))
+
+    def neural_audio_event(self, kind: str, source: str = "jarvis", position: list[float] | None = None, intensity: float = 0.5, priority: float = 0.5) -> dict[str, object]:
+        return self._advanced.audio.emit(kind, source=source, position=position, intensity=intensity, priority=priority)
+
+    def neural_audio_policy(self, game_active: bool = False, performance_pressure: float = 0.0) -> dict[str, object]:
+        return self._advanced.audio.policy(game_active=game_active, performance_pressure=performance_pressure)
+
+    def neural_multiuser_profile(self, user_id: str, preferences: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.multi_user.profile(user_id, **dict(preferences))
+
+    def neural_multiuser_region(self, region_id: str, owner: str, shared: bool = False, members: list[str] | None = None) -> dict[str, object]:
+        return self._advanced.multi_user.region(region_id, owner=owner, shared=shared, members=members or [])
+
+    def neural_remote_region(self, region_id: str, state: Mapping[str, object]) -> dict[str, object]:
+        return self._advanced.remote.upsert(region_id, **dict(state))
+
+    def neural_stream_region(self, region_id: str, priority: float = 0.5) -> dict[str, object]:
+        return self._advanced.streaming.request(region_id, priority=priority)
+
+    def neural_stream_pump(self, budget: int = 4) -> dict[str, object]:
+        return self._advanced.streaming.pump(budget)
+
+    def neural_advanced_snapshot_from_world(self) -> dict[str, object]:
+        return self._advanced.snapshot()
+
     def _refresh_real_windows(self) -> None:
         for window in self._spatial_windows.list_windows():
             handle = str(window.get("handle"))
@@ -666,6 +754,7 @@ def install(desktop_module: Any) -> None:
         def __init__(self, host: Any) -> None:
             super().__init__(host)
             self._neural_world = NeuralWorld(persistence=NeuralPersistence())
+            self._advanced = NeuralAdvancedRuntime()
             self._performance = PerformanceGovernor()
             self._layout = SpatialLayoutStore()
             self._shape_registry = self._neural_world.shape_registry
