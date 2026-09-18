@@ -79,16 +79,28 @@ class JarvisDesktopTests(unittest.TestCase):
         with patch.object(sys, "platform", "win32"), patch.dict(sys.modules, {"webview": fake_webview}):
             host.run_window()
 
-        fake_webview.create_window.assert_called_once_with(
-            title="Jarvis",
-            url="http://127.0.0.1:8790/faces/board/",
-            width=1200,
-            height=800,
-            fullscreen=False,
-            resizable=True,
-            min_size=(800, 600),
-            js_api=host.web_api,
+        self.assertEqual(fake_webview.create_window.call_count, 2)
+        self.assertEqual(
+            fake_webview.create_window.call_args_list[0].kwargs,
+            {
+                "title": "Jarvis",
+                "url": "http://127.0.0.1:8790/faces/board/",
+                "width": 1200,
+                "height": 800,
+                "fullscreen": False,
+                "resizable": True,
+                "min_size": (800, 600),
+                "js_api": host.web_api,
+            },
         )
+        floating_kwargs = fake_webview.create_window.call_args_list[1].kwargs
+        self.assertEqual(floating_kwargs["title"], "Jarvis Floating Text Link")
+        self.assertIn("html", floating_kwargs)
+        self.assertIs(floating_kwargs["js_api"], host.web_api)
+        self.assertTrue(floating_kwargs["hidden"])
+        self.assertTrue(floating_kwargs["frameless"])
+        self.assertTrue(floating_kwargs["easy_drag"])
+        self.assertTrue(floating_kwargs["on_top"])
         fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
         self.assertIsNotNone(host._window)
 
