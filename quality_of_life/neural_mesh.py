@@ -88,7 +88,7 @@ const S={
   earthData:{locators:[]},earthLastPoll:0,observation:{enabled:false,focus:"auto"},
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),
-  surfacePositions:new Map(),surfaceScales:new Map()
+  surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200
 };
 
 function compile(type,src){
@@ -216,7 +216,11 @@ function nodePosition(n){const o=S.localOffsets.get(n.id);return o?[n.position[0
 function activeNodes(){
   const max=S.mode==="background"?320:S.quality==="performance"?720:1500;
   const c=camera();
-  return S.nodes.slice().sort(function(a,b){
+  const visible=S.nodes.filter(function(n){
+    const p=worldToScreen(nodePosition(n));
+    return p!==null&&p[0]>-140&&p[0]<canvas.clientWidth+140&&p[1]>-140&&p[1]<canvas.clientHeight+140;
+  });
+  return visible.slice().sort(function(a,b){
     if(a.kind==="core")return-1;if(b.kind==="core")return 1;
     const da=Math.hypot(a.position[0]-c.eye[0],a.position[1]-c.eye[1],a.position[2]-c.eye[2]);
     const db=Math.hypot(b.position[0]-c.eye[0],b.position[1]-c.eye[1],b.position[2]-c.eye[2]);
@@ -392,6 +396,15 @@ async function pollEvents(){
     S.lastEvents=performance.now();
   }catch(_){}
 }
+async function pollLayouts(){
+  const a=api();if(!a||!a.neural_window_list_states)return;
+  try{
+    const states=await a.neural_window_list_states();
+    S.layouts=new Map((Array.isArray(states)?states:[]).map(function(item){return[String(item.key),item]}));
+    S.lastLayoutPoll=performance.now();
+    renderSpatialWindows();
+  }catch(_){}
+}
 async function pollWindows(){
   if(!S.showWindows)return;
   const a=api();if(!a||!a.spatial_windows_catalog)return;
@@ -436,10 +449,20 @@ function renderSpatialWindows(){
   S.windows.slice().sort(function(a,b){return(Number(Boolean(a.minimized))-Number(Boolean(b.minimized)))}).forEach(function(info,index){
     const key=String(info.handle);keep.add(key);let el=current.get(key);if(!el)el=makeSurface(info);
     el.classList.toggle("giant",S.giant);
-    if(!Number.isFinite(Number(el.dataset.x)))el.dataset.x=String(110+(index%4)*390);
-    if(!Number.isFinite(Number(el.dataset.y)))el.dataset.y=String(120+Math.floor(index/4)*280);
-    if(!Number.isFinite(Number(el.dataset.z)))el.dataset.z=String(-index*25);
-    el.dataset.scale=String(S.giant?1.28:1);applySurfaceTransform(el);
+    const saved=S.layouts.get("window:"+info.handle);
+    if(saved&&Array.isArray(saved.position)){
+      el.dataset.x=String(Number(saved.position[0]||0)*70);
+      el.dataset.y=String(-Number(saved.position[1]||0)*70);
+      el.dataset.z=String(Number(saved.position[2]||(-index*25)));
+      el.dataset.scale=String(Math.max(.05,Math.min(4,Number(saved.scale||1))));
+    }else{
+      if(!Number.isFinite(Number(el.dataset.x)))el.dataset.x=String(110+(index%4)*390);
+      if(!Number.isFinite(Number(el.dataset.y)))el.dataset.y=String(120+Math.floor(index/4)*280);
+      if(!Number.isFinite(Number(el.dataset.z)))el.dataset.z=String(-index*25);
+      el.dataset.scale=String(S.giant?1.28:1);
+    }
+    if(S.giant&&!saved)el.dataset.scale="1.28";
+    applySurfaceTransform(el);
     if(!el.parentNode)layer.appendChild(el);
     preview(info,el,index);
   });
@@ -494,8 +517,8 @@ ui.querySelector("#jn-chat-send").addEventListener("click",chat);
 ui.querySelector("#jn-chat-input").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();chat()}});
 window.addEventListener("resize",resize);
 document.addEventListener("visibilitychange",function(){const hidden=document.hidden;canvas.style.visibility=hidden?"hidden":"visible";ui.querySelector("#jn-surfaces").style.visibility=hidden?"hidden":"visible";});
-function tick(){const now=performance.now();if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
-pollSnapshot();pollEvents();pollWindows();pollEarth();pollObservation();tick();render(performance.now());
+function tick(){const now=performance.now();if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
+pollSnapshot();pollEvents();pollWindows();pollLayouts();pollEarth();pollObservation();tick();render(performance.now());
 })();
 """
 }
