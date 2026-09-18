@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from .neural_events import NeuralEventBus
 from .neural_persistence import NeuralPersistence
+from .spatial_layout import SpatialLayoutStore
 from .permissions import Capability
 
 
@@ -428,6 +429,12 @@ class NeuralWorldBridgeMixin:
     def neural_trace(self, start: str, target: str, max_hops: int = 8) -> list[dict[str, object]]:
         return self._neural_world.trace(start, target, max_hops=max_hops)
 
+    def neural_events(self, sequence: int = 0, limit: int = 500) -> list[dict[str, object]]:
+        return self._neural_world.event_snapshot(sequence, limit)
+
+    def neural_world_save(self) -> dict[str, object]:
+        return {"ok": self._neural_world.save()}
+
     def neural_performance(self) -> dict[str, object]:
         return self._performance.sample().as_dict()
 
@@ -441,6 +448,20 @@ class NeuralWorldBridgeMixin:
         except Exception:
             pass
         return self._performance.sample().as_dict()
+
+    def neural_window_state(self, key: str) -> dict[str, object] | None:
+        state = self._layout.get(str(key))
+        return state.as_dict() if state is not None else None
+
+    def neural_window_set_state(self, key: str, payload: Mapping[str, object]) -> dict[str, object]:
+        if not isinstance(payload, Mapping):
+            raise TypeError("spatial state payload must be an object")
+        state = self._layout.upsert(str(key), **dict(payload))
+        self._neural_world.events.publish("window.layout.changed", entity_id=str(key), payload=state.as_dict())
+        return state.as_dict()
+
+    def neural_window_list_states(self) -> list[dict[str, object]]:
+        return [state.as_dict() for state in self._layout.list()]
 
     def spatial_windows_catalog(self) -> list[dict[str, object]]:
         try:
@@ -487,6 +508,7 @@ def install(desktop_module: Any) -> None:
             super().__init__(host)
             self._neural_world = NeuralWorld()
             self._performance = PerformanceGovernor()
+            self._layout = SpatialLayoutStore()
             try:
                 policy = host.controller.runtime.policy
             except Exception:
