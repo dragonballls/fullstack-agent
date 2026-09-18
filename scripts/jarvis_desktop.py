@@ -573,7 +573,7 @@ class FullstackJarvisHost:
     def _on_window_before_show(self, window: Any) -> None:
         try:
             native = getattr(window, "native", None)
-            handle = int(native.Handle.ToInt32())
+            handle = int(native.Handle.ToInt64())
             setter = getattr(self._web_api, "spatial_set_host_handle", None)
             if callable(setter):
                 setter(handle)
