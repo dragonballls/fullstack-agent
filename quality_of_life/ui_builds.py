@@ -216,6 +216,8 @@ class UIBuildStore:
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             build = self._normalize(manifest, protected=bool(manifest.get("protected", False)))
+            build.created_at = str(manifest.get("created_at", "") or "")
+            build.updated_at = str(manifest.get("updated_at", "") or "")
             css_path = build_dir / "style.css"
             markup_path = build_dir / "index.html"
             script_path = build_dir / "script.js"
