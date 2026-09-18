@@ -84,7 +84,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
-  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
+  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
   quality:"maximum",mode:"foreground",view:"network",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
@@ -317,7 +317,7 @@ function renderEarth(now){
   if(locators.length){
     const cp=new Float32Array(locators.length*3),cs=new Float32Array(locators.length),ce=new Float32Array(locators.length),ph=new Float32Array(locators.length),sel=new Float32Array(locators.length),sh=new Float32Array(locators.length),bi=new Float32Array(locators.length);
     locators.forEach(function(item,i){
-      const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180+S.earthYaw;
+      const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;
       const r=1.075,rr=Math.cos(lat)*r;
       cp.set([rr*Math.cos(lon),Math.sin(lat)*r,rr*Math.sin(lon)],i*3);
       cs[i]=.10;ce[i]=1;ph[i]=i*.91;sel[i]=0;sh[i]=1;bi[i]=now-1700;
@@ -346,9 +346,9 @@ async function pollObservation(){
     S.observation=await a.neural_observation_state();
     const box=ui.querySelector("#jn-observe");
     if(S.observation&&S.observation.enabled){
-      const events=await a.neural_events(S.eventSequence,40);
+      const events=await a.neural_events(S.observationSequence,40);
       let lines=[];
-      for(const e of Array.isArray(events)?events:[]){S.eventSequence=Math.max(S.eventSequence,Number(e.sequence)||0);if(e.kind&&String(e.kind).startsWith("observation.")){lines.push(String(e.payload&&e.payload.message||e.kind).slice(0,120));}}
+      for(const e of Array.isArray(events)?events:[]){S.observationSequence=Math.max(S.observationSequence,Number(e.sequence)||0);if(e.kind&&String(e.kind).startsWith("observation.")){lines.push(String(e.payload&&e.payload.message||e.kind).slice(0,120));}}
       box.textContent=(S.observation.focus||"auto").toUpperCase()+" · "+(lines.length?lines.slice(-6).join("  •  "):S.observation.reason||"OBSERVING");
       box.classList.add("visible");
     }else{
