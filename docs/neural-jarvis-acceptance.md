@@ -82,3 +82,6 @@
 - JavaScript Neural JARVIS payload is syntax-checked in CI.
 - Full GitHub Actions matrix covers self-coding safety, Windows maintenance, integration, quality-of-life, and the packaged Windows Jarvis release gate.
 - Native release gate builds the single-file windowed Jarvis.exe, validates embedded upstream imports, launches the packaged visualizer, runs native GUI smoke tests, generates a signed attestation, and uploads the executable artifact.
+
+## Advanced backlog
+- See `docs/neural-jarvis-advanced.md` for the complete advanced Neural JARVIS capability matrix implemented by `quality_of_life.neural_advanced` and exposed through `NeuralWorldBridgeMixin`.
