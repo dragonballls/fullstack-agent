@@ -30,6 +30,8 @@ NEURAL_MESH_BUILTIN = {
 .jn-meta{margin-top:6px;font-size:9px;line-height:1.5;color:#6fa8c5}
 #jn-response{position:absolute;left:50%;bottom:81px;transform:translateX(-50%);width:min(760px,calc(100vw - 80px));max-height:100px;overflow:auto;padding:8px 12px;box-sizing:border-box;border:1px solid rgba(91,190,255,.12);border-radius:11px;background:rgba(1,9,18,.45);color:rgba(181,226,248,.86);font-size:9px;line-height:1.45;pointer-events:none;opacity:0}
 #jn-response.visible{opacity:1}
+#jn-observe{position:absolute;right:24px;bottom:92px;width:min(390px,calc(100vw - 48px));max-height:180px;overflow:auto;padding:10px;border:1px solid rgba(91,190,255,.12);border-radius:11px;background:rgba(1,9,18,.54);color:#88bddc;font-size:8px;line-height:1.45;pointer-events:none;opacity:0;backdrop-filter:blur(10px)}
+#jn-observe.visible{opacity:1}
 #jn-chat{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:min(820px,calc(100vw - 48px));display:flex;gap:9px;padding:9px;box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:16px;background:rgba(1,9,18,.76);box-shadow:0 0 36px rgba(20,128,255,.12);backdrop-filter:blur(14px)}
 #jn-chat input{min-width:0;flex:1;border:0;outline:none;color:#e6f8ff;background:transparent;padding:10px 11px;font:13px/1.2 Inter,Segoe UI,sans-serif}
 #jn-chat input::placeholder{color:rgba(137,190,217,.66)}
@@ -55,6 +57,7 @@ NEURAL_MESH_BUILTIN = {
   <input id="jn-search" autocomplete="off" spellcheck="false" placeholder="Search the neural world…" />
   <div id="jn-actions">
     <button class="jn-btn" id="jn-home">CORE</button>
+    <button class="jn-btn" id="jn-earth">EARTH</button>
     <button class="jn-btn" id="jn-windows">WINDOWS</button>
     <button class="jn-btn" id="jn-giant">GIANT</button>
     <button class="jn-btn" id="jn-perf-btn">PERF</button>
@@ -62,6 +65,7 @@ NEURAL_MESH_BUILTIN = {
   </div>
   <div id="jn-inspector"><div class="jn-mini">SELECTED NEURON</div><div class="jn-name" id="jn-name"></div><div class="jn-meta" id="jn-meta"></div></div>
   <div id="jn-response"></div>
+  <div id="jn-observe"></div>
   <div id="jn-help">DRAG · ORBIT · WHEEL · ZOOM · GRAB NEURON · TYPE TALK · SPATIAL WINDOWS</div>
   <div id="jn-chat"><input id="jn-chat-input" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…" /><button class="jn-btn" id="jn-chat-send">↵</button></div>
   <div id="jn-perf">AUTO QUALITY</div>
@@ -80,7 +84,8 @@ const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,
   localOffsets:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
-  quality:"maximum",mode:"foreground",frozen:false,giant:false,showWindows:true,
+  quality:"maximum",mode:"foreground",view:"network",frozen:false,giant:false,showWindows:true,
+  earthData:{locators:[]},earthLastPoll:0,observation:{enabled:false,focus:"auto"},
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),
   surfacePositions:new Map(),surfaceScales:new Map()
