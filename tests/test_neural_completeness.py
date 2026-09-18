@@ -101,6 +101,16 @@ class NeuralCompletenessTests(unittest.TestCase):
         self.assertEqual(result["requested"], result["executed"])
         self.assertEqual(result["failures"], [])
 
+    def test_master_scope_reports_all_advanced_domains_bound(self):
+        from quality_of_life.neural_advanced import NeuralAdvancedRuntime
+
+        runtime = NeuralAdvancedRuntime()
+        status = runtime.feature_status()
+        self.assertEqual(status["master_scope"]["status"], "100%_added")
+        self.assertEqual(status["remaining_scope"]["status"], "100%_added")
+        self.assertEqual(status["remaining_scope"]["missing"], [])
+        self.assertEqual(status["remaining_scope"]["extra"], [])
+
     def test_neural_world_bridge_exposes_completeness(self):
         from quality_of_life.neural_world import NeuralWorld
 
