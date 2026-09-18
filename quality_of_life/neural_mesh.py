@@ -7,8 +7,8 @@ bridge. It is rendered as an additive UI build and does not replace Jarvis core.
 NEURAL_MESH_BUILTIN = {
     "id": "neural-mesh",
     "name": "Neural JARVIS",
-    "version": "0.3.0",
-    "description": "Blue fully 3D JARVIS world with instanced liquid-cell neurons, lifecycle pulses, fluid grab/return, spatial windows, search, zoom, performance culling, and typed chat.",
+    "version": "0.4.0",
+    "description": "Blue fully 3D JARVIS world with instanced liquid-cell neurons, lifecycle pulses, fluid grab/return, spatial windows, search, zoom, performance culling, and a camera-facing persistent neural command surface.",
     "protected": True,
     "css": r"""
 #jarvis-text-shell,#jarvis-workspace-shell{display:none!important}
@@ -38,10 +38,37 @@ NEURAL_MESH_BUILTIN = {
 #jn-observe.visible{opacity:1}
 #jn-minimap{position:absolute;right:24px;bottom:64px;width:180px;height:110px;border:1px solid rgba(91,190,255,.12);border-radius:10px;background:rgba(1,9,18,.35);opacity:.72;pointer-events:none;display:none}
 #jn-minimap.visible{display:block}
-#jn-chat{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:min(820px,calc(100vw - 48px));display:flex;gap:9px;padding:9px;box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:16px;background:rgba(1,9,18,.76);box-shadow:0 0 36px rgba(20,128,255,.12);backdrop-filter:blur(14px)}
-#jn-chat input{min-width:0;flex:1;border:0;outline:none;color:#e6f8ff;background:transparent;padding:10px 11px;font:13px/1.2 Inter,Segoe UI,sans-serif}
-#jn-chat input::placeholder{color:rgba(137,190,217,.66)}
-#jn-chat button{width:44px;height:40px}
+#jn-neural-console{position:absolute;left:0;top:0;width:min(560px,calc(100vw - 32px));min-height:96px;box-sizing:border-box;pointer-events:auto;transform:translate3d(-9999px,-9999px,0) scale(.94);transform-origin:50% 50%;transform-style:preserve-3d;will-change:transform;z-index:40}
+#jn-neural-console.jn-console-collapsed{width:min(310px,calc(100vw - 32px));min-height:0}
+#jn-neural-console::before{content:"";position:absolute;inset:-1px;border:1px solid rgba(77,184,255,.24);border-radius:18px;background:linear-gradient(145deg,rgba(4,20,39,.92),rgba(1,8,18,.82));box-shadow:0 24px 80px rgba(0,0,0,.42),0 0 42px rgba(24,140,255,.18),inset 0 0 30px rgba(42,168,255,.04);backdrop-filter:blur(16px);transform:translateZ(-8px);pointer-events:none}
+#jn-neural-console::after{content:"";position:absolute;left:13px;right:13px;top:42px;height:1px;background:linear-gradient(90deg,rgba(72,186,255,.4),transparent 82%);opacity:.72;pointer-events:none}
+#jn-console-header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px 9px}
+.jn-console-identity{display:flex;align-items:center;gap:8px;min-width:0}
+.jn-console-orb{width:9px;height:9px;border-radius:50%;background:#55caff;box-shadow:0 0 18px rgba(70,194,255,.95),0 0 36px rgba(70,194,255,.32);flex:0 0 auto}
+.jn-console-title{font-size:9px;letter-spacing:.19em;color:#bfeaff;text-transform:uppercase;white-space:nowrap}
+.jn-console-subtitle{margin-top:2px;font-size:7px;letter-spacing:.10em;color:#4e91bb;text-transform:uppercase;white-space:nowrap}
+.jn-console-controls{display:flex;gap:5px;pointer-events:auto}
+.jn-console-btn{border:1px solid rgba(91,190,255,.18);border-radius:8px;min-width:28px;height:27px;padding:0 8px;color:#7fc5ea;background:rgba(3,18,32,.48);cursor:pointer;font:8px Inter,Segoe UI,sans-serif;letter-spacing:.09em;text-transform:uppercase}
+.jn-console-btn:hover{border-color:rgba(127,219,255,.62);box-shadow:0 0 18px rgba(45,159,246,.14);color:#dff6ff}
+#jn-console-body{position:relative;padding:0 12px 11px}
+#jn-console-log{display:flex;flex-direction:column;gap:5px;max-height:74px;overflow:auto;margin:0 0 8px;padding:5px 1px 0;scrollbar-width:thin}
+.jn-console-message{max-width:92%;padding:6px 8px;border:1px solid rgba(91,190,255,.09);border-radius:8px;background:rgba(255,255,255,.018);font-size:8px;line-height:1.35;color:#83afd0;word-break:break-word}
+.jn-console-message.user{margin-left:auto;border-color:rgba(68,184,255,.17);color:#b9e5ff;background:rgba(39,140,208,.06)}
+.jn-console-message.system{color:#6e9abb}
+#jn-console-quick{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
+.jn-console-chip{border:1px solid rgba(91,190,255,.12);border-radius:8px;padding:5px 7px;color:#6faecf;background:rgba(2,15,27,.42);cursor:pointer;font:7px Inter,Segoe UI,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.jn-console-chip:hover{color:#cdeeff;border-color:rgba(108,210,255,.34)}
+#jn-console-composer{display:flex;gap:7px;align-items:flex-end;padding:6px;border:1px solid rgba(91,190,255,.21);border-radius:12px;background:rgba(1,10,20,.54);box-shadow:inset 0 0 20px rgba(30,142,229,.035)}
+#jn-chat-input{min-width:0;flex:1;resize:none;border:0;outline:none;overflow:hidden;color:#e6f8ff;background:transparent;padding:5px 6px;font:11px/1.35 Inter,Segoe UI,sans-serif;max-height:92px}
+#jn-chat-input::placeholder{color:rgba(137,190,217,.66)}
+#jn-chat-send{width:38px;height:34px;flex:0 0 auto}
+#jn-console-footer{display:flex;justify-content:space-between;gap:8px;padding:6px 2px 0;color:#477da0;font-size:7px;letter-spacing:.10em;text-transform:uppercase}
+#jn-console-footer strong{color:#62bff0;font-weight:500}
+#jn-neural-console.jn-console-collapsed #jn-console-body,#jn-neural-console.jn-console-collapsed #jn-console-footer{display:none}
+#jn-neural-console.jn-console-collapsed::after{top:43px}
+#jn-neural-console.jn-console-collapsed .jn-console-subtitle{color:#5da4cc}
+#jn-console-tether{position:absolute;left:0;top:0;width:0;height:1px;transform-origin:0 50%;background:linear-gradient(90deg,rgba(61,186,255,.64),rgba(61,186,255,.12),transparent);box-shadow:0 0 10px rgba(42,160,255,.25);pointer-events:none;z-index:35}
+#jn-console-tether::after{content:"";position:absolute;right:-3px;top:-3px;width:7px;height:7px;border:1px solid rgba(120,220,255,.72);border-radius:50%;background:rgba(32,138,214,.24);box-shadow:0 0 14px rgba(63,191,255,.55)}
 #jn-help{position:absolute;left:50%;bottom:128px;transform:translateX(-50%);color:rgba(120,178,208,.56);font-size:8px;letter-spacing:.13em;pointer-events:none;white-space:nowrap}
 #jn-perf{position:absolute;bottom:22px;right:24px;font-size:8px;color:#438eb9;letter-spacing:.12em;pointer-events:none}
 #jn-ecology{position:absolute;left:24px;bottom:22px;font-size:8px;color:#438eb9;letter-spacing:.12em;pointer-events:none;text-transform:uppercase}
@@ -87,7 +114,24 @@ NEURAL_MESH_BUILTIN = {
   <div id="jn-response"></div>
   <div id="jn-observe"></div><canvas id="jn-minimap" width="180" height="110"></canvas>
   <div id="jn-help">DRAG · ORBIT · WHEEL · ZOOM · GRAB NEURON · TYPE TALK · SPATIAL WINDOWS</div>
-  <div id="jn-chat"><input id="jn-chat-input" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…" /><button class="jn-btn" id="jn-chat-send">↵</button></div>
+  <div id="jn-console-tether"></div>
+  <div id="jn-neural-console" aria-label="Neural command surface">
+    <div id="jn-console-header">
+      <div class="jn-console-identity"><span class="jn-console-orb"></span><div><div class="jn-console-title">NEURAL COMMAND</div><div class="jn-console-subtitle" id="jn-console-status">3D CORE LINK · ALWAYS IN VIEW</div></div></div>
+      <div class="jn-console-controls"><button class="jn-console-btn" id="jn-console-collapse" title="Collapse the command surface">MIN</button><button class="jn-console-btn" id="jn-console-hotkey" title="F13 toggles this surface">F13</button></div>
+    </div>
+    <div id="jn-console-body">
+      <div id="jn-console-log"><div class="jn-console-message system">Neural command surface online. Locked to JARVIS CORE.</div></div>
+      <div id="jn-console-quick">
+        <button class="jn-console-chip" data-command="Show me what you are doing">SHOW ACTIVITY</button>
+        <button class="jn-console-chip" data-command="Open God's Eye">GOD'S EYE</button>
+        <button class="jn-console-chip" data-command="Check system status">SYSTEM STATUS</button>
+        <button class="jn-console-chip" data-command="Show my workflows">WORKFLOWS</button>
+      </div>
+      <div id="jn-console-composer"><textarea id="jn-chat-input" rows="1" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…"></textarea><button class="jn-btn" id="jn-chat-send" aria-label="Send message">↵</button></div>
+      <div id="jn-console-footer"><span>ENTER SEND · SHIFT+ENTER NEW LINE</span><strong>F13 TOGGLE · CORE LOCKED · CAMERA FACING</strong></div>
+    </div>
+  </div>
   <div id="jn-perf">AUTO QUALITY</div><div id="jn-ecology">FLUID ECOLOGY · STANDBY</div>
 </div>
 """,
@@ -107,7 +151,7 @@ const S={
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
-  frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),
+  frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),consoleCollapsed:false,lastConsoleLayout:0,consoleLayoutMs:50,
   surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200,advanced:{physics:{}}
 };
 
@@ -294,6 +338,7 @@ function render(now){
   if(S.mode==="foreground"&&S.frameMs>28)S.quality="performance";
   if(S.mode==="foreground"&&S.frameMs<18&&S.nodes.length<800)S.quality="maximum";
   resize();
+  renderNeuralConsolePlacement(false);
   const c=camera();
   const nodes=activeNodes(c);simulateFluid(dt,nodes);
   const aspect=canvas.width/Math.max(1,canvas.height),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
@@ -470,6 +515,60 @@ function worldToScreen(p){
   const focal=canvas.clientHeight/(2*Math.tan(Math.PI/6));
   return[canvas.clientWidth/2+(rel[0]*c.right[0]+rel[1]*c.right[1]+rel[2]*c.right[2])*focal/depth,canvas.clientHeight/2-(rel[0]*c.up[0]+rel[1]*c.up[1]+rel[2]*c.up[2])*focal/depth,depth];
 }
+function clampNumber(v,low,high){return Math.max(low,Math.min(high,v));}
+function appendConsoleMessage(kind,text){
+  const log=ui.querySelector("#jn-console-log");if(!log)return;
+  const row=document.createElement("div");row.className="jn-console-message "+(kind==="user"?"user":"system");row.textContent=String(text||"").slice(0,1600);
+  log.appendChild(row);
+  while(log.children.length>10)log.removeChild(log.firstChild);
+  log.scrollTop=log.scrollHeight;
+}
+function setConsoleStatus(text){
+  const status=ui.querySelector("#jn-console-status");if(status)status.textContent=String(text||"").slice(0,90);
+}
+function setConsoleCollapsed(collapsed){
+  S.consoleCollapsed=Boolean(collapsed);
+  const el=ui.querySelector("#jn-neural-console");if(!el)return;
+  el.classList.toggle("jn-console-collapsed",S.consoleCollapsed);
+  const button=ui.querySelector("#jn-console-collapse");if(button)button.textContent=S.consoleCollapsed?"OPEN":"MIN";
+  try{localStorage.setItem("jarvis.neuralCommand.collapsed",S.consoleCollapsed?"1":"0");}catch(_){}
+  requestAnimationFrame(function(){renderNeuralConsolePlacement(true);});
+}
+function renderNeuralConsolePlacement(force){
+  const now=performance.now();
+  if(!force&&now-S.lastConsoleLayout<S.consoleLayoutMs)return;
+  S.lastConsoleLayout=now;
+  const el=ui.querySelector("#jn-neural-console"),tether=ui.querySelector("#jn-console-tether");if(!el)return;
+  const width=canvas.clientWidth,height=canvas.clientHeight;if(width<1||height<1)return;
+  let corePos=[0,0,0],coreScreen=null,anchorScreen=null;
+  const core=S.nodes.find(function(n){return n.id==="jarvis.core";});
+  if(core){
+    corePos=nodePosition(core);
+    coreScreen=worldToScreen(corePos);
+    const c=camera();
+    const anchor=add(add(corePos,mul3(c.right,2.7)),mul3(c.up,-2.0));
+    anchorScreen=worldToScreen(anchor);
+  }
+  let x=width*.5,y=height*.5,depth=16;
+  if(S.view==="earth"){y=height-132;}
+  else if(anchorScreen){x=anchorScreen[0];y=anchorScreen[1];depth=anchorScreen[2]||16;}
+  else if(coreScreen){x=coreScreen[0];y=coreScreen[1]+115;depth=coreScreen[2]||16;}
+  const w=el.offsetWidth||520,h=el.offsetHeight||(S.consoleCollapsed?46:156);
+  const margin=14,top=76,bottom=16;
+  x=clampNumber(x-w*.5,margin,Math.max(margin,width-w-margin));
+  y=clampNumber(y-h*.5,top,Math.max(top,height-h-bottom));
+  const scale=clampNumber(.88+18/(depth+42),.88,1.04);
+  el.style.transform="translate3d("+Math.round(x)+"px,"+Math.round(y)+"px,0) scale("+scale.toFixed(3)+")";
+  if(tether){
+    if(S.view==="earth"||!coreScreen){tether.style.width="0";tether.style.opacity="0";}
+    else{
+      const ex=x+w*.5,ey=y+h*.5,dx=ex-coreScreen[0],dy=ey-coreScreen[1],length=Math.hypot(dx,dy);
+      tether.style.width=Math.round(length)+"px";tether.style.opacity=length>12?".75":"0";
+      tether.style.transform="translate3d("+Math.round(coreScreen[0])+"px,"+Math.round(coreScreen[1])+"px,0) rotate("+Math.atan2(dy,dx)+"rad)";
+    }
+  }
+}
+
 function screenDelta(dx,dy,depth){const c=camera(),f=canvas.clientHeight/(2*Math.tan(Math.PI/6));return add(mul3(c.right,dx*depth/f),mul3(c.up,-dy*depth/f))}
 function pick(x,y){
   let best=null,bestD=Infinity;
@@ -686,11 +785,46 @@ async function search(value){
 }
 async function chat(){
   const input=ui.querySelector("#jn-chat-input"),value=input.value.trim(),a=api();if(!value||!a||!a.submit_text)return;
-  input.disabled=true;ui.querySelector("#jn-status").textContent="JARVIS · PROCESSING";
-  try{let result=await a.submit_text(value,false);if(result&&result.needs_confirmation){const accepted=window.confirm(result.text||"Jarvis requires confirmation.");if(accepted)result=await a.submit_text(value,true);}
-    const box=ui.querySelector("#jn-response");box.textContent=(result&&(result.text||result.error))||"Done.";box.classList.add("visible");input.value="";await pollSnapshot();
-  }catch(e){const box=ui.querySelector("#jn-response");box.textContent="Request failed: "+String(e);box.classList.add("visible");}
-  finally{input.disabled=false;input.focus();}
+  appendConsoleMessage("user",value);
+  input.disabled=true;
+  setConsoleStatus("PROCESSING · NEURAL LINK ACTIVE");
+  ui.querySelector("#jn-status").textContent="JARVIS · PROCESSING";
+  try{
+    let result=await a.submit_text(value,false);
+    if(result&&result.needs_confirmation){
+      appendConsoleMessage("system",result.text||"Jarvis requires confirmation.");
+      setConsoleStatus("AWAITING CONFIRMATION");
+      const accepted=window.confirm(result.text||"Jarvis requires confirmation.");
+      if(accepted)result=await a.submit_text(value,true);
+      else result={text:"Command cancelled."};
+    }
+    const response=(result&&(result.text||result.error))||"Done.";
+    appendConsoleMessage("system",response);
+    const box=ui.querySelector("#jn-response");box.textContent=response;box.classList.add("visible");
+    input.value="";input.style.height="auto";
+    setConsoleStatus("3D CORE LINK · ALWAYS IN VIEW");
+    await pollSnapshot();
+  }catch(e){
+    const message="Request failed: "+String(e);
+    appendConsoleMessage("system",message);
+    const box=ui.querySelector("#jn-response");box.textContent=message;box.classList.add("visible");
+    setConsoleStatus("LINK ERROR · RETRY READY");
+  }finally{
+    input.disabled=false;input.focus();
+    resizeNeuralComposer();
+    renderNeuralConsolePlacement(true);
+  }
+}
+function resizeNeuralComposer(){
+  const input=ui.querySelector("#jn-chat-input");if(!input)return;
+  input.style.height="auto";
+  input.style.height=Math.min(92,Math.max(34,input.scrollHeight))+"px";
+  renderNeuralConsolePlacement(true);
+}
+function toggleNeuralConsole(){
+  setConsoleCollapsed(!S.consoleCollapsed);
+  const input=ui.querySelector("#jn-chat-input");
+  if(!S.consoleCollapsed&&input)window.setTimeout(function(){input.focus();},0);
 }
 canvas.addEventListener("pointerdown",function(e){
   if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
@@ -735,11 +869,19 @@ ui.querySelector("#jn-giant").addEventListener("click",function(){S.giant=!S.gia
 ui.querySelector("#jn-perf-btn").addEventListener("click",async function(){const a=api(),next=S.mode==="foreground"?"background":"foreground";if(a&&a.neural_set_performance_mode)try{const r=await a.neural_set_performance_mode(next);S.mode=r.mode||next;S.quality=r.quality||S.quality;}catch(_){}});
 ui.querySelector("#jn-freeze").addEventListener("click",function(){S.frozen=!S.frozen;ui.querySelector("#jn-freeze").textContent=S.frozen?"UNFREEZE":"FREEZE"});
 ui.querySelector("#jn-chat-send").addEventListener("click",chat);
-ui.querySelector("#jn-chat-input").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();chat()}});
-window.addEventListener("resize",resize);
+ui.querySelector("#jn-chat-input").addEventListener("input",resizeNeuralComposer);
+ui.querySelector("#jn-chat-input").addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();chat()}});
+ui.querySelector("#jn-console-collapse").addEventListener("click",toggleNeuralConsole);
+ui.querySelector("#jn-console-hotkey").addEventListener("click",function(){setConsoleCollapsed(false);const input=ui.querySelector("#jn-chat-input");if(input)input.focus();});
+ui.querySelectorAll(".jn-console-chip").forEach(function(button){button.addEventListener("click",function(){const input=ui.querySelector("#jn-chat-input");if(!input)return;input.value=String(button.dataset.command||"");resizeNeuralComposer();input.focus();});});
+try{S.consoleCollapsed=localStorage.getItem("jarvis.neuralCommand.collapsed")==="1";}catch(_){}
+setConsoleCollapsed(S.consoleCollapsed);
+window.addEventListener("keydown",function(e){if(e.code==="F13"){e.preventDefault();toggleNeuralConsole();}});
+window.addEventListener("resize",function(){resize();resizeNeuralComposer();});
+window.addEventListener("scroll",function(){renderNeuralConsolePlacement(true)},{passive:true});
 document.addEventListener("visibilitychange",function(){const hidden=document.hidden;canvas.style.visibility=hidden?"hidden":"visible";ui.querySelector("#jn-surfaces").style.visibility=hidden?"hidden":"visible";});
 function tick(){const now=performance.now();if(document.hidden){setTimeout(tick,1500);return;}syncEmbeddedVisibility();if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastHandPoll>S.handPollMs)pollHand();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.lastAdvanced>S.advancedPollMs)pollAdvanced();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
-pollSnapshot();pollEvents();pollWindows();pollLayouts();pollEarth();pollObservation();pollHand();pollAdvanced();tick();render(performance.now());
+pollSnapshot();pollEvents();pollWindows();pollLayouts();pollEarth();pollObservation();pollHand();pollAdvanced();resizeNeuralComposer();renderNeuralConsolePlacement(true);tick();render(performance.now());
 })();
 """
 }
