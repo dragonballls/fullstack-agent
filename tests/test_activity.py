@@ -1,6 +1,6 @@
 import unittest
 
-from quality_of_life.activity import ActivityStatus, ActivityStore
+from quality_of_life.activity import ActivityCapacityError, ActivityStatus, ActivityStore
 
 
 class ActivityStoreTests(unittest.TestCase):
@@ -60,11 +60,19 @@ class ActivityStoreTests(unittest.TestCase):
         store = ActivityStore(max_records=2)
         first = store.create("first")
         second = store.create("second")
+
+        with self.assertRaises(ActivityCapacityError):
+            store.create("third")
+
+        self.assertIsNotNone(store.get(first.id))
+        self.assertIsNotNone(store.get(second.id))
+
         store.update(first.id, status=ActivityStatus.SUCCEEDED, progress=100)
         third = store.create("third")
 
         self.assertIsNone(store.get(first.id))
         self.assertIsNotNone(store.get(second.id))
+        self.assertIsNotNone(store.get(third.id))
         self.assertEqual([r.title for r in store.list()], ["third", "second"])
 
     def test_failed_activity_redacts_common_secret_patterns(self):
