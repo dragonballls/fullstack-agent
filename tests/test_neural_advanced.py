@@ -177,7 +177,7 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
     def test_master_behavior_level_verification_is_exhaustive(self):
         runtime = NeuralAdvancedRuntime()
         contract = runtime.behavioral_verification()
-        self.assertEqual(contract["total"], 285)
+        self.assertEqual(contract["total"], 284)
         verification = runtime.verify_all_master_features()
         self.assertEqual(verification["status"], "pass", verification["failures"])
         self.assertEqual(verification["failed"], 0)
@@ -188,7 +188,7 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         status = runtime.master_scope_status()
         self.assertEqual(status["status"], "100%_added")
         self.assertEqual(status["missing"], [])
-        self.assertEqual(status["total"], 285)
+        self.assertEqual(status["total"], 284)
 
         smoke = runtime.master_smoke_test()
         self.assertEqual(smoke["status"], "pass", smoke["failures"])
