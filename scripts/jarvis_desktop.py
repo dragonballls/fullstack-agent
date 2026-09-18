@@ -194,6 +194,89 @@ class HandsAdapter:
             self.started = False
 
 
+class FloatingTextHotkey:
+    """Register a dedicated system-wide hotkey for the floating Jarvis command bar."""
+
+    MOD_CONTROL = 0x0002
+    MOD_ALT = 0x0001
+    MOD_SHIFT = 0x0004
+    MOD_NOREPEAT = 0x4000
+    VK_F12 = 0x7B
+    WM_HOTKEY = 0x0312
+    WM_QUIT = 0x0012
+
+    def __init__(self, callback: callable) -> None:
+        self.callback = callback
+        self.thread: threading.Thread | None = None
+        self.stop_event = threading.Event()
+        self.thread_id: int | None = None
+        self.registered = False
+
+    @property
+    def enabled(self) -> bool:
+        return sys.platform == "win32" and os.environ.get("JARVIS_SMOKE", "0").strip().lower() not in {"1", "true", "yes", "on"}
+
+    def start(self) -> None:
+        if not self.enabled or (self.thread and self.thread.is_alive()):
+            return
+        self.stop_event.clear()
+        self.thread = threading.Thread(target=self._run, name="jarvis-floating-hotkey", daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        thread_id = self.thread_id
+        if thread_id is not None and sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.user32.PostThreadMessageW(thread_id, self.WM_QUIT, 0, 0)
+            except Exception:
+                pass
+        if self.thread is not None and self.thread.is_alive() and threading.current_thread() is not self.thread:
+            self.thread.join(timeout=2)
+        self.thread = None
+        self.thread_id = None
+        self.registered = False
+
+    def _run(self) -> None:
+        if not self.enabled:
+            return
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        self.thread_id = int(kernel32.GetCurrentThreadId())
+        modifiers = self.MOD_CONTROL | self.MOD_ALT | self.MOD_SHIFT | self.MOD_NOREPEAT
+        try:
+            msg = wintypes.MSG()
+            user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)
+            if not user32.RegisterHotKey(None, FLOATING_HOTKEY_ID, modifiers, self.VK_F12):
+                LOGGER.warning("floating command bar hotkey %s could not be registered; it remains available from the UI", FLOATING_HOTKEY_LABEL)
+                return
+            self.registered = True
+            LOGGER.info("floating command bar global hotkey registered: %s", FLOATING_HOTKEY_LABEL)
+            while not self.stop_event.is_set():
+                result = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                if result in (-1, 0):
+                    break
+                if msg.message == self.WM_HOTKEY and int(msg.wParam) == FLOATING_HOTKEY_ID:
+                    try:
+                        self.callback()
+                    except Exception:
+                        LOGGER.exception("floating command bar hotkey callback failed")
+                user32.TranslateMessage(ctypes.byref(msg))
+                user32.DispatchMessageW(ctypes.byref(msg))
+        except Exception:
+            LOGGER.exception("floating command bar hotkey listener failed")
+        finally:
+            if self.registered:
+                try:
+                    user32.UnregisterHotKey(None, FLOATING_HOTKEY_ID)
+                except Exception:
+                    pass
+            self.registered = False
+
+
 class AutoUpdateController:
     """Poll the verified rolling GitHub release and hand off a replacement safely."""
 
