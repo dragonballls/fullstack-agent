@@ -176,6 +176,22 @@ class AgentOrchestrator:
             detail = "; ".join(result.errors[:3]) or "workflow did not verify successfully"
             return f'Workflow "{workflow.name}" did not complete successfully: {detail}', False, list(result.errors), False
         intent = parse_intent(text)
+        if intent.kind == "spatial_open":
+            application = str(intent.arguments.get("application", "")).strip()
+            if not confirmed:
+                return f"I can open {application} inside Jarvis's spatial world, but confirmation is required.", False, [], True
+            result = self.runtime.dispatch(
+                Capability.APP_LAUNCH,
+                "spatial.open_application",
+                application,
+                confirmed=True,
+                embed=True,
+            )
+            if result.get("embedded"):
+                return f"Opened {application} inside the Jarvis spatial world.", True, [], False
+            if result.get("launched"):
+                return f"Opened {application}; its window could not be embedded, so Jarvis left it available as a normal desktop window.", False, [str(result.get("embedding_error", "spatial embedding unavailable"))], False
+            return "", False, [f"Could not launch: {application}"], False
         if intent.kind == "neural_observe_start":
             focus = str(intent.arguments.get("focus", "auto") or "auto")
             state = self.runtime.neural_observation_start(focus, str(intent.arguments.get("reason", text)))
