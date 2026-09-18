@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 
 def publish_observation(runtime: Any, stage: str, message: str, **details: object) -> None:
@@ -11,5 +14,5 @@ def publish_observation(runtime: Any, stage: str, message: str, **details: objec
         return
     try:
         publisher(stage, message, **details)
-    except Exception:
-        pass
+    except (RuntimeError, TypeError, ValueError, OSError) as exc:
+        LOGGER.warning("neural observation publish failed (%s)", type(exc).__name__)
