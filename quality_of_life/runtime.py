@@ -131,7 +131,7 @@ class JarvisRuntime:
             entity.lifecycle = LifecycleState.MATURE if success else LifecycleState.FAILED
             entity.status = "succeeded" if success else "failed"
             entity.energy = 0.18 if success else 0.0
-            entity.visible = success
+            entity.visible = True
             entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
         world.events.publish("task.finished", entity_id=task_id, payload={"success": bool(success), "message": str(message)[:500]})
 
@@ -152,8 +152,9 @@ class JarvisRuntime:
         }
         try:
             sink("observation." + payload["stage"], payload=payload)
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("neural observation sink failed (%s)", type(exc).__name__)
 
     def neural_observation_start(self, focus: str = "auto", reason: str = "") -> dict[str, object]:
         if self._neural_observation is None:
