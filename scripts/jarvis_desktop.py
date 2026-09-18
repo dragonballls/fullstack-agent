@@ -733,8 +733,10 @@ class FullstackJarvisHost:
     def _load_floating_position(self) -> tuple[int | None, int | None]:
         try:
             payload = json.loads(FLOATING_POSITION_FILE.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return None, None
             x, y = payload.get("x"), payload.get("y")
-            if isinstance(x, int) and isinstance(y, int):
+            if type(x) is int and type(y) is int:
                 return x, y
         except (OSError, ValueError, TypeError):
             pass
@@ -781,7 +783,7 @@ class FullstackJarvisHost:
                 events.loaded += self._on_floating_loaded
             else:
                 LOGGER.debug("floating command bar mock window exposes no event container")
-            LOGGER.info("floating command bar window object created; hotkey=%s", FLOATING_HOTKEY_LABEL)
+            LOGGER.info("floating command bar window object created; pid=%s hotkey=%s", os.getpid(), FLOATING_HOTKEY_LABEL)
             return self._floating_window
 
     def _on_floating_loaded(self, *_args: Any, **_kwargs: Any) -> None:
