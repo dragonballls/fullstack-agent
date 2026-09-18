@@ -78,9 +78,15 @@ class NeuralFullStackTests(unittest.TestCase):
         self.assertEqual(runtime.streaming.snapshot()["cache"][0]["region_id"], "r1")
         self.assertTrue(runtime.command("world_streaming", "start", {"interval": 0.01})["started"])
         runtime.streaming.request("r2", priority=1.0)
-        time.sleep(0.04)
-        runtime.command("world_streaming", "stop")
-        self.assertTrue(any(item["region_id"] == "r2" for item in runtime.streaming.snapshot()["loaded"]))
+        try:
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                if any(item["region_id"] == "r2" for item in runtime.streaming.snapshot()["loaded"]):
+                    break
+                time.sleep(0.02)
+            self.assertTrue(any(item["region_id"] == "r2" for item in runtime.streaming.snapshot()["loaded"]))
+        finally:
+            runtime.command("world_streaming", "stop")
 
     def test_graphics_pipeline_and_adaptive_render_policy(self):
         runtime = FullStackNeuralExperience()
