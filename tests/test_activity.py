@@ -59,10 +59,12 @@ class ActivityStoreTests(unittest.TestCase):
     def test_store_is_bounded(self):
         store = ActivityStore(max_records=2)
         first = store.create("first")
-        store.create("second")
-        store.create("third")
+        second = store.create("second")
+        store.update(first.id, status=ActivityStatus.SUCCEEDED, progress=100)
+        third = store.create("third")
 
         self.assertIsNone(store.get(first.id))
+        self.assertIsNotNone(store.get(second.id))
         self.assertEqual([r.title for r in store.list()], ["third", "second"])
 
     def test_failed_activity_redacts_common_secret_patterns(self):
