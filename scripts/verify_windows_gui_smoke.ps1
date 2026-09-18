@@ -85,7 +85,7 @@ try {
             }
             if (Test-Path -LiteralPath $log) {
                 $contents = Get-Content -LiteralPath $log -Raw
-                if ($contents -match 'headless frozen Jarvis native window contract validated;') {
+                if ($contents -match 'headless frozen Jarvis native window object created;') {
                     $created = $true
                     break
                 }
@@ -93,7 +93,7 @@ try {
             Start-Sleep -Milliseconds 500
         }
         if (-not $created) {
-            throw 'Frozen Jarvis.exe did not reach the headless native-window contract validation within 45 seconds'
+            throw 'Frozen Jarvis.exe did not reach real pywebview native-window object creation within 45 seconds'
         }
         if ($process.HasExited) {
             throw "Jarvis.exe exited after native window-object creation with code $($process.ExitCode)"
