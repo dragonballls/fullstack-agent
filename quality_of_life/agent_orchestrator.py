@@ -376,12 +376,17 @@ class AgentOrchestrator:
 
     def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
         started = time.monotonic()
+        task_id = self.runtime.neural_task_started(text[:280]) if hasattr(self.runtime, "neural_task_started") else None
         self._observe("request.started", "Request received by Jarvis", profile="planning")
         plan = build_plan(text)
+        if task_id:
+            self.runtime.neural_task_update(task_id, status="running", step="Plan selected", progress=8)
         self._observe("plan.created", "Execution plan selected", tasks=len(plan.parallel_tasks), profile=plan.primary.profile.value)
         errors: list[str] = []
         providers: list[str] = []
         deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
+        if task_id:
+            self.runtime.neural_task_update(task_id, status="waiting" if needs_confirmation else "running", step="Guarded deterministic stage", progress=28)
         self._observe("deterministic.complete", "Guarded deterministic stage completed", verified=deterministic_verified, confirmation=needs_confirmation)
         errors.extend(deterministic_errors)
         if not deterministic_context and not needs_confirmation and self._looks_like_computer_goal(text) and not plan.parallel_tasks:
@@ -401,6 +406,8 @@ class AgentOrchestrator:
         parallel_completed = 0
         if plan.primary.profile is RequestProfile.CODING and any(word in text.casefold() for word in ("implement", "fix", "modify", "code")):
             self._observe("coding.started", "Repository coding stage started")
+            if task_id:
+                self.runtime.neural_task_update(task_id, status="running", step="Coding", progress=60)
             coding_context, coding_verified = self._coding_context(text, confirmed)
             self._observe("coding.completed", "Repository coding stage completed", verified=coding_verified)
             deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
@@ -409,8 +416,12 @@ class AgentOrchestrator:
                 needs_confirmation = True
         if plan.parallel_tasks:
             self._observe("specialists.started", "Specialist checks started", count=len(plan.parallel_tasks))
+            if task_id:
+                self.runtime.neural_task_update(task_id, status="running", step="Specialist checks", progress=52)
             specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
             self._observe("specialists.completed", "Specialist checks completed", completed=sum(1 for result in specialist_results if result.ok and result.text))
+            if task_id:
+                self.runtime.neural_task_update(task_id, status="running", step="Synthesis", progress=82)
             parallel_completed = sum(1 for result in specialist_results if result.ok and result.text)
             for result in specialist_results:
                 if result.target_name:
@@ -430,6 +441,8 @@ class AgentOrchestrator:
         if needs_confirmation:
             verified = False
         self._observe("request.completed", "Request execution completed", verified=verified, confirmation=needs_confirmation, errors=len(errors))
+        if task_id:
+            self.runtime.neural_task_finished(task_id, success=verified, message=synthesis_text[:300])
         return OrchestrationResult(synthesis_text, plan.primary.profile.value, verified, needs_confirmation, parallel_completed, tuple(dict.fromkeys(providers)), int((time.monotonic() - started) * 1000), tuple(errors))
 
     def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:
