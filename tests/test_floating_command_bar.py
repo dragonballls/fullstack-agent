@@ -35,7 +35,7 @@ class FloatingCommandBarContractTests(unittest.TestCase):
         self.assertIn('FLOATING_POSITION_FILE = LOG_DIR.parent / "settings" / "floating_text_link.json"', self.desktop)
         self.assertIn("_load_floating_position", self.desktop)
         self.assertIn("_save_floating_position", self.desktop)
-        self.assertIn("json.dumps({"x": x, "y": y})", self.desktop)
+        self.assertIn('json.dumps({"x": x, "y": y})', self.desktop)
 
     def test_release_smoke_requires_floating_window_creation(self):
         self.assertIn("floating command bar window object created;", self.smoke)
