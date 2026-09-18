@@ -10,7 +10,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from .activity import ActivityStatus, ActivityStore
+from .activity import ActivityCapacityError, ActivityStatus, ActivityStore
 from .capabilities import operation
 
 
@@ -359,7 +359,10 @@ class WorkflowService:
             factory = getattr(runtime, "activity_store", None)
             if callable(factory):
                 activity_store = factory()
-        activity = activity_store.create(workflow.name) if activity_store is not None else None
+        try:
+            activity = activity_store.create(workflow.name) if activity_store is not None else None
+        except ActivityCapacityError:
+            activity = None
         if activity is not None:
             activity = activity_store.update(activity.id, status=ActivityStatus.RUNNING, step="Starting")
 
