@@ -394,6 +394,27 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.DEVICE_APPS, "devices.apps", lambda device_id, app_id, **kwargs: self._tool("devices").open_app(device_id, app_id, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_AUTOMATION, "devices.automate", lambda device_id, steps, **kwargs: self._tool("devices").automate(device_id, steps, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.hand_target", lambda device_id: self._set_hand_target(device_id)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.advanced.inspect", lambda: self._neural_advanced_command("inspect", "inspect")))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "neural.workspace.compose", lambda operation, payload=None: self._neural_advanced_command("workspace", operation, payload)))
+        self.orchestrator.register(Action(Capability.FILE_WRITE, "neural.cross_application.transfer", lambda kind, source, destination, payload_ref=None: self._neural_advanced_command("cross_application", "transfer", {"kind": kind, "source": source, "destination": destination, "payload_ref": payload_ref})))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "neural.browser.research_wall", lambda id, pages, columns=3: self._neural_advanced_command("browser", "research_wall", {"id": id, "pages": pages, "columns": columns})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.performance.sample", lambda **metrics: self._neural_advanced_command("performance", "sample", metrics)))
+        self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.display.update", lambda id, state=None: self._neural_advanced_command("display", "update", {"id": id, "state": state or {}})))
+        self.orchestrator.register(Action(Capability.FILE_WRITE, "neural.history.snapshot", lambda id, world: self._neural_advanced_command("history", "snapshot", {"id": id, "world": world})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.planning.dry_run", lambda actions, known_good=None: self._neural_advanced_command("planning", "dry_run", {"actions": actions, "known_good": known_good})))
+        self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "neural.reliability.reset", lambda region=None: self._neural_advanced_command("reliability", "reset", {"region": region})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.audio.event", lambda kind, source="jarvis", position=None, intensity=0.5, priority=0.5: self._neural_advanced_command("audio", "event", {"kind": kind, "source": source, "position": position, "intensity": intensity, "priority": priority})))
+        self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "neural.multiuser.region", lambda id, owner, shared=False, members=None: self._neural_advanced_command("multi_user", "region", {"id": id, "owner": owner, "shared": shared, "members": members or []})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.remote.region", lambda id, state=None: self._neural_advanced_command("remote", "upsert", {"id": id, "state": state or {}})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.streaming.region", lambda id, priority=0.5: self._neural_advanced_command("streaming", "request", {"id": id, "priority": priority})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.simulation.run", lambda scenario="cpu_stress", count=1000: self._neural_advanced_command("simulation", "benchmark", {"scenario": scenario, "count": count})))
+        self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.accessibility.update", lambda **settings: self._neural_advanced_command("accessibility", "update", settings)))
+
+    def _neural_advanced_command(self, domain: str, operation: str, payload: dict[str, object] | None = None) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None or not hasattr(world, "neural_advanced_command"):
+            raise RuntimeError("advanced neural world is unavailable")
+        return world.neural_advanced_command(domain, operation, payload or {})
 
     def open_application_spatial(self, application: str, *, confirmed: bool = False, embed: bool = True, wait_seconds: float = 10.0) -> dict[str, object]:
         self.policy.check(Capability.APP_LAUNCH)
