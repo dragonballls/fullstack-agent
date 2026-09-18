@@ -19,6 +19,7 @@ import time
 from typing import Any, Iterable, Mapping, Sequence
 
 from .neural_fullstack import FullStackNeuralExperience
+from .neural_completeness import NeuralFeatureCompleteness
 
 
 SCHEMA_VERSION = 3
@@ -1331,6 +1332,7 @@ class NeuralAdvancedRuntime:
         self.streaming = WorldStreamer()
         self.simulation = SimulationLab()
         self.fullstack = FullStackNeuralExperience()
+        self.completeness = NeuralFeatureCompleteness(self.fullstack)
         self._behavior: dict[str, dict[str, float]] = defaultdict(dict)
         self._optimization_history: deque[dict[str, Any]] = deque(maxlen=512)
         self._timeline: deque[dict[str, Any]] = deque(maxlen=2048)
@@ -1367,6 +1369,7 @@ class NeuralAdvancedRuntime:
             "status": "runtime-ready",
             "categories": {category: [{"name": feature, "status": "implemented"} for feature in features] for category, features in FEATURES.items()},
             "execution": self.fullstack.feature_execution_matrix(FEATURES),
+            "remaining_scope": self.completeness.status(),
         }
 
     def tick(self, dt: float = 0.016, *, activity: float = 0.5) -> dict[str, Any]:
@@ -1515,6 +1518,7 @@ class NeuralAdvancedRuntime:
             "simulation": dict(self.simulation.last_results),
             "optimization_history": list(self._optimization_history)[-100:],
             "full_stack_execution": self.fullstack.snapshot(),
+            "completeness": self.completeness.status(),
         }
 
 
