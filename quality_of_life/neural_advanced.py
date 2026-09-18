@@ -1364,12 +1364,21 @@ class NeuralAdvancedRuntime:
             }
 
     def feature_status(self) -> dict[str, Any]:
+        execution = self.fullstack.feature_execution_matrix(FEATURES)
+        remaining = self.completeness.status()
+        master_status = "100%_added" if not execution["unbound_domains"] and remaining["status"] == "100%_added" else "incomplete"
         return {
             "schema_version": SCHEMA_VERSION,
             "status": "runtime-ready",
             "categories": {category: [{"name": feature, "status": "implemented"} for feature in features] for category, features in FEATURES.items()},
-            "execution": self.fullstack.feature_execution_matrix(FEATURES),
-            "remaining_scope": self.completeness.status(),
+            "execution": execution,
+            "remaining_scope": remaining,
+            "master_scope": {
+                "status": master_status,
+                "advanced_domains": len(FEATURES),
+                "advanced_feature_count": execution["feature_count"],
+                "remaining_new_features": remaining["total_requested"],
+            },
         }
 
     def tick(self, dt: float = 0.016, *, activity: float = 0.5) -> dict[str, Any]:
