@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from .neural_discovery import NeuralDiscovery
 from .neural_events import NeuralEventBus
 from .neural_persistence import NeuralPersistence
+from .neural_shapes import normalize_shape
 from .spatial_layout import SpatialLayoutStore
 from .permissions import Capability
 
@@ -78,6 +79,7 @@ class NeuralEntity:
     visible: bool = True
     persistent: bool = True
     parent_id: str | None = None
+    shape: dict[str, object] = field(default_factory=lambda: normalize_shape("droplet").as_dict())
     metadata: dict[str, object] = field(default_factory=dict)
     created_at: str = ""
     updated_at: str = ""
@@ -89,7 +91,7 @@ class NeuralEntity:
             "lifecycle": self.lifecycle.value, "position": list(self.position),
             "scale": self.scale, "energy": self.energy, "visible": self.visible,
             "persistent": self.persistent, "parent_id": self.parent_id,
-            "metadata": dict(self.metadata), "created_at": self.created_at,
+            "shape": dict(self.shape), "metadata": dict(self.metadata), "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
 
@@ -185,7 +187,7 @@ class NeuralWorld:
         position: tuple[float, float, float] | None = None,
         scale: float = 1.0, energy: float = 0.35, visible: bool = True,
         persistent: bool = True, parent_id: str | None = None,
-        metadata: Mapping[str, object] | None = None,
+        shape: object = "droplet", metadata: Mapping[str, object] | None = None,
     ) -> NeuralEntity:
         safe_id = str(entity_id).strip()
         if not safe_id or len(safe_id) > 256:
@@ -209,6 +211,7 @@ class NeuralWorld:
                 existing.visible = bool(visible)
                 existing.persistent = bool(persistent)
                 existing.parent_id = parent_id
+                existing.shape = normalize_shape(shape).as_dict()
                 if metadata is not None:
                     existing.metadata = dict(metadata)
                 existing.updated_at = now
@@ -224,7 +227,7 @@ class NeuralWorld:
                 scale=max(0.1, min(8.0, float(scale))),
                 energy=max(0.0, min(1.0, float(energy))),
                 visible=bool(visible), persistent=bool(persistent),
-                parent_id=parent_id, metadata=dict(metadata or {}),
+                parent_id=parent_id, shape=normalize_shape(shape).as_dict(), metadata=dict(metadata or {}),
                 created_at=now, updated_at=now,
             )
             self._entities[safe_id] = node
@@ -345,6 +348,7 @@ class NeuralWorld:
                         visible=bool(item.get("visible", True)),
                         persistent=bool(item.get("persistent", True)),
                         parent_id=str(item["parent_id"]) if item.get("parent_id") else None,
+                        shape=item.get("shape", "droplet"),
                         metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else None,
                     )
                 except (KeyError, TypeError, ValueError, MemoryError):
@@ -438,6 +442,21 @@ class NeuralWorldBridgeMixin:
             snapshot["windows"] = []
         snapshot["performance"] = self._performance.sample().as_dict()
         return snapshot
+
+    def neural_shape_catalog(self) -> list[str]:
+        from .neural_shapes import BUILTIN_SHAPES
+        return list(BUILTIN_SHAPES)
+
+    def neural_shape_set(self, entity_id: str, shape: object) -> dict[str, object]:
+        with self._neural_world._lock:
+            entity = self._neural_world._entities.get(str(entity_id))
+            if entity is None:
+                raise KeyError("unknown neural entity")
+            normalized = normalize_shape(shape).as_dict()
+            entity.shape = normalized
+            entity.updated_at = _now()
+            self._neural_world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
+            return {"id": entity.id, "shape": normalized}
 
     def neural_search(self, query: str, kind: str | None = None, source: str | None = None, status: str | None = None, limit: int = 100) -> list[dict[str, object]]:
         return self._neural_world.search(query, kind=kind, source=source, status=status, limit=limit)
