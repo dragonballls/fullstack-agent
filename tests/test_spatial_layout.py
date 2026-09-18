@@ -18,6 +18,16 @@ class SpatialLayoutTests(unittest.TestCase):
             self.assertTrue(loaded.pinned)
             self.assertEqual(loaded.mode, "portal")
 
+    def test_shape_round_trip(self):
+        with TemporaryDirectory() as tmp:
+            path = f"{tmp}/layout.json"
+            first = SpatialLayoutStore(path)
+            first.upsert("opera:123", shape={"name": "hexagon", "family": "primitive", "parameters": {}})
+            second = SpatialLayoutStore(path)
+            loaded = second.get("opera:123")
+            self.assertIsNotNone(loaded)
+            self.assertEqual(loaded.shape["name"], "hexagon")
+
     def test_invalid_mode_rejected(self):
         with TemporaryDirectory() as tmp:
             store = SpatialLayoutStore(f"{tmp}/layout.json")
