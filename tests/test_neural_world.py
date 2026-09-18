@@ -3,6 +3,26 @@ from quality_of_life.neural_world import EntityKind, LifecycleState, NeuralWorld
 
 
 class NeuralWorldTests(unittest.TestCase):
+    def test_bootstrap_includes_persistent_neural_command_anchor(self):
+        from quality_of_life.neural_world import EntityKind, NeuralWorld
+
+        world = NeuralWorld(persistence=None)
+        snapshot = world.snapshot(limit=100)
+        command = next(item for item in snapshot["entities"] if item["id"] == "jarvis.neural-command")
+
+        self.assertEqual(command["kind"], EntityKind.SUBSYSTEM.value)
+        self.assertTrue(command["persistent"])
+        self.assertTrue(command["visible"])
+        self.assertEqual(command["parent_id"], "jarvis.core")
+        self.assertEqual(command["metadata"]["ui_surface"], "neural_command")
+        self.assertTrue(command["metadata"]["always_visible"])
+        self.assertTrue(any(
+            rel["source"] == "jarvis.core"
+            and rel["target"] == "jarvis.neural-command"
+            and rel["relation_type"] == "neural-command-surface"
+            for rel in snapshot["relations"]
+        ))
+
     def test_bootstrap_core_and_subsystems(self):
         world = NeuralWorld()
         snapshot = world.snapshot()
