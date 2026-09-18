@@ -198,6 +198,7 @@ class NeuralWorld:
             now = _now()
             existing = self._entities.get(safe_id)
             if existing is not None:
+                before = existing.as_dict()
                 existing.label = str(label)[:500]
                 existing.source = str(source)[:200]
                 existing.status = str(status)[:120]
@@ -211,6 +212,9 @@ class NeuralWorld:
                 if metadata is not None:
                     existing.metadata = dict(metadata)
                 existing.updated_at = now
+                after = existing.as_dict()
+                if before != after:
+                    self.events.publish("entity.updated", entity_id=existing.id, payload=after)
                 return existing
             node = NeuralEntity(
                 id=safe_id, kind=EntityKind(str(kind)), label=str(label)[:500],
@@ -249,12 +253,15 @@ class NeuralWorld:
         with self._lock:
             if source not in self._entities or target not in self._entities:
                 raise KeyError("relation endpoints must exist")
-            relation = NeuralRelation(
-                source, target, str(relation_type)[:120],
-                max(0.0, min(1.0, float(strength))),
-            )
-            self._relations[(source, target, relation.relation_type)] = relation
-            self.events.publish('relation.created', entity_id=source, payload=relation.as_dict())
+            key = (source, target, str(relation_type)[:120])
+            normalized = max(0.0, min(1.0, float(strength)))
+            prior = self._relations.get(key)
+            relation = NeuralRelation(source, target, key[2], normalized)
+            self._relations[key] = relation
+            if prior is None:
+                self.events.publish("relation.created", entity_id=source, payload=relation.as_dict())
+            elif abs(prior.strength - relation.strength) >= 0.02:
+                self.events.publish("relation.updated", entity_id=source, payload=relation.as_dict())
             return relation
 
     def search(self, query: str, *, kind: str | None = None,
