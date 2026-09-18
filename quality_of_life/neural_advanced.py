@@ -18,6 +18,8 @@ import threading
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
+from .neural_fullstack import FullStackNeuralExperience
+
 
 SCHEMA_VERSION = 3
 
@@ -1328,6 +1330,7 @@ class NeuralAdvancedRuntime:
         self.multi_user = MultiUserBrain()
         self.streaming = WorldStreamer()
         self.simulation = SimulationLab()
+        self.fullstack = FullStackNeuralExperience()
         self._behavior: dict[str, dict[str, float]] = defaultdict(dict)
         self._optimization_history: deque[dict[str, Any]] = deque(maxlen=512)
         self._timeline: deque[dict[str, Any]] = deque(maxlen=2048)
@@ -1363,13 +1366,21 @@ class NeuralAdvancedRuntime:
             "schema_version": SCHEMA_VERSION,
             "status": "runtime-ready",
             "categories": {category: [{"name": feature, "status": "implemented"} for feature in features] for category, features in FEATURES.items()},
+            "execution": self.fullstack.feature_execution_matrix(FEATURES),
         }
 
     def tick(self, dt: float = 0.016, *, activity: float = 0.5) -> dict[str, Any]:
         physics = self.liquid.step(dt, activity=activity)
         policy = self.performance.optimization_policy()
+        organism = self.fullstack.organism.step(activity)
         self._optimization_history.append({"timestamp": _now(), "policy": policy})
-        return {"physics": physics, "satellite_particles": sum(1 for p in self.liquid.snapshot()["particles"] if p.get("satellite_of")), "policy": policy, "timestamp": _now()}
+        return {
+            "physics": physics,
+            "organism": organism,
+            "satellite_particles": sum(1 for p in self.liquid.snapshot()["particles"] if p.get("satellite_of")),
+            "policy": policy,
+            "timestamp": _now(),
+        }
 
     def command_workspace(self, operation: str, payload: Mapping[str, Any]) -> dict[str, Any]:
         op = str(operation)
@@ -1503,6 +1514,7 @@ class NeuralAdvancedRuntime:
             "streaming": self.streaming.snapshot(),
             "simulation": dict(self.simulation.last_results),
             "optimization_history": list(self._optimization_history)[-100:],
+            "full_stack_execution": self.fullstack.snapshot(),
         }
 
 
@@ -1511,5 +1523,5 @@ __all__ = [
     "DisplayAwareness", "DryRunPlanner", "FEATURES", "InspectorHub", "LiquidEcology",
     "MultiUserBrain", "NeuralAdvancedRuntime", "NeuralHistory", "PerformanceIntelligence",
     "ReliabilityManager", "RemoteRegionManager", "SimulationLab", "SpatialWorkspace", "Vector3",
-    "WorldStreamer", "WorkspaceSurface",
+    "WorldStreamer", "WorkspaceSurface", "FullStackNeuralExperience",
 ]
