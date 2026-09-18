@@ -162,6 +162,56 @@ class SpatialWindowManager:
         self._embedded.pop(handle, None)
         return {"ok": True, "embedded": False, "handle": handle}
 
+    def present_embedded(
+        self,
+        identifier: int,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        *,
+        visible: bool = True,
+    ) -> dict[str, object]:
+        """Place an already-embedded native child over the host client area."""
+        self.policy.check(Capability.WINDOW_CONTROL)
+        handle = self._validate(identifier)
+        if handle not in self._embedded:
+            raise LookupError("window is not spatially embedded")
+        if width <= 0 or height <= 0:
+            raise ValueError("spatial surface dimensions must be positive")
+        bounded_width = min(16_384, int(width))
+        bounded_height = min(16_384, int(height))
+        flags = self.SWP_NOACTIVATE | self.SWP_NOZORDER | self.SWP_FRAMECHANGED
+        if visible:
+            flags |= self.SWP_SHOWWINDOW
+        ok = self.user32.SetWindowPos(
+            handle, 0, int(x), int(y), bounded_width, bounded_height, flags,
+        )
+        if visible:
+            self.user32.ShowWindow(handle, self.SW_SHOW)
+        else:
+            self.user32.ShowWindow(handle, self.SW_HIDE)
+        if not ok:
+            raise SpatialWindowUnavailable("native spatial surface could not be presented")
+        return {
+            "ok": True,
+            "handle": handle,
+            "x": int(x),
+            "y": int(y),
+            "width": bounded_width,
+            "height": bounded_height,
+            "visible": bool(visible),
+        }
+
+    def host_client_origin(self) -> tuple[int, int]:
+        host = self._validate(self._host_handle or 0)
+        from ctypes import wintypes
+        point = wintypes.POINT(0, 0)
+        converter = getattr(self.user32, "ClientToScreen", None)
+        if converter is None or not converter(host, ctypes.byref(point)):
+            return (0, 0)
+        return int(point.x), int(point.y)
+
     def _validate(self, identifier: int) -> int:
         try:
             handle = int(identifier)
