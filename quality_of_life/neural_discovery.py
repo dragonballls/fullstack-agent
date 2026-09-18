@@ -11,6 +11,8 @@ class NeuralDiscovery:
     def __init__(self, world: Any, runtime: Any) -> None:
         self.world = world
         self.runtime = runtime
+        self._seen_apps: set[str] = set()
+        self._seen_processes: set[str] = set()
 
     @staticmethod
     def _app_id(app: Any) -> str:
@@ -23,8 +25,10 @@ class NeuralDiscovery:
         except Exception:
             return 0
         count = 0
+        seen: set[str] = set()
         for app in apps or ():
             app_id = self._app_id(app)
+            seen.add(app_id)
             node = self.world.upsert(
                 app_id, EntityKind.APPLICATION,
                 str(getattr(app, "name", app_id)),
@@ -45,6 +49,9 @@ class NeuralDiscovery:
             except KeyError:
                 pass
             count += 1
+        for stale in self._seen_apps - seen:
+            self.world.retire(stale, remove=False)
+        self._seen_apps = seen
         return count
 
     def sync_processes(self) -> int:
@@ -54,9 +61,12 @@ class NeuralDiscovery:
         except Exception:
             return 0
         count = 0
+        seen: set[str] = set()
         for proc in processes or ():
+            process_id = f"process:{int(proc.pid)}"
+            seen.add(process_id)
             node = self.world.upsert(
-                f"process:{int(proc.pid)}",
+                process_id,
                 EntityKind.PROCESS,
                 str(proc.name or f"PID {proc.pid}"),
                 source="windows.processes",
@@ -70,6 +80,9 @@ class NeuralDiscovery:
             except KeyError:
                 pass
             count += 1
+        for stale in self._seen_processes - seen:
+            self.world.retire(stale, remove=False)
+        self._seen_processes = seen
         return count
 
     def sync(self) -> dict[str, int]:
