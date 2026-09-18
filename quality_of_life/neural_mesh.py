@@ -134,10 +134,36 @@ function attr(p,name,size,buf,div){
 }
 
 const droplet=program(
-'#version 300 es\nprecision highp float;\nlayout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;layout(location=2)in vec3 aCenter;layout(location=3)in float aScale;layout(location=4)in float aEnergy;layout(location=5)in float aPhase;layout(location=6)in float aSelected;layout(location=7)in float aBirth;\nuniform mat4 uMvp;uniform mat4 uView;uniform float uTime;out vec3 vNormal;out vec3 vView;out vec3 vLocal;out float vEnergy;out float vPhase;out float vSelected;\nvoid main(){float life=clamp((uTime-aBirth)/760.0,0.0,1.0);float grow=life*life*(3.0-2.0*life);float wob=1.0+.028*sin(uTime*.0035+aPhase+aPos.y*4.0);vec3 local=aPos*wob;local.y+=.035*sin(uTime*.0025+aPhase*1.7);vec3 world=aCenter+local*(aScale*mix(.08,1.0,grow));world+=vec3(sin(uTime*.0002+aPhase)*.06,cos(uTime*.00017+aPhase*1.4)*.05,sin(uTime*.00018+aPhase*.8)*.06)*min(1.0,aScale);vec4 vp=uView*vec4(world,1.0);gl_Position=uMvp*vec4(world,1.0);vNormal=normalize(mat3(uView)*aNormal);vView=normalize(-vp.xyz);vLocal=local;vEnergy=aEnergy;vPhase=aPhase;vSelected=aSelected;}',
+'#version 300 es\nprecision highp float;\nlayout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;layout(location=2)in vec3 aCenter;layout(location=3)in float aScale;layout(location=4)in float aEnergy;layout(location=5)in float aPhase;layout(location=6)in float aSelected;layout(location=7)in float aShape;layout(location=8)in float aBirth;\nuniform mat4 uMvp;uniform mat4 uView;uniform float uTime;out vec3 vNormal;out vec3 vView;out vec3 vLocal;out float vEnergy;out float vPhase;out float vSelected;\nvoid main(){float life=clamp((uTime-aBirth)/760.0,0.0,1.0);float grow=life*life*(3.0-2.0*life);float wob=1.0+.028*sin(uTime*.0035+aPhase+aPos.y*4.0);vec3 local=aPos*wob; if(aShape<1.5){local=vec3(local.x,local.y*1.05,local.z);} else if(aShape<2.5){local=normalize(aPos)*(.84+.16*abs(aPos.y));} else if(aShape<3.5){local*=vec3(.88,1.38,.88);} else if(aShape<4.5){local*=vec3(.72,1.45,.72);} else if(aShape<5.5){local.xz*=1.0+.30*sin(8.0*atan(local.z,local.x));} else if(aShape<6.5){local.y*=.34;local.xz*=1.20;} else if(aShape<7.5){local.xz*=1.0+.55*pow(max(0.,sin(5.0*atan(local.z,local.x))),6.0);} else {local.xz*=.88;local.y*=.88;} local.y+=.035*sin(uTime*.0025+aPhase*1.7);vec3 world=aCenter+local*(aScale*mix(.08,1.0,grow));world+=vec3(sin(uTime*.0002+aPhase)*.06,cos(uTime*.00017+aPhase*1.4)*.05,sin(uTime*.00018+aPhase*.8)*.06)*min(1.0,aScale);vec4 vp=uView*vec4(world,1.0);gl_Position=uMvp*vec4(world,1.0);vNormal=normalize(mat3(uView)*aNormal);vView=normalize(-vp.xyz);vLocal=local;vEnergy=aEnergy;vPhase=aPhase;vSelected=aSelected;}',
 '#version 300 es\nprecision highp float;in vec3 vNormal;in vec3 vView;in vec3 vLocal;in float vEnergy;in float vPhase;in float vSelected;out vec4 outColor;\nvoid main(){vec3 n=normalize(vNormal),light=normalize(vec3(-.35,.62,.74));float diff=max(0.,dot(n,light));float fres=pow(1.-max(0.,dot(n,normalize(vView))),2.);float ring=.5+.5*sin(14.*atan(vLocal.z,vLocal.x)+vPhase+vLocal.y*5.);float e=clamp(vEnergy,0.,1.);vec3 blue=vec3(.05,.31,.73),cyan=vec3(.24,.78,1.),white=vec3(.82,.97,1.);vec3 c=mix(blue,cyan,diff*.6+fres*.4);c=mix(c,white,e*.26+ring*.08);if(vSelected>.5)c=mix(c,vec3(.70,.96,1.),.50);outColor=vec4(c,clamp(.30+.38*fres+.16*e+.07*ring,0.,.96));}'
 );
 
+const earthProg=program(
+'#version 300 es
+precision highp float;
+layout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;
+uniform mat4 uMvp;uniform mat4 uModel;out vec3 vPos;out vec3 vNormal;
+void main(){vPos=aPos;vNormal=mat3(uModel)*aNormal;gl_Position=uMvp*uModel*vec4(aPos,1.);}',
+'#version 300 es
+precision highp float;
+in vec3 vPos;in vec3 vNormal;out vec4 outColor;
+void main(){
+  vec3 n=normalize(vNormal),light=normalize(vec3(-.55,.68,.75));
+  float lit=.32+.68*max(0.,dot(n,light));
+  float lat=asin(clamp(vPos.y,-1.,1.)),lon=atan(vPos.z,vPos.x);
+  float noise=sin(lon*4.2+sin(lat*5.0))*sin(lat*7.1)+.34*sin(lon*9.2-lat*2.7);
+  float land=smoothstep(.18,.56,noise);
+  float polar=smoothstep(.69,.93,abs(vPos.y));
+  vec3 c=mix(vec3(.012,.20,.46),vec3(.08,.42,.25),land);
+  c=mix(c,vec3(.72,.90,.98),polar*.76);
+  float gridLat=pow(1.-abs(sin(lat*18.)),18.);
+  float gridLon=pow(1.-abs(sin(lon*36.)),24.);
+  c+=vec3(.16,.52,.86)*(gridLat+gridLon)*.038;
+  float rim=pow(1.-max(0.,dot(n,vec3(0.,0.,1.))),2.);
+  c+=vec3(.10,.43,.94)*rim*.34;
+  outColor=vec4(c*lit,1.);
+}'
+);
 const lineProg=program(
 '#version 300 es\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aStrength;layout(location=2)in float aProgress;uniform mat4 uMvp;uniform float uTime;out float vStrength;out float vProgress;void main(){gl_Position=uMvp*vec4(aPos,1.);vStrength=aStrength;vProgress=aProgress;}',
 '#version 300 es\nprecision highp float;in float vStrength;in float vProgress;uniform float uTime;out vec4 outColor;void main(){float pulse=.5+.5*sin(vProgress*18.-uTime*.004);outColor=vec4(.04,.46,.98,(.035+.27*vStrength)*(.72+.28*pulse));}'
@@ -164,7 +190,28 @@ function buildDroplet(){
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);return idx.length;
 }
 const meshCount=buildDroplet();
+const earthPos=gl.createBuffer(),earthNormal=gl.createBuffer(),earthIndex=gl.createBuffer();
+function buildEarthSphere(){
+  const lat=20,lon=32,pos=[],nor=[],idx=[];
+  for(let iy=0;iy<=lat;iy++){
+    const p=Math.PI*iy/lat,y=Math.cos(p),r=Math.sin(p);
+    for(let ix=0;ix<=lon;ix++){
+      const t=2*Math.PI*ix/lon,x=r*Math.cos(t),z=r*Math.sin(t);
+      pos.push(x,y,z);nor.push(x,y,z);
+    }
+  }
+  for(let iy=0;iy<lat;iy++)for(let ix=0;ix<lon;ix++){
+    const a=iy*(lon+1)+ix,b=a+1,c=a+lon+1,d=c+1;idx.push(a,c,b,b,c,d);
+  }
+  upload(earthPos,new Float32Array(pos),gl.STATIC_DRAW);
+  upload(earthNormal,new Float32Array(nor),gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,earthIndex);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
+  return idx.length;
+}
+const earthIndexCount=buildEarthSphere();
 
+function shapeCode(node){const name=String(node.shape&&node.shape.name||"droplet").toLowerCase();if(name==="sphere")return 2;if(name==="capsule")return 3;if(name==="crystal")return 4;if(name==="torus")return 5;if(name==="ring")return 6;if(name==="star")return 7;if(name==="orbital")return 8;return 1;}
 function nodePosition(n){const o=S.localOffsets.get(n.id);return o?[n.position[0]+o[0],n.position[1]+o[1],n.position[2]+o[2]]:n.position;}
 function activeNodes(){
   const max=S.mode==="background"?320:S.quality==="performance"?720:1500;
@@ -191,11 +238,11 @@ function render(now){
   perspective(proj,Math.PI/3,aspect,.05,2000);lookAt(view,c.eye,S.target);multiply(mvp,proj,view);
   gl.clearColor(0,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   const nodes=activeNodes(),nowMs=performance.now();
-  const cp=new Float32Array(nodes.length*3),cs=new Float32Array(nodes.length),ce=new Float32Array(nodes.length),ph=new Float32Array(nodes.length),se=new Float32Array(nodes.length),bi=new Float32Array(nodes.length);
+  const cp=new Float32Array(nodes.length*3),cs=new Float32Array(nodes.length),ce=new Float32Array(nodes.length),ph=new Float32Array(nodes.length),se=new Float32Array(nodes.length),sh=new Float32Array(nodes.length),bi=new Float32Array(nodes.length);
   nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);cs[i]=(n.scale||1)*(n.kind==="core"?1.75:n.kind==="subsystem"?1.30:.72);ce[i]=n.energy||.2;ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;bi[i]=S.births.get(n.id)||nowMs-900;});
-  upload(centerBuf,cp);upload(scaleBuf,cs);upload(energyBuf,ce);upload(phaseBuf,ph);upload(selectedBuf,se);upload(birthBuf,bi);
+  upload(centerBuf,cp);upload(scaleBuf,cs);upload(energyBuf,ce);upload(phaseBuf,ph);upload(selectedBuf,se);upload(shapeBuf,sh);upload(birthBuf,bi);
   gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),nowMs);
-  attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,centerBuf,1);attr(droplet,"aScale",1,scaleBuf,1);attr(droplet,"aEnergy",1,energyBuf,1);attr(droplet,"aPhase",1,phaseBuf,1);attr(droplet,"aSelected",1,selectedBuf,1);attr(droplet,"aBirth",1,birthBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,nodes.length);
+  attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,centerBuf,1);attr(droplet,"aScale",1,scaleBuf,1);attr(droplet,"aEnergy",1,energyBuf,1);attr(droplet,"aPhase",1,phaseBuf,1);attr(droplet,"aSelected",1,selectedBuf,1);attr(droplet,"aShape",1,shapeBuf,1);attr(droplet,"aBirth",1,birthBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,nodes.length);
 
   const map=new Map(nodes.map(function(n){return[n.id,n]})),lp=[],ls=[],lg=[];
   for(const r of S.links){if(S.dragNode&&(r.source===S.dragNode||r.target===S.dragNode))continue;const a=map.get(r.source),b=map.get(r.target);if(!a||!b)continue;const ap=nodePosition(a),bp=nodePosition(b),mid=[(ap[0]+bp[0])*.5,(ap[1]+bp[1])*.5,(ap[2]+bp[2])*.5],bend=norm(cross(norm(sub(bp,ap)),[0,1,0])),mag=.16+Math.min(1.1,Math.hypot(...sub(bp,ap))*.055),p1=add(mid,mul3(bend,mag)),p2=add(mid,mul3(bend,-mag)),pts=[ap,p1,p1,p2,p2,bp];pts.forEach(function(p,i){lp.push(...p);ls.push(r.strength||.4);lg.push((i%2)*.5);});}
