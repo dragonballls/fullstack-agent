@@ -399,24 +399,23 @@ class AgentOrchestrator:
             )
 
     def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
-        started = time.monotonic()
         task_id = self.runtime.neural_task_started(text[:280]) if hasattr(self.runtime, "neural_task_started") else None
-        self._observe("request.started", "Request received by Jarvis", profile="planning")
         try:
-            plan = build_plan(text)
+            return self._execute_impl(text, confirmed, task_id)
         except Exception as exc:
             self._finish_neural_failure(task_id, exc)
             raise
+
+    def _execute_impl(self, text: str, confirmed: bool, task_id: str | None) -> OrchestrationResult:
+        started = time.monotonic()
+        self._observe("request.started", "Request received by Jarvis", profile="planning")
+        plan = build_plan(text)
         if task_id:
             self.runtime.neural_task_update(task_id, status="running", step="Plan selected", progress=8)
         self._observe("plan.created", "Execution plan selected", tasks=len(plan.parallel_tasks), profile=plan.primary.profile.value)
         errors: list[str] = []
         providers: list[str] = []
-        try:
-            deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
-        except Exception as exc:
-            self._finish_neural_failure(task_id, exc)
-            raise
+        deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
         if task_id:
             self.runtime.neural_task_update(task_id, status="waiting" if needs_confirmation else "running", step="Guarded deterministic stage", progress=28)
         self._observe("deterministic.complete", "Guarded deterministic stage completed", verified=deterministic_verified, confirmation=needs_confirmation)
@@ -440,11 +439,7 @@ class AgentOrchestrator:
             self._observe("coding.started", "Repository coding stage started")
             if task_id:
                 self.runtime.neural_task_update(task_id, status="running", step="Coding", progress=60)
-            try:
-                coding_context, coding_verified = self._coding_context(text, confirmed)
-            except Exception as exc:
-                self._finish_neural_failure(task_id, exc)
-                raise
+            coding_context, coding_verified = self._coding_context(text, confirmed)
             self._observe("coding.completed", "Repository coding stage completed", verified=coding_verified)
             deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
             deterministic_verified = coding_verified
@@ -454,11 +449,7 @@ class AgentOrchestrator:
             self._observe("specialists.started", "Specialist checks started", count=len(plan.parallel_tasks))
             if task_id:
                 self.runtime.neural_task_update(task_id, status="running", step="Specialist checks", progress=60)
-            try:
-                specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
-            except Exception as exc:
-                self._finish_neural_failure(task_id, exc)
-                raise
+            specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
             self._observe("specialists.completed", "Specialist checks completed", completed=sum(1 for result in specialist_results if result.ok and result.text))
             if task_id:
                 self.runtime.neural_task_update(task_id, status="running", step="Synthesis", progress=82)
@@ -475,11 +466,7 @@ class AgentOrchestrator:
             synthesis_text = deterministic_context
             provider = providers[-1] if providers else "deterministic"
         else:
-            try:
-                synthesis_text, provider = self.router.complete_profiled(self._messages(synthesis_prompt), plan.primary.profile)
-            except Exception as exc:
-                self._finish_neural_failure(task_id, exc)
-                raise
+            synthesis_text, provider = self.router.complete_profiled(self._messages(synthesis_prompt), plan.primary.profile)
         providers.append(provider)
         verified = bool(synthesis_text.strip()) and (deterministic_verified or not deterministic_context)
         if needs_confirmation:
