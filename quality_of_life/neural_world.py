@@ -438,6 +438,25 @@ class NeuralWorldBridgeMixin:
         from .gods_eye_globe import globe_payload
         return globe_payload(self.host.controller.runtime)
 
+    def gods_eye_globe_search(self, query: str) -> dict[str, object]:
+        places = self.host.controller.runtime.dispatch(Capability.LOCATION_READ, "gods_eye.search", query=str(query))
+        locators = []
+        for index, place in enumerate(places or []):
+            point = getattr(place, "point", None)
+            if point is None:
+                continue
+            locators.append({
+                "id": "search:" + str(index),
+                "label": str(getattr(place, "name", "Place"))[:120],
+                "latitude": float(point.latitude),
+                "longitude": float(point.longitude),
+                "kind": "search",
+                "authorized": True,
+                "accuracy_m": None,
+                "source": str(getattr(place, "provider", ""))[:80],
+            })
+        return {"schema_version": 1, "locators": locators[:50]}
+
     def neural_observation_start(self, focus: str = "auto", reason: str = "") -> dict[str, object]:
         return self.host.controller.runtime.neural_observation_start(focus, reason)
 
