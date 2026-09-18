@@ -79,6 +79,10 @@ class ActivityRecord:
         }
 
 
+class ActivityCapacityError(RuntimeError):
+    """Raised when all retained activity records are non-terminal."""
+
+
 class ActivityStore:
     """Thread-safe bounded store; it does not execute or terminate activities."""
 
@@ -105,8 +109,10 @@ class ActivityStore:
             error=None,
         )
         with self._lock:
-            self._records[record.id] = record
             self._trim()
+            if len(self._records) >= self.max_records:
+                raise ActivityCapacityError("activity telemetry capacity is full; active activities were retained")
+            self._records[record.id] = record
         return record
 
     def get(self, activity_id: str) -> ActivityRecord | None:
@@ -181,7 +187,14 @@ class ActivityStore:
 
     def _trim(self) -> None:
         while len(self._records) > self.max_records:
-            self._records.popitem(last=False)
+            removed = False
+            for activity_id, record in self._records.items():
+                if record.status in _TERMINAL:
+                    del self._records[activity_id]
+                    removed = True
+                    break
+            if not removed:
+                break
 
     @staticmethod
     def _normalize_progress(progress: int | None) -> int | None:
