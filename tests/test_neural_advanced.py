@@ -207,7 +207,7 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         runtime = JarvisRuntime(CapabilityPolicy(allowed=frozenset({Capability.SYSTEM_DIAGNOSTICS})))
         runtime.set_neural_world_service(NeuralWorld())
         with self.assertRaises(CapabilityDenied):
-            runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", "Window grouping")
+            runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", "grouping")
         self.assertEqual(runtime.policy.allowed, frozenset({Capability.SYSTEM_DIAGNOSTICS}))
 
     def test_master_execution_uses_confirmation_for_mutating_capability(self):
@@ -224,7 +224,7 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
             confirmation=confirm,
         )
         runtime.set_neural_world_service(NeuralWorld())
-        result = runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", "Window grouping")
+        result = runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", "grouping")
         self.assertTrue(result["implemented"])
         self.assertTrue(any(capability is Capability.WINDOW_CONTROL for capability, _ in seen))
 
