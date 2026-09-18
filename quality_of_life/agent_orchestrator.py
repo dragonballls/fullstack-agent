@@ -231,9 +231,11 @@ class AgentOrchestrator:
             target_query = str(intent.arguments.get("target", "")).strip()
             normalized_target = target_query.casefold()
             shape = str(intent.arguments.get("shape", "droplet")).strip()
-            # "this browser tab/window" is resolved through the same world entity registry
-            # as every other target; brain aliases intentionally address the whole neural mesh.
-            target_query = target_query.replace("this ", "", 1).replace("the ", "", 1).strip()
+            if normalized_target.startswith("this "):
+                selected = getattr(self.runtime, "neural_current_selection", lambda: None)()
+                target_query = selected or target_query.replace("this ", "", 1).strip()
+            else:
+                target_query = target_query.replace("the ", "", 1).strip()
             try:
                 result = self.runtime.neural_shape_apply(
                     target_query,
