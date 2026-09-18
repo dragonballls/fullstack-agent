@@ -245,14 +245,15 @@ def workspace_script() -> str:
   const indexList = document.getElementById("jw-command-index-list");
   const indexSearch = document.getElementById("jw-command-index-search");
   const brand = shell.querySelector(".jw-brand");
+  let capabilityCatalog = [];
 
   async function refreshCapabilityIndex() {
     if (!api() || !api().capability_catalog || !indexList) return;
     try {
-      const catalog = await api().capability_catalog();
+      capabilityCatalog = await api().capability_catalog();
       const render = (filter = "") => {
         const normalized = String(filter || "").toLowerCase();
-        const rows = (Array.isArray(catalog) ? catalog : []).filter(item =>
+        const rows = (Array.isArray(capabilityCatalog) ? capabilityCatalog : []).filter(item =>
           !normalized ||
           String(item.name || "").toLowerCase().includes(normalized) ||
           String(item.description || "").toLowerCase().includes(normalized)
@@ -261,12 +262,25 @@ def workspace_script() -> str:
           '<div class="jw-index-row"><div><b>' + String(item.name || "").replace(/[<>]/g, "") + '</b><br><small>' + String(item.description || "").replace(/[<>]/g, "") + '</small></div><span class="jw-index-risk">' + String(item.risk || "").toUpperCase() + '</span></div>'
         ).join("") || '<div class="jw-index-row"><small>No matching capability.</small></div>';
       };
-      render();
-      indexSearch && indexSearch.addEventListener("input", () => render(indexSearch.value));
+      render(indexSearch ? indexSearch.value : "");
     } catch (_) {
       if (indexList) indexList.innerHTML = '<div class="jw-index-row"><small>Capability index unavailable; command link remains online.</small></div>';
     }
   }
+
+  indexSearch && indexSearch.addEventListener("input", () => {
+    const normalized = String(indexSearch.value || "").toLowerCase();
+    const rows = (Array.isArray(capabilityCatalog) ? capabilityCatalog : []).filter(item =>
+      !normalized ||
+      String(item.name || "").toLowerCase().includes(normalized) ||
+      String(item.description || "").toLowerCase().includes(normalized)
+    );
+    if (indexList) {
+      indexList.innerHTML = rows.map(item =>
+        '<div class="jw-index-row"><div><b>' + String(item.name || "").replace(/[<>]/g, "") + '</b><br><small>' + String(item.description || "").replace(/[<>]/g, "") + '</small></div><span class="jw-index-risk">' + String(item.risk || "").toUpperCase() + '</span></div>'
+      ).join("") || '<div class="jw-index-row"><small>No matching capability.</small></div>';
+    }
+  });
 
   function toggleCapabilityIndex(force) {
     if (!index) return;
