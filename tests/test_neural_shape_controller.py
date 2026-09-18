@@ -83,6 +83,73 @@ class NeuralShapeControllerTests(unittest.TestCase):
         self.assertEqual(spec.name, "globe")
         self.assertEqual(spec.family, "primitive")
 
+    def test_create_records_rollback_before_world_mutation(self):
+        tmp, world, layout, controller = self.make_controller()
+        self.addCleanup(tmp.cleanup)
+        original_upsert = world.upsert
+
+        def partial_upsert(*args, **kwargs):
+            node = original_upsert(*args, **kwargs)
+            raise RuntimeError("simulated post-create failure")
+
+        world.upsert = partial_upsert
+        with self.assertRaises(RuntimeError):
+            controller.create("Partial Object", "globe")
+        generated = world.search("Partial Object", limit=1)
+        self.assertEqual(len(generated), 1)
+        self.assertTrue(controller.history())
+        self.assertTrue(controller.revert(generated[0]["id"])["reverted"])
+        self.assertEqual(world.search("Partial Object", limit=1), [])
+
+    def test_failed_apply_does_not_leave_history_for_unknown_target(self):
+        tmp, world, layout, controller = self.make_controller()
+        self.addCleanup(tmp.cleanup)
+        with self.assertRaises(KeyError):
+            controller.apply("missing-target", "sphere")
+        self.assertEqual(controller.history(), [])
+
+    def test_revert_retains_history_when_window_layout_restore_fails(self):
+        tmp, world, layout, controller = self.make_controller()
+        self.addCleanup(tmp.cleanup)
+        world.upsert("window:99", EntityKind.WINDOW, "Browser Tab", source="windows", shape="cube")
+        layout.upsert("window:99", shape={"name": "cube", "family": "primitive", "parameters": {}}, rotation=[0, 0, 0])
+        controller.apply("window:99", "globe")
+        original_upsert = layout.upsert
+
+        def fail_upsert(key, **kwargs):
+            raise OSError("simulated layout restore failure")
+
+        layout.upsert = fail_upsert
+        failed = controller.revert("window:99")
+        self.assertFalse(failed["reverted"])
+        self.assertEqual(len(controller.history()), 1)
+        self.assertEqual(world.search("Browser Tab", limit=1)[0]["shape"]["name"], "cube")
+
+        layout.upsert = original_upsert
+        self.assertTrue(controller.revert("window:99")["reverted"])
+        self.assertEqual(controller.history(), [])
+
+    def test_revert_all_retains_failed_entries_for_retry(self):
+        tmp, world, layout, controller = self.make_controller()
+        self.addCleanup(tmp.cleanup)
+        world.upsert("window:100", EntityKind.WINDOW, "Retry Window", source="windows", shape="cube")
+        layout.upsert("window:100", shape={"name": "cube", "family": "primitive", "parameters": {}}, rotation=[0, 0, 0])
+        controller.apply("window:100", "globe")
+        original_upsert = layout.upsert
+
+        def fail_upsert(key, **kwargs):
+            raise OSError("simulated layout restore failure")
+
+        layout.upsert = fail_upsert
+        failed = controller.revert_all()
+        self.assertFalse(failed["ok"])
+        self.assertEqual(failed["failed"], ["window:100"])
+        self.assertEqual(len(controller.history()), 1)
+
+        layout.upsert = original_upsert
+        self.assertTrue(controller.revert_all()["ok"])
+        self.assertEqual(controller.history(), [])
+
     def test_rotation_units_are_normalized(self):
         self.assertAlmostEqual(parse_rotation_speed(30, "degrees per second"), 0.5235987756, places=6)
         self.assertAlmostEqual(parse_rotation_speed(2, "rps"), 12.5663706144, places=6)
@@ -125,6 +192,13 @@ class ShapeIntentTests(unittest.TestCase):
         self.assertEqual(create.kind, "neural_shape_create")
         self.assertEqual(create.arguments["shape"], "glowing torus")
         self.assertEqual(create.arguments["name"], "Halo")
+
+        custom = parse_intent("create a 3D object called Nebula")
+        self.assertEqual(custom.kind, "neural_shape_create")
+        unrelated_create = parse_intent("create a reminder called Stand")
+        self.assertEqual(unrelated_create.kind, "chat")
+        unrelated_change = parse_intent("change volume to 20")
+        self.assertEqual(unrelated_change.kind, "chat")
 
 
 if __name__ == "__main__":
