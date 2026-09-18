@@ -86,6 +86,12 @@ class JarvisRuntime:
             raise RuntimeError("neural world is unavailable")
         return world.neural_shape_apply(target, shape, **kwargs)
 
+    def neural_shape_revert(self, target: str) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_revert(target)
+
     def neural_shape_remove(self, target: str) -> dict[str, object]:
         world = self._neural_world_service
         if world is None:
