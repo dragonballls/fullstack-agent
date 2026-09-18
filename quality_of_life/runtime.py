@@ -39,8 +39,33 @@ class JarvisRuntime:
         self._background_mode = BackgroundModeController()
         self._activity = ActivityStore()
         self._neural_event_sink: Callable[..., Any] | None = None
+        self._neural_world_service: Any | None = None
         self._neural_observation: Any | None = None
         self._register_actions()
+
+    def set_neural_world_service(self, world: Any | None) -> None:
+        self._neural_world_service = world
+
+    def neural_entity_search(self, query: str, **filters: object) -> list[dict[str, object]]:
+        world = self._neural_world_service
+        if world is None:
+            return []
+        return world.search(query, **filters)
+
+    def neural_entity_shape_set(self, entity_id: str, shape: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        from .neural_shapes import normalize_shape
+        with world._lock:
+            entity = world._entities.get(str(entity_id))
+            if entity is None:
+                raise KeyError("unknown neural entity")
+            normalized = normalize_shape(shape).as_dict()
+            entity.shape = normalized
+            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+            world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
+            return {"id": entity.id, "shape": normalized}
 
     def set_neural_event_sink(self, sink: Callable[..., Any] | None) -> None:
         self._neural_event_sink = sink
