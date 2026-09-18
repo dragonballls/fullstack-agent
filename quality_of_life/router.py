@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import ipaddress
 import json
 import os
 import threading
@@ -14,21 +13,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
-from .omniroute import OmniRouteConnection
+from .omniroute import OmniRouteConnection, is_loopback_hostname
 from .orchestration import RequestProfile
-
-
-def _is_loopback_hostname(hostname: str | None) -> bool:
-    """Return True when a hostname resolves syntactically to a loopback address."""
-    if not hostname:
-        return False
-    normalized = hostname.strip().lower().rstrip(".")
-    if normalized == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(normalized).is_loopback
-    except ValueError:
-        return False
 
 
 @dataclass(frozen=True)
@@ -59,7 +45,7 @@ class ProviderTarget:
     @property
     def is_loopback(self) -> bool:
         """Return whether the target is local/loopback and therefore may use HTTP."""
-        return _is_loopback_hostname(urllib.parse.urlparse(self.base_url).hostname)
+        return is_loopback_hostname(urllib.parse.urlparse(self.base_url).hostname)
 
 
 @dataclass(frozen=True)
@@ -239,6 +225,7 @@ class CloudModelRouter:
         if self._cooldown_active(target):
             return ProviderResult(False, None, target.name, 0, "target temporarily cooling down after a recent failure")
         if not self._ensure_omniroute(target):
+            self._record_failure(target)
             return ProviderResult(False, None, target.name, int((time.monotonic() - started) * 1000), "omniroute is not reachable and could not be started")
         key = os.environ.get(target.api_key_env)
         headers = {"Content-Type": "application/json"}
