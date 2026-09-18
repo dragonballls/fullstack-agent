@@ -312,11 +312,7 @@ class SpatialWindowManager:
 
     def presentation_capabilities(self, identifier: int) -> dict[str, bool]:
         self._validate(identifier)
-        try:
-            import winrt.windows.graphics.capture  # type: ignore # noqa: F401
-            winrt_capture = True
-        except ImportError:
-            winrt_capture = False
+        winrt_capture = _winrt_capture_available()
         return {
             "native_window": True,
             "windows_graphics_capture": winrt_capture,
