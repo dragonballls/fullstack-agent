@@ -101,7 +101,9 @@ class SpatialWindowManager:
         original_exstyle = self._get_long(child, self.GWL_EXSTYLE)
         original_rect = self.rect(child).as_dict()
 
-        if not self.user32.SetParent(child, host):
+        self.user32.SetParent(child, host)
+        get_parent_after = getattr(self.user32, "GetParent", None)
+        if get_parent_after is not None and int(get_parent_after(child)) != host:
             raise SpatialWindowUnavailable("Windows rejected the spatial parent change")
         try:
             self._set_long(child, self.GWL_STYLE, (original_style & ~self.WS_POPUP) | self.WS_CHILD)
@@ -137,7 +139,9 @@ class SpatialWindowManager:
         state = self._embedded.get(handle)
         if state is None:
             return {"ok": True, "embedded": False, "handle": handle}
-        if not self.user32.SetParent(handle, int(state["original_parent"])):
+        self.user32.SetParent(handle, int(state["original_parent"]))
+        get_parent_after = getattr(self.user32, "GetParent", None)
+        if get_parent_after is not None and int(get_parent_after(handle)) != int(state["original_parent"]):
             raise SpatialWindowUnavailable("Windows rejected the spatial parent restore")
         self._set_long(handle, self.GWL_STYLE, int(state["original_style"]))
         self._set_long(handle, self.GWL_EXSTYLE, int(state["original_exstyle"]))
@@ -258,7 +262,8 @@ class SpatialWindowManager:
             "native_window": True,
             "windows_graphics_capture": winrt_capture,
             "preview_capture": True,
-            "interactive_embedding": False,
+            "interactive_embedding": bool(self._host_handle is not None),
+            "cross_process_embedding": True,
         }
 
     def capture_png(self, identifier: int, *, max_width: int = 720) -> str:
