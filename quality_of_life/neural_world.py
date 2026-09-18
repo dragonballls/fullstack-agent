@@ -532,8 +532,8 @@ class NeuralWorldBridgeMixin:
             self._neural_world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
             return {"id": entity.id, "shape": normalized}
 
-    def neural_search(self, query: str, kind: str | None = None, source: str | None = None, status: str | None = None, limit: int = 100) -> list[dict[str, object]]:
-        return self._neural_world.search(query, kind=kind, source=source, status=status, limit=limit)
+    def neural_search(self, query: str = "", kind: str | None = None, source: str | None = None, status: str | None = None, lifecycle: str | None = None, connected_to: str | None = None, limit: int = 100) -> list[dict[str, object]]:
+        return self._neural_world.search(query, kind=kind, source=source, status=status, lifecycle=lifecycle, connected_to=connected_to, limit=limit)
 
     def neural_trace(self, start: str, target: str, max_hops: int = 8) -> list[dict[str, object]]:
         return self._neural_world.trace(start, target, max_hops=max_hops)
