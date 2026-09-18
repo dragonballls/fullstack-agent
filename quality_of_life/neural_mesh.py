@@ -170,7 +170,7 @@ void main(){
   float rim=pow(1.-max(0.,dot(n,vec3(0.,0.,1.))),2.);
   c+=vec3(.10,.43,.94)*rim*.34;
   outColor=vec4(c*lit,1.);
-}'
+}`
 );
 const lineProg=program(
 '#version 300 es\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aStrength;layout(location=2)in float aProgress;uniform mat4 uMvp;uniform float uTime;out float vStrength;out float vProgress;void main(){gl_Position=uMvp*vec4(aPos,1.);vStrength=aStrength;vProgress=aProgress;}',
