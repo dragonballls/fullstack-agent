@@ -1549,6 +1549,30 @@ class FullStackNeuralExperience:
             if op == "profile":
                 return self.performance.profile(str(data["name"]), **dict(data.get("metrics", {})))
 
+        if domain_name in {"multi_user", "multi_user_shared"}:
+            if op == "profile":
+                return self.multi_user.profile(str(data["id"]), **dict(data.get("preferences", {})))
+            if op == "select":
+                return self.multi_user.select_user(str(data["id"]))
+            if op == "layout":
+                return self.multi_user.set_layout(str(data["id"]), dict(data.get("layout", {})))
+            if op == "pin":
+                return self.multi_user.pin_neuron(str(data["id"]), str(data.get("neuron_id", "jarvis.core")), pinned=bool(data.get("pinned", True)))
+            if op == "region":
+                return self.multi_user.region(
+                    str(data.get("id", data.get("region_id", "brain:shared"))),
+                    owner=str(data.get("owner", "user-a")),
+                    shared=bool(data.get("shared", True)),
+                    members=[str(value) for value in data.get("members", [])],
+                )
+            if op == "resource":
+                return self.multi_user.resource(
+                    str(data.get("id", data.get("resource_id", "resource:shared"))),
+                    owner=str(data.get("owner", "user-a")),
+                    shared=bool(data.get("shared", True)),
+                    controls=dict(data.get("controls", {})),
+                )
+
         if domain_name == "optimization_intelligence":
             if op == "learn":
                 return self.optimization.learn(str(data["name"]), dict(data.get("metrics", {})))
