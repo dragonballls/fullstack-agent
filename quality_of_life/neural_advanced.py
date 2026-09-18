@@ -1174,11 +1174,24 @@ class AudioScene:
         self.events.append(event)
         return event
 
-    def policy(self, *, game_active: bool = False, performance_pressure: float = 0.0) -> dict[str, Any]:
+    def policy(self, *, game_active: bool = False, performance_pressure: float = 0.0, performance_mode: str | None = None) -> dict[str, Any]:
         pressure = _clamp(performance_pressure)
-        self.mode = "game-priority" if game_active else "adaptive"
+        if performance_mode is not None:
+            mode = str(performance_mode).strip().lower()
+            if mode not in {"low", "balanced", "quality"}:
+                raise ValueError("performance_mode must be low, balanced, or quality")
+            self.mode = mode
+        else:
+            self.mode = "game-priority" if game_active else "adaptive"
         self.enabled = pressure < 0.95
-        return {"enabled": self.enabled, "mode": self.mode, "voice": "spatial", "effects": pressure < 0.8}
+        return {
+            "enabled": self.enabled,
+            "mode": self.mode,
+            "voice": "spatial",
+            "effects": pressure < 0.8,
+            "game_audio_priority": bool(game_active),
+            "performance_budget": "reduced" if self.mode == "low" or pressure >= 0.8 else "normal",
+        }
 
     def snapshot(self) -> dict[str, Any]:
         return {"enabled": self.enabled, "mode": self.mode, "events": list(self.events)[-100:]}
@@ -2052,7 +2065,9 @@ class NeuralAdvancedRuntime:
                 result["apply"] = applied
                 result["rollback"] = self.fullstack.optimization.rollback(app)
             if "loop" in lower:
-                result["loop_guard"] = self.fullstack.optimization.compare(app, strategy, before, before)["loop_prevented"]
+                loop_check = self.fullstack.optimization.compare(app, strategy, before, before)
+                result["loop_guard"] = bool(loop_check["loop_prevented"])
+                result["optimization_allowed"] = not result["loop_guard"]
             if "diminishing" in lower:
                 result["diminishing_returns"] = measurement["percent_change"] == 0 or abs(measurement["percent_change"]) < 3.0
             self._optimization_history.append({"timestamp": _now(), "feature": name, "result": result})
