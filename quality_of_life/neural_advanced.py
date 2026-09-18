@@ -1708,8 +1708,10 @@ class NeuralAdvancedRuntime:
                 result = self.workspace.giant_wall(ids, curvature=float(data.get("curvature", 0.18)))
             elif "monitor" in lower:
                 result = self.workspace.monitor_wall(str(data.get("display_id", "display-1")), ids, width=float(data.get("width", 1920)), height=float(data.get("height", 1080)))
-            elif "collision" in lower or "occlusion" in lower or "z-order" in lower:
-                result = self.workspace.collision_report()
+            elif "z-order" in lower:
+                result = self.workspace.set_z_order(ids[0], int(data.get("z_order", 10)))
+            elif "collision" in lower or "occlusion" in lower:
+                result = {"report": self.workspace.collision_report(), "resolved": self.workspace.resolve_collisions()}
             elif "freeform" in lower or "positioning" in lower:
                 result = self.workspace.freeform(ids[0], position=Vector3(*map(float, data.get("position", (120, 80, 0)))), rotation=Vector3(*map(float, data.get("rotation", (0, 0, 0)))), scale=Vector3(*map(float, data.get("scale", (1, 1, 1)))))
             elif "elastic" in lower:
@@ -2001,7 +2003,24 @@ class NeuralAdvancedRuntime:
                 result = self.audio.emit(kind, position=data.get("position"), intensity=float(data.get("intensity", data.get("activity", 0.5))))
             return self._record_master(category, name, result, data)
 
-        if category in {"multi_user", "multi_user_shared"}:
+        if category == "multi_user_shared":
+            uid = str(data.get("user_id", "user-a"))
+            result = self.multi_user.region(
+                str(data.get("region_id", "brain:shared")),
+                owner=str(data.get("owner", uid)),
+                shared=True,
+                members=list(data.get("members", [uid])),
+            )
+            if "permission" in lower or "ownership" in lower:
+                result["ownership_model"] = {
+                    "owner": result.get("owner", uid),
+                    "shared": True,
+                    "controls": dict(data.get("controls", {"read": True, "write": True})),
+                }
+            result["shared_world"] = True
+            return self._record_master(category, name, result, data)
+
+        if category == "multi_user":
             uid = str(data.get("user_id", "user-a"))
             if "profile" in lower or "preference" in lower or "user profiles" in lower:
                 result = self.multi_user.profile(uid, **dict(data.get("preferences", {"theme": "neural"})))
