@@ -1,9 +1,12 @@
+import tempfile
 import threading
 import unittest
 
+from quality_of_life.activity import ActivityStatus, ActivityStore
 from quality_of_life.agent_orchestrator import AgentOrchestrator
 from quality_of_life.orchestration import RequestProfile
 from quality_of_life.permissions import Capability
+from quality_of_life.workflows import Workflow, WorkflowService, WorkflowStep, WorkflowStore
 
 
 class FakeOperation:
@@ -58,6 +61,20 @@ class FakeRuntime:
         self.execute_result = execute_result
         self.dispatch_calls = []
         self.orchestrator = FakeOrchestrator()
+        self.activity = ActivityStore()
+
+        class Policy:
+            def needs_confirmation(self, _capability):
+                return False
+
+        class Policy:
+            def needs_confirmation(self, capability):
+                return capability == Capability.FILE_DELETE
+
+        self.policy = Policy()
+
+    def activity_store(self):
+        return self.activity
 
     def dispatch(self, capability, operation, *args, **kwargs):
         self.dispatch_calls.append((capability, operation, args, kwargs))
@@ -126,6 +143,90 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertEqual(events[0].kind, "ack")
         self.assertEqual(events[-1].kind, "result")
         self.assertTrue(any(event.kind == "progress" for event in events))
+
+    def test_confirmed_coding_handoff_publishes_completed_activity(self):
+        router = FakeRouter()
+        runtime = FakeRuntime(FakeResult("agent/self-code/verified"))
+
+        result = AgentOrchestrator(router, runtime).execute(
+            "implement the fix and run the tests",
+            confirmed=True,
+        )
+
+        self.assertTrue(result.verified)
+        records = runtime.activity.list()
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].status, ActivityStatus.SUCCEEDED)
+        self.assertEqual(records[0].progress, 100)
+
+    def test_explicit_saved_workflow_command_requires_confirmation(self):
+        runtime = FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            store = WorkflowStore(f"{tmp}/workflows.json")
+            workflow = Workflow.new(
+                "System check",
+                aliases=("status check",),
+                steps=(WorkflowStep("files.delete", {"path": "x"}),),
+            )
+            store.create(workflow)
+            agent = AgentOrchestrator(FakeRouter(), runtime)
+            agent._workflow_store = store
+
+            text, verified, errors, needs_confirmation = agent._deterministic_context(
+                "run my system check",
+                confirmed=False,
+            )
+
+            self.assertTrue(needs_confirmation)
+            self.assertFalse(verified)
+            self.assertEqual(errors, [])
+            self.assertIn("confirmation", text.casefold())
+            self.assertEqual(runtime.dispatch_calls, [])
+
+    def test_confirmed_saved_workflow_command_executes_through_runtime(self):
+        runtime = FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            store = WorkflowStore(f"{tmp}/workflows.json")
+            workflow = Workflow.new(
+                "System check",
+                steps=(WorkflowStep("applications.list", {}),),
+            )
+            store.create(workflow)
+            agent = AgentOrchestrator(FakeRouter(), runtime)
+            agent._workflow_store = store
+
+            text, verified, errors, needs_confirmation = agent._deterministic_context(
+                "run my system check",
+                confirmed=True,
+            )
+
+            self.assertTrue(verified)
+            self.assertFalse(needs_confirmation)
+            self.assertEqual(errors, [])
+            self.assertIn("System check", text)
+            self.assertEqual(len(runtime.dispatch_calls), 1)
+            self.assertEqual(runtime.dispatch_calls[0][1], "applications.list")
+
+    def test_corrupt_workflow_store_does_not_block_normal_commands(self):
+        runtime = FakeRuntime()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = f"{tmp}/workflows.json"
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("{not valid json")
+            store = WorkflowStore(path)
+            agent = AgentOrchestrator(FakeRouter(), runtime)
+            agent._workflow_store = store
+
+            text, verified, errors, needs_confirmation = agent._deterministic_context(
+                "list processes",
+                confirmed=False,
+            )
+
+            self.assertTrue(verified)
+            self.assertFalse(needs_confirmation)
+            self.assertEqual(errors, [])
+            self.assertEqual(len(runtime.dispatch_calls), 1)
+            self.assertEqual(runtime.dispatch_calls[0][1], "processes.list")
 
 
 if __name__ == "__main__":

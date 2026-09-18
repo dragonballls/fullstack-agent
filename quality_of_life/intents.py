@@ -31,6 +31,11 @@ _DEVICE_REFRESH = re.compile(r"^(?:refresh|scan|find)\s+(?:my\s+)?(?:phones|devi
 _DEVICE_SELECT = re.compile(r"^(?:switch to|select|use)\s+(?:my\s+)?(?:phone|device)(?:\s+(.+))$|^(?:switch to|select|use)\s+(.+?)(?:\s+phone)?$", re.IGNORECASE)
 _DEVICE_SCREEN_ALL = re.compile(r"^(?:show|view|mirror)\s+(?:me\s+)?(?:all|both)\s+(?:my\s+)?(?:phone|phones|device|devices)(?:\s+(?:screen|screens|view|views))?$", re.IGNORECASE)
 _DEVICE_SCREEN = re.compile(r"^(?:show|view)\s+(?:me\s+)?(?:(?:my|the)\s+)?(?:phone|device)(?:\s+(.+?))?(?:\s+(?:screen|view))?$", re.IGNORECASE)
+_OBSERVE_START = re.compile(r"^(?:show(?:\s+me)?|let\s+me\s+see|walk\s+me\s+through|take\s+me\s+through)\s+(?:what\s+(?:you['’]?re|you\s+are)\s+doing|your\s+process|the\s+process|what\s+you\s+are\s+working\s+on)(?:\s+(.+))?$", re.IGNORECASE)
+_OBSERVE_STOP = re.compile(r"^(?:stop|hide|close)\s+(?:the\s+)?(?:live\s+)?(?:process|observation|activity\s+view)$|^(?:stop|hide)\s+showing\s+me\s+(?:what\s+you['’]?re|what\s+you\s+are)\s+doing$", re.IGNORECASE)
+_SHAPE = re.compile(r"^(?:make|turn|change)\s+(?:the\s+)?(.+?)\s+(?:neuron|node)?\s*(?:into|as)\s+(.+)$", re.IGNORECASE)
+_SHAPE_SAVE = re.compile(r"^(?:save|remember)\s+(?:this\s+)?shape\s+(.+?)\s+(?:as|named)\s+(.+)$", re.IGNORECASE)
+_SPATIAL_OPEN = re.compile(r"^(?:open|launch|start|put)\s+(?:the\s+)?(.+?)\s+(?:in|inside|within)\s+(?:the\s+)?(?:3d\s+)?(?:space|spatial\s+space|jarvis\s+space|neural\s+space)$", re.IGNORECASE)
 
 
 def parse_intent(text: str) -> Intent:
@@ -38,6 +43,26 @@ def parse_intent(text: str) -> Intent:
     if not value:
         return Intent("chat", {"text": ""})
     lowered = value.casefold()
+    match = _SPATIAL_OPEN.match(value)
+    if match:
+        return Intent("spatial_open", {"application": match.group(1).strip()})
+    match = _OBSERVE_START.match(value)
+    if match:
+        return Intent("neural_observe_start", {"focus": (match.group(1) or "").strip() or "auto", "reason": value})
+    if _OBSERVE_STOP.match(value):
+        return Intent("neural_observe_stop", {})
+    match = _SHAPE_SAVE.match(value)
+    if match:
+        return Intent("neural_shape_save", {"shape": match.group(1).strip(), "name": match.group(2).strip()})
+    match = _SHAPE.match(value)
+    if match:
+        target = match.group(1).strip()
+        requested_shape = match.group(2).strip()
+        if requested_shape.casefold().startswith("a "):
+            requested_shape = requested_shape[2:].strip()
+        elif requested_shape.casefold().startswith("an "):
+            requested_shape = requested_shape[3:].strip()
+        return Intent("neural_shape", {"target": target, "shape": requested_shape})
     if _HAND_START.match(value):
         return Intent("hand_control_start", {})
     if _HAND_STOP.match(value):

@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import time
 from typing import Any, Callable, Iterable, Iterator
 
+from .activity import ActivityStatus
 from .api_tools import ApiToolAdapter
 from .capabilities import operation
 from .computer_use import ComputerUseAgent, RouterComputerUsePlanner, ScreenObserver
 from .intents import parse_intent
+from .neural_observation_events import publish_observation
 from .orchestration import OrchestrationPlan, RequestProfile, build_plan
 from .permissions import Capability
 from .planner import PlanError, plan_request
 from .router import CloudModelRouter, ProviderResult
 from .tool_broker import ToolResult, UNIVERSAL_OPERATION_SPECS, UniversalToolBroker
 from .web_tools import WebToolAdapter
+from .workflows import WorkflowService, WorkflowStore
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -52,6 +58,7 @@ class AgentOrchestrator:
         self.runtime = runtime
         self.max_parallel = max_parallel
         self._universal_tool_broker = UniversalToolBroker(getattr(runtime, "policy", None))
+        self._workflow_store = WorkflowStore()
         web_hosts = {host.strip().lower() for host in __import__("os").environ.get("JARVIS_WEB_ALLOWED_HOSTS", "").split(",") if host.strip()}
         if web_hosts:
             self._universal_tool_broker.register(WebToolAdapter(web_hosts))
@@ -93,6 +100,9 @@ class AgentOrchestrator:
                 except Exception:
                     return False
         return False
+
+    def _observe(self, stage: str, message: str, **details: object) -> None:
+        publish_observation(self.runtime, stage, message, **details)
 
     @staticmethod
     def _messages(prompt: str) -> list[dict[str, str]]:
@@ -141,7 +151,78 @@ class AgentOrchestrator:
 
     def _deterministic_context(self, text: str, confirmed: bool) -> tuple[str, bool, list[str], bool]:
         """Execute explicitly supported intents through the existing policy-gated runtime."""
+        try:
+            workflow = self._workflow_store.resolve(text)
+        except (OSError, ValueError, TypeError) as exc:
+            workflow = None
+            self._observe("workflow.store", "Workflow store unavailable; continuing with normal command routing", error=type(exc).__name__)
+        if workflow is not None:
+            result = WorkflowService.execute(
+                self.runtime,
+                workflow,
+                confirmed=confirmed,
+                store=self._workflow_store,
+            )
+            if result.needs_confirmation:
+                return (
+                    f'Workflow "{workflow.name}" is ready, but confirmation is required before it runs.',
+                    False,
+                    [],
+                    True,
+                )
+            if result.verified:
+                return (
+                    f'Workflow "{workflow.name}" completed: {result.completed_steps} step(s).',
+                    True,
+                    list(result.errors),
+                    False,
+                )
+            detail = "; ".join(result.errors[:3]) or "workflow did not verify successfully"
+            return f'Workflow "{workflow.name}" did not complete successfully: {detail}', False, list(result.errors), False
         intent = parse_intent(text)
+        if intent.kind == "spatial_open":
+            application = str(intent.arguments.get("application", "")).strip()
+            if not confirmed:
+                return f"I can open {application} inside Jarvis's spatial world, but confirmation is required.", False, [], True
+            result = self.runtime.dispatch(
+                Capability.APP_LAUNCH,
+                "spatial.open_application",
+                application,
+                confirmed=True,
+                embed=True,
+            )
+            if result.get("embedded"):
+                return f"Opened {application} inside the Jarvis spatial world.", True, [], False
+            if result.get("launched"):
+                return f"Opened {application}; its window could not be embedded, so Jarvis left it available as a normal desktop window.", False, [str(result.get("embedding_error", "spatial embedding unavailable"))], False
+            return "", False, [f"Could not launch: {application}"], False
+        if intent.kind == "neural_observe_start":
+            focus = str(intent.arguments.get("focus", "auto") or "auto")
+            state = self.runtime.neural_observation_start(focus, str(intent.arguments.get("reason", text)))
+            return f"Observation mode enabled: {state['focus']}.", True, [], False
+        if intent.kind == "neural_observe_stop":
+            state = self.runtime.neural_observation_stop()
+            return "Observation mode disabled.", True, [], False
+        if intent.kind == "neural_shape_save":
+            shape = str(intent.arguments.get("shape", "droplet")).strip()
+            name = str(intent.arguments.get("name", "")).strip()
+            if not name:
+                return "", False, ["Shape name is required"], False
+            result = self.runtime.neural_shape_save(name, shape)
+            return f"Saved shape {result['name']}.", True, [], False
+        if intent.kind == "neural_shape":
+            target_query = str(intent.arguments.get("target", "")).strip()
+            shape = str(intent.arguments.get("shape", "droplet")).strip()
+            matches = self.runtime.neural_entity_search(target_query, limit=5)
+            if not matches:
+                return "", False, [f"No neural entity found for: {target_query}"], False
+            first_label = str(matches[0].get("label", "")).strip().casefold()
+            normalized_target = target_query.strip().casefold()
+            if len(matches) > 1 and first_label != normalized_target:
+                return "", False, [f"Neural target is ambiguous: {target_query}"], False
+            target_id = str(matches[0]["id"])
+            changed = self.runtime.neural_entity_shape_set(target_id, shape)
+            return f"Changed {matches[0].get('label', target_id)} to {shape}.", True, [], False
         if intent.kind == "browser_open":
             browser = str(intent.arguments["browser"])
             url = intent.arguments.get("url")
@@ -260,10 +341,37 @@ class AgentOrchestrator:
         return f"Computer goal was not fully verified after {result.steps_executed} action(s).", False, False, list(result.errors), "computer-use"
 
     def _coding_context(self, text: str, confirmed: bool) -> tuple[str, bool]:
-        if not confirmed:
+        activity = None
+        factory = getattr(self.runtime, "activity_store", None)
+        if callable(factory):
+            activity = factory().create("Coding: " + text[:100])
+            if not confirmed:
+                factory().update(activity.id, status=ActivityStatus.WAITING, step="Waiting for confirmation")
+                return "A repository-changing coding request requires confirmation before self-coding can run.", False
+            factory().update(activity.id, status=ActivityStatus.RUNNING, step="Starting self-coding")
+        elif not confirmed:
             return "A repository-changing coding request requires confirmation before self-coding can run.", False
-        result = self.runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal=text)
+
+        try:
+            result = self.runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal=text)
+        except Exception as exc:
+            if activity is not None:
+                factory().update(
+                    activity.id,
+                    status=ActivityStatus.FAILED,
+                    step="Self-coding failed",
+                    error=str(exc),
+                )
+            raise
         branch = str(result)
+        if activity is not None:
+            factory().update(
+                activity.id,
+                status=ActivityStatus.SUCCEEDED if branch else ActivityStatus.FAILED,
+                progress=100 if branch else 0,
+                step="Complete" if branch else "Self-coding failed",
+                error=None if branch else "self-coding returned no verified result",
+            )
         return f"Self-coding completed on verified branch: {branch}", bool(branch)
 
     @staticmethod
@@ -279,12 +387,38 @@ class AgentOrchestrator:
         context = "\n\n".join(findings) or "No specialist findings were available."
         return "Act as the primary Jarvis response model. Synthesize the findings below into one accurate, concise response. Do not claim an action was performed unless a deterministic tool result is supplied. Preserve safety boundaries.\n\n" + f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
 
+    def _finish_neural_failure(self, task_id: str | None, exc: Exception) -> None:
+        if not task_id:
+            return
+        try:
+            self.runtime.neural_task_finished(task_id, success=False, message=f"{type(exc).__name__}: {str(exc)[:300]}")
+        except Exception as finalization_exc:
+            LOGGER.warning(
+                "neural task finalization failed (%s)",
+                type(finalization_exc).__name__,
+            )
+
     def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
+        task_id = self.runtime.neural_task_started(text[:280]) if hasattr(self.runtime, "neural_task_started") else None
+        try:
+            return self._execute_impl(text, confirmed, task_id)
+        except Exception as exc:
+            self._finish_neural_failure(task_id, exc)
+            raise
+
+    def _execute_impl(self, text: str, confirmed: bool, task_id: str | None) -> OrchestrationResult:
         started = time.monotonic()
+        self._observe("request.started", "Request received by Jarvis", profile="planning")
         plan = build_plan(text)
+        if task_id:
+            self.runtime.neural_task_update(task_id, status="running", step="Plan selected", progress=8)
+        self._observe("plan.created", "Execution plan selected", tasks=len(plan.parallel_tasks), profile=plan.primary.profile.value)
         errors: list[str] = []
         providers: list[str] = []
         deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
+        if task_id:
+            self.runtime.neural_task_update(task_id, status="waiting" if needs_confirmation else "running", step="Guarded deterministic stage", progress=28)
+        self._observe("deterministic.complete", "Guarded deterministic stage completed", verified=deterministic_verified, confirmation=needs_confirmation)
         errors.extend(deterministic_errors)
         if not deterministic_context and not needs_confirmation and self._looks_like_computer_goal(text) and not plan.parallel_tasks:
             computer_context, computer_verified, computer_confirmation, computer_errors, computer_provider = self._computer_goal_context(text, confirmed)
@@ -302,13 +436,23 @@ class AgentOrchestrator:
             errors.extend(typed_errors)
         parallel_completed = 0
         if plan.primary.profile is RequestProfile.CODING and any(word in text.casefold() for word in ("implement", "fix", "modify", "code")):
+            self._observe("coding.started", "Repository coding stage started")
+            if task_id:
+                self.runtime.neural_task_update(task_id, status="running", step="Coding", progress=60)
             coding_context, coding_verified = self._coding_context(text, confirmed)
+            self._observe("coding.completed", "Repository coding stage completed", verified=coding_verified)
             deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
             deterministic_verified = coding_verified
             if not confirmed:
                 needs_confirmation = True
         if plan.parallel_tasks:
+            self._observe("specialists.started", "Specialist checks started", count=len(plan.parallel_tasks))
+            if task_id:
+                self.runtime.neural_task_update(task_id, status="running", step="Specialist checks", progress=60)
             specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
+            self._observe("specialists.completed", "Specialist checks completed", completed=sum(1 for result in specialist_results if result.ok and result.text))
+            if task_id:
+                self.runtime.neural_task_update(task_id, status="running", step="Synthesis", progress=82)
             parallel_completed = sum(1 for result in specialist_results if result.ok and result.text)
             for result in specialist_results:
                 if result.target_name:
@@ -327,6 +471,21 @@ class AgentOrchestrator:
         verified = bool(synthesis_text.strip()) and (deterministic_verified or not deterministic_context)
         if needs_confirmation:
             verified = False
+        self._observe("request.completed", "Request execution completed", verified=verified, confirmation=needs_confirmation, errors=len(errors))
+        if task_id:
+            if needs_confirmation:
+                self.runtime.neural_task_update(
+                    task_id,
+                    status="waiting",
+                    step="Waiting for confirmation",
+                    progress=28,
+                )
+            else:
+                self.runtime.neural_task_finished(
+                    task_id,
+                    success=verified,
+                    message=synthesis_text[:300],
+                )
         return OrchestrationResult(synthesis_text, plan.primary.profile.value, verified, needs_confirmation, parallel_completed, tuple(dict.fromkeys(providers)), int((time.monotonic() - started) * 1000), tuple(errors))
 
     def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:

@@ -9,6 +9,7 @@ from typing import Any
 
 from .background import BackgroundJobs
 from .background_mode import BackgroundModeController
+from .activity import ActivityStore
 from .gods_eye import GodsEye, Place
 from .gods_eye_launcher import GodsEyeLauncher
 from .intents import Intent, parse_intent
@@ -36,7 +37,140 @@ class JarvisRuntime:
         self._agent_orchestrator: Any | None = None
         self._health_monitor: Any | None = None
         self._background_mode = BackgroundModeController()
+        self._activity = ActivityStore()
+        self._neural_event_sink: Callable[..., Any] | None = None
+        self._neural_world_service: Any | None = None
+        self._neural_observation: Any | None = None
         self._register_actions()
+
+    def set_neural_world_service(self, world: Any | None) -> None:
+        self._neural_world_service = world
+
+    def neural_entity_search(self, query: str = "", **filters: object) -> list[dict[str, object]]:
+        world = self._neural_world_service
+        if world is None:
+            return []
+        return world.search(query, **filters)
+
+    def neural_shape_library(self) -> list[dict[str, object]]:
+        world = self._neural_world_service
+        return world.neural_shape_library() if world is not None else []
+
+    def neural_shape_save(self, name: str, shape: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_save(name, shape)
+
+    def neural_shape_delete(self, name: str) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        return world.neural_shape_delete(name)
+
+    def neural_entity_shape_set(self, entity_id: str, shape: object) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None:
+            raise RuntimeError("neural world is unavailable")
+        from .neural_shapes import normalize_shape
+        with world._lock:
+            entity = world._entities.get(str(entity_id))
+            if entity is None:
+                raise KeyError("unknown neural entity")
+            registry = getattr(self._neural_world_service, "shape_registry", None)
+            normalized = (registry.resolve(shape) if registry is not None else normalize_shape(shape)).as_dict()
+            entity.shape = normalized
+            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+            world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
+            return {"id": entity.id, "shape": normalized}
+
+    def neural_task_started(self, title: str) -> str | None:
+        world = self._neural_world_service
+        if world is None:
+            return None
+        import uuid
+        from .neural_world import EntityKind, LifecycleState
+        task_id = "task:" + uuid.uuid4().hex
+        node = world.upsert(
+            task_id, EntityKind.TASK, str(title)[:300], source="jarvis.orchestrator",
+            status="queued", lifecycle=LifecycleState.NEWBORN, energy=1.0, scale=1.05,
+            persistent=False, parent_id="jarvis.core",
+            metadata={"started_by": "jarvis", "observable": True},
+        )
+        try:
+            world.relate("jarvis.core", task_id, "executing", 0.9)
+        except KeyError:
+            pass
+        return task_id
+
+    def neural_task_update(self, task_id: str | None, *, status: str, step: str, progress: int | None = None) -> None:
+        if not task_id or self._neural_world_service is None:
+            return
+        world = self._neural_world_service
+        from .neural_world import LifecycleState
+        lifecycle = LifecycleState.ACTIVE if status in {"queued", "running"} else LifecycleState.WAITING if status == "waiting" else LifecycleState.FAILED if status == "failed" else LifecycleState.RETIRED if status in {"cancelled", "succeeded"} else LifecycleState.ACTIVE
+        with world._lock:
+            entity = world._entities.get(task_id)
+            if entity is None:
+                return
+            entity.status = str(step)[:120]
+            entity.lifecycle = lifecycle
+            entity.energy = max(0.0, min(1.0, (progress if progress is not None else 60) / 100.0))
+            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        world.events.publish("task.progress", entity_id=task_id, payload={"status": status, "step": str(step)[:240], "progress": progress})
+
+    def neural_task_finished(self, task_id: str | None, *, success: bool, message: str = "") -> None:
+        if not task_id or self._neural_world_service is None:
+            return
+        world = self._neural_world_service
+        from .neural_world import LifecycleState
+        with world._lock:
+            entity = world._entities.get(task_id)
+            if entity is None:
+                return
+            entity.lifecycle = LifecycleState.MATURE if success else LifecycleState.FAILED
+            entity.status = "succeeded" if success else "failed"
+            entity.energy = 0.18 if success else 0.0
+            entity.visible = True
+            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        world.events.publish("task.finished", entity_id=task_id, payload={"success": bool(success), "message": str(message)[:500]})
+
+    def set_neural_event_sink(self, sink: Callable[..., Any] | None) -> None:
+        self._neural_event_sink = sink
+
+    def publish_neural_observation(self, stage: str, message: str, **details: object) -> None:
+        controller = self._neural_observation
+        if controller is None or not controller.snapshot().get("enabled", False):
+            return
+        sink = self._neural_event_sink
+        if sink is None:
+            return
+        payload = {
+            "stage": str(stage)[:100],
+            "message": str(message)[:500],
+            **{str(key)[:50]: str(value)[:240] for key, value in details.items()},
+        }
+        try:
+            sink("observation." + payload["stage"], payload=payload)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("neural observation sink failed (%s)", type(exc).__name__)
+
+    def neural_observation_start(self, focus: str = "auto", reason: str = "") -> dict[str, object]:
+        if self._neural_observation is None:
+            from .neural_observation import NeuralObservationController
+            self._neural_observation = NeuralObservationController()
+        return self._neural_observation.start(focus, reason)
+
+    def neural_observation_stop(self) -> dict[str, object]:
+        if self._neural_observation is None:
+            return {"enabled": False, "focus": "auto", "reason": "", "started_at": None}
+        return self._neural_observation.stop()
+
+    def neural_observation_state(self) -> dict[str, object]:
+        if self._neural_observation is None:
+            return {"enabled": False, "focus": "auto", "reason": "", "started_at": None}
+        return self._neural_observation.snapshot()
 
     def available_tools(self) -> tuple[str, ...]:
         return self.registry.names()
@@ -50,7 +184,7 @@ class JarvisRuntime:
             return lambda: target.from_environment()
         if name == "account_manager":
             return lambda: target(account_access=self._tool("account_access"))
-        if name in {"computer", "screen", "browser", "clipboard", "windows"}:
+        if name in {"computer", "screen", "browser", "clipboard", "windows", "spatial_windows"}:
             return lambda: target(self.policy)
         if name == "browser_registry":
             return lambda: target()
@@ -156,6 +290,18 @@ class JarvisRuntime:
         """Return the current background lifecycle state and degraded components."""
         return self._background_mode.status()
 
+    def activity_store(self) -> ActivityStore:
+        """Return the bounded process-local activity store."""
+        return self._activity
+
+    def activity_snapshot(self, limit: int = 20) -> list[dict[str, object]]:
+        """Return JSON-safe activity records for workspace surfaces."""
+        return [record.as_dict() for record in self._activity.list(limit)]
+
+    def activity_cancel(self, activity_id: str) -> dict[str, object]:
+        """Request cooperative cancellation without terminating the executor."""
+        return self._activity.request_cancel(activity_id).as_dict()
+
     def _register_actions(self) -> None:
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.move", lambda x, y: self._tool("computer").move(x, y)))
         self.orchestrator.register(Action(Capability.MOUSE_CONTROL, "computer.click", lambda button="left", clicks=1: self._tool("computer").click(button, clicks)))
@@ -166,11 +312,20 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.type_text", lambda text: self._tool("computer").type_text(text)))
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.hotkey", lambda *keys: self._tool("computer").hotkey(*keys)))
         self.orchestrator.register(Action(Capability.APP_LAUNCH, "computer.open_app", lambda command, *args: self._tool("computer").open_app(command, *args)))
+        self.orchestrator.register(Action(Capability.APP_LAUNCH, "spatial.open_application", lambda application, embed=True, confirmed=False, wait_seconds=10.0: self.open_application_spatial(application, embed=embed, confirmed=confirmed, wait_seconds=wait_seconds)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_list", lambda: self._tool("spatial_windows").list_windows()))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_embed", lambda identifier, x=24, y=24, width=960, height=640, confirmed=False: self._tool("spatial_windows").embed(identifier, x=x, y=y, width=width, height=height, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_unembed", lambda identifier, confirmed=False: self._tool("spatial_windows").unembed(identifier, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SCREEN_READ, "screen.capture", lambda output=None: self._tool("screen").capture(output)))
         self.orchestrator.register(Action(Capability.CLIPBOARD, "clipboard.read", lambda: self._tool("clipboard").read()))
         self.orchestrator.register(Action(Capability.CLIPBOARD, "clipboard.write", lambda text: self._tool("clipboard").write(text)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.list", lambda: self._tool("windows").list_windows()))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.focus", lambda identifier: self._tool("windows").focus_window(identifier)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.geometry", lambda identifier: self._tool("spatial_windows").rect(identifier).as_dict()))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.move_resize", lambda identifier, x, y, width, height, confirmed=False: self._tool("spatial_windows").move_resize(identifier, x, y, width, height, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.show", lambda identifier, confirmed=False: self._tool("spatial_windows").set_visible(identifier, True, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.hide", lambda identifier, confirmed=False: self._tool("spatial_windows").set_visible(identifier, False, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.restore", lambda identifier, confirmed=False: self._tool("spatial_windows").restore(identifier, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.minimize", lambda identifier: self._tool("windows").minimize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.maximize", lambda identifier: self._tool("windows").maximize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.close", lambda identifier: self._tool("windows").close_window(identifier)))
@@ -240,6 +395,163 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.DEVICE_APPS, "devices.apps", lambda device_id, app_id, **kwargs: self._tool("devices").open_app(device_id, app_id, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_AUTOMATION, "devices.automate", lambda device_id, steps, **kwargs: self._tool("devices").automate(device_id, steps, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.hand_target", lambda device_id: self._set_hand_target(device_id)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.advanced.inspect", lambda: self._neural_advanced_command("inspect", "inspect")))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "neural.workspace.compose", lambda operation, payload=None: self._neural_advanced_command("workspace", operation, payload)))
+        self.orchestrator.register(Action(Capability.FILE_WRITE, "neural.cross_application.transfer", lambda kind, source, destination, payload_ref=None: self._neural_advanced_command("cross_application", "transfer", {"kind": kind, "source": source, "destination": destination, "payload_ref": payload_ref})))
+        self.orchestrator.register(Action(Capability.BROWSER_CONTROL, "neural.browser.research_wall", lambda id, pages, columns=3: self._neural_advanced_command("browser", "research_wall", {"id": id, "pages": pages, "columns": columns})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.performance.sample", lambda **metrics: self._neural_advanced_command("performance", "sample", metrics)))
+        self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.display.update", lambda id, state=None: self._neural_advanced_command("display", "update", {"id": id, "state": state or {}})))
+        self.orchestrator.register(Action(Capability.FILE_WRITE, "neural.history.snapshot", lambda id, world: self._neural_advanced_command("history", "snapshot", {"id": id, "world": world})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.planning.dry_run", lambda actions, known_good=None: self._neural_advanced_command("planning", "dry_run", {"actions": actions, "known_good": known_good})))
+        self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "neural.reliability.reset", lambda region=None: self._neural_advanced_command("reliability", "reset", {"region": region})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.audio.event", lambda kind, source="jarvis", position=None, intensity=0.5, priority=0.5: self._neural_advanced_command("audio", "event", {"kind": kind, "source": source, "position": position, "intensity": intensity, "priority": priority})))
+        self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "neural.multiuser.region", lambda id, owner, shared=False, members=None: self._neural_advanced_command("multi_user", "region", {"id": id, "owner": owner, "shared": shared, "members": members or []})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.remote.region", lambda id, state=None: self._neural_advanced_command("remote", "upsert", {"id": id, "state": state or {}})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.streaming.region", lambda id, priority=0.5: self._neural_advanced_command("streaming", "request", {"id": id, "priority": priority})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.simulation.run", lambda scenario="cpu_stress", count=1000: self._neural_advanced_command("simulation", "benchmark", {"scenario": scenario, "count": count})))
+        self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.accessibility.update", lambda **settings: self._neural_advanced_command("accessibility", "update", settings)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.fullstack.command", lambda domain, operation, payload=None, confirmed=False: self._neural_fullstack_execute(domain, operation, payload, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status", lambda: self._neural_advanced_command("master", "status", {})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None, confirmed=False: self._neural_master_execute(feature, payload, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.smoke", lambda limit=None: self._neural_advanced_command("master", "smoke", {"limit": limit} if limit is not None else {})))
+
+    def _neural_domain_capability(self, domain: str, operation: str = "") -> Capability:
+        name = str(domain).strip().casefold()
+        op = str(operation).strip().casefold()
+        if name in {"spatial_windows", "desktop_3d"}:
+            return Capability.WINDOW_CONTROL
+        if name == "cross_application":
+            return Capability.CLIPBOARD if "clipboard" in op else Capability.FILE_WRITE
+        if name == "browser":
+            return Capability.BROWSER_CONTROL
+        if name in {"hardware_display", "multi_monitor", "accessibility", "accessibility_full"}:
+            return Capability.SYSTEM_SETTINGS
+        if name == "memory_history":
+            return Capability.FILE_WRITE
+        if name == "reliability":
+            return Capability.SYSTEM_MAINTENANCE
+        if name in {"multi_user", "multi_user_shared"}:
+            return Capability.ACCOUNT_WRITE
+        if name in {"remote", "remote_computing"} and ("control" in op or "sync" in op):
+            return Capability.SYSTEM_MAINTENANCE
+        if name in {"xr", "xr_full"} and op == "haptic":
+            return Capability.DEVICE_INPUT
+        if name == "xr":
+            return Capability.SYSTEM_SETTINGS
+        return Capability.SYSTEM_DIAGNOSTICS
+
+    def _neural_fullstack_execute(self, domain: str, operation: str, payload: Mapping[str, Any] | None = None, *, confirmed: bool = False) -> dict[str, object]:
+        capability = self._neural_domain_capability(domain, operation)
+        self.policy.check(capability)
+        if self.policy.needs_confirmation(capability) and not confirmed:
+            if self.confirmation is None or not self.confirmation(capability, "neural.fullstack.command"):
+                raise PermissionError(f"Confirmation is required: {capability.value}/neural.fullstack.command")
+        return self._neural_advanced_command("fullstack", "route", {"domain": domain, "operation": operation, "payload": dict(payload or {})})
+
+    def _neural_master_capability(self, feature: str) -> Capability:
+        from .neural_advanced import MASTER_SCOPE
+        name = str(feature).strip()
+        category = next((key for key, values in MASTER_SCOPE.items() if name in values), None)
+        if category in {"spatial_windows", "desktop_3d"}:
+            return Capability.WINDOW_CONTROL
+        if category == "cross_application":
+            return Capability.CLIPBOARD if "clipboard" in name.casefold() else Capability.FILE_WRITE
+        if category == "browser":
+            return Capability.BROWSER_CONTROL
+        if category == "hardware_display" or category == "multi_monitor" or category in {"accessibility", "accessibility_full"}:
+            return Capability.SYSTEM_SETTINGS
+        if category == "memory_history":
+            return Capability.FILE_WRITE
+        if category == "reliability":
+            return Capability.SYSTEM_MAINTENANCE
+        if category == "remote_computing" and ("control" in name.casefold() or "synchronization" in name.casefold()):
+            return Capability.SYSTEM_MAINTENANCE
+        if category == "multi_user" or category == "multi_user_shared":
+            return Capability.ACCOUNT_WRITE
+        if category in {"optimization_intelligence"}:
+            return Capability.SYSTEM_SETTINGS
+        if category in {"xr", "xr_full"} and "haptic" in name.casefold():
+            return Capability.DEVICE_INPUT
+        if category in {"audio", "games", "time_machine", "world_streaming", "large_world_proof", "advanced_analytics", "performance", "performance_intelligence", "search_navigation", "lifecycle", "planning", "testing", "developer_tools", "remote", "simulation", "simulation_world", "core_neural"}:
+            return Capability.SYSTEM_DIAGNOSTICS
+        if category == "xr":
+            return Capability.SYSTEM_SETTINGS
+        return Capability.SYSTEM_DIAGNOSTICS
+
+    def _neural_master_execute(self, feature: str, payload: Mapping[str, Any] | None = None, *, confirmed: bool = False) -> dict[str, object]:
+        capability = self._neural_master_capability(feature)
+        self.policy.check(capability)
+        if self.policy.needs_confirmation(capability) and not confirmed:
+            if self.confirmation is None or not self.confirmation(capability, "neural.master.execute"):
+                raise PermissionError(f"Confirmation is required: {capability.value}/neural.master.execute")
+        return self._neural_advanced_command("master", "execute", {"feature": feature, "payload": dict(payload or {})})
+
+    def _neural_advanced_command(self, domain: str, operation: str, payload: dict[str, object] | None = None) -> dict[str, object]:
+        world = self._neural_world_service
+        if world is None or not hasattr(world, "neural_advanced_command"):
+            raise RuntimeError("advanced neural world is unavailable")
+        return world.neural_advanced_command(domain, operation, payload or {})
+
+    def open_application_spatial(self, application: str, *, confirmed: bool = False, embed: bool = True, wait_seconds: float = 10.0) -> dict[str, object]:
+        self.policy.check(Capability.APP_LAUNCH)
+        if embed and not confirmed:
+            raise PermissionError("confirmation is required to open an application in spatial mode")
+        if self.policy.needs_confirmation(Capability.APP_LAUNCH) and not confirmed:
+            raise PermissionError("application launch requires confirmation")
+        computer = self._tool("computer")
+        spatial = self._tool("spatial_windows")
+        baseline = {int(item["handle"]) for item in spatial.list_windows() if item.get("handle") is not None}
+        launched = None
+        requested = str(application).strip()
+        if not requested:
+            raise ValueError("application is required")
+        try:
+            resolved = self._tool("applications").resolve(requested)
+            computer.open_known_app(resolved.name)
+            title_hint = resolved.name.casefold()
+        except Exception:
+            launched = computer.open_app(requested)
+            title_hint = requested.casefold()
+        deadline = __import__("time").monotonic() + max(0.0, min(60.0, float(wait_seconds)))
+        selected = None
+        while __import__("time").monotonic() < deadline:
+            for item in spatial.list_windows():
+                handle = int(item.get("handle", 0) or 0)
+                if not handle or handle in baseline:
+                    continue
+                title = str(item.get("title", ""))
+                pid = int(item.get("process_id", 0) or 0)
+                launched_pid = int(getattr(launched, "pid", 0) or 0)
+                if (launched_pid and pid == launched_pid) or (title_hint and title_hint in title.casefold()):
+                    selected = item
+                    break
+            if selected is not None:
+                break
+            __import__("time").sleep(0.25)
+        result: dict[str, object] = {
+            "launched": launched is not None or selected is not None,
+            "pid": int(getattr(launched, "pid", 0) or 0),
+            "embedded": False,
+            "window": selected,
+        }
+        if selected is None or not embed:
+            return result
+        if self.policy.needs_confirmation(Capability.WINDOW_CONTROL) and not confirmed:
+            result["embedding_error"] = "window-control confirmation required"
+            return result
+        try:
+            rect = selected.get("rect", {}) if isinstance(selected, dict) else {}
+            result["embedding"] = spatial.embed(
+                int(selected["handle"]),
+                x=24, y=24,
+                width=min(1280, int(rect.get("width", 960) or 960)),
+                height=min(900, int(rect.get("height", 640) or 640)),
+                confirmed=confirmed,
+            )
+            result["embedded"] = True
+        except (RuntimeError, LookupError, ValueError, PermissionError) as exc:
+            result["embedding_error"] = type(exc).__name__
+        return result
 
     def _start_hand_control(self) -> dict[str, object]:
         runtime = self._tool("hand_control_runtime")

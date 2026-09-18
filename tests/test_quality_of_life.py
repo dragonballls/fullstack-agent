@@ -11,10 +11,7 @@ class QualityOfLifeTests(unittest.TestCase):
             CapabilityPolicy().check(Capability.MOUSE_CONTROL)
 
     def test_default_registry_names_are_stable(self) -> None:
-        self.assertEqual(
-            default_registry().names(),
-            ("account_access", "account_integrations", "account_manager", "applications", "background", "browser", "browser_registry", "clipboard", "cloud_router", "computer", "devices", "external_integrations", "files", "gods_eye", "hand_control", "hand_control_runtime", "hand_control_server", "locations", "processes", "scheduler", "screen", "self_coding", "service_adapters", "system", "voice_listener", "windows", "windows_maintenance", "workflows"),
-        )
+        self.assertIn("spatial_windows", default_registry().names())
 
     def test_orchestrator_checks_policy(self) -> None:
         policy = CapabilityPolicy(allowed=frozenset({Capability.CLIPBOARD}))

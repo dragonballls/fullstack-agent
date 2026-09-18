@@ -23,12 +23,18 @@ class HandControlServer(ThreadingHTTPServer):
         self.bridge = bridge
         self.interpreter = interpreter
         self.last_sample = time.monotonic()
+        self.last_sample_payload: dict[str, object] = {}
+        self.last_events: list[str] = []
         self._watchdog_stop = Event()
         self._watchdog = Thread(target=self._watchdog_loop, name="jarvis-hand-watchdog", daemon=True)
         self._watchdog.start()
 
-    def note_sample(self) -> None:
+    def note_sample(self, payload: dict[str, object] | None = None, events: list[str] | None = None) -> None:
         self.last_sample = time.monotonic()
+        if isinstance(payload, dict):
+            self.last_sample_payload = dict(payload)
+        if isinstance(events, list):
+            self.last_events = [str(item)[:80] for item in events][-12:]
 
     def _watchdog_loop(self) -> None:
         while not self._watchdog_stop.wait(0.20):
@@ -77,6 +83,9 @@ class HandControlHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json(200, {"status": "ok", "enabled": self.server.bridge.enabled})
             return
+        if self.path == "/hand/state":
+            self._json(200, {"enabled": self.server.bridge.enabled, "sample": self.server.last_sample_payload, "events": self.server.last_events, "age_ms": round((time.monotonic()-self.server.last_sample)*1000)})
+            return
         self._json(404, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
@@ -99,6 +108,8 @@ class HandControlHandler(BaseHTTPRequestHandler):
                 fingers=int(payload["fingers"]), confidence=float(payload["confidence"]),
             )
             events = self.server.interpreter.interpret(sample)
+            event_names = [event.kind for event in events]
+            self.server.note_sample(payload, event_names)
             dispatched = sum(self.server.bridge.dispatch(event) for event in events)
             self._json(200, {"accepted": True, "events": [e.kind for e in events], "dispatched": dispatched, "enabled": self.server.bridge.enabled})
         except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:

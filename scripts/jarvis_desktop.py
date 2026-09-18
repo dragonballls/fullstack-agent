@@ -545,11 +545,23 @@ class FullstackJarvisHost:
         if self.stopped:
             return
         self.updater.stop()
+        try:
+            save = getattr(self._web_api, "neural_world_save", None)
+            if callable(save):
+                save()
+        except Exception:
+            LOGGER.exception("neural world persistence failed during shutdown")
         for component in (self.hands, self.voice, self.visualizer):
             try:
                 component.stop()
             except Exception:
                 LOGGER.exception("fullstack component failed during shutdown")
+        try:
+            restore = getattr(self._web_api, "spatial_unembed_all", None)
+            if callable(restore):
+                restore()
+        except Exception:
+            LOGGER.exception("failed to restore spatial application windows")
         self.controller.close()
         self.stopped = True
         self.started = False
@@ -557,6 +569,17 @@ class FullstackJarvisHost:
     @staticmethod
     def _fullscreen_enabled() -> bool:
         return os.environ.get("JARVIS_FULLSCREEN", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _on_window_before_show(self, window: Any) -> None:
+        try:
+            native = getattr(window, "native", None)
+            handle = int(native.Handle.ToInt64())
+            setter = getattr(self._web_api, "spatial_set_host_handle", None)
+            if callable(setter):
+                setter(handle)
+            LOGGER.info("native Jarvis host handle registered for spatial windows: %s", handle)
+        except Exception:
+            LOGGER.exception("could not register native Jarvis host handle for spatial windows")
 
     def _on_window_loaded(self, *_args: Any, **_kwargs: Any) -> None:
         window = self._window
@@ -568,33 +591,80 @@ class FullstackJarvisHost:
         except Exception:
             LOGGER.exception("centered Jarvis text input overlay failed to inject")
 
+    @staticmethod
+    def _native_window_kwargs(url: str, fullscreen: bool) -> dict[str, Any]:
+        """Return the exact native pywebview window contract used by production."""
+        return {
+            "title": "Jarvis",
+            "url": url,
+            "width": 1200,
+            "height": 800,
+            "fullscreen": fullscreen,
+            "resizable": True,
+            "min_size": (800, 600),
+        }
+
     def run_window(self) -> None:
         """Create the native visualizer window on the foreground thread."""
-        smoke = os.environ.get("JARVIS_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
-        if smoke:
-            if VoiceAdapter._truthy("JARVIS_SMOKE_WEBVIEW"):
-                import webview
-                LOGGER.info("frozen pywebview import validation passed: %s", getattr(webview, "__version__", "unknown"))
-            threading.Event().wait()
-            return
+        headless_smoke = os.environ.get("JARVIS_UI_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
         try:
             import webview
         except ImportError as exc:
             raise RuntimeError("pywebview is required for the native Jarvis window") from exc
+
         gui = "edgechromium" if sys.platform == "win32" else None
-        LOGGER.info("creating native Jarvis window; gui=%s fullscreen=%s url=%s", gui or "default", self._fullscreen_enabled(), self.visualizer.url())
-        window_kwargs = {
-            "title": "Jarvis",
-            "url": self.visualizer.url(),
-            "width": 1200,
-            "height": 800,
-            "fullscreen": self._fullscreen_enabled(),
-            "resizable": True,
-            "min_size": (800, 600),
-            "js_api": self.web_api,
-        }
+        window_kwargs = self._native_window_kwargs(self.visualizer.url(), self._fullscreen_enabled())
+        window_kwargs["js_api"] = self.web_api
+
+        if headless_smoke:
+            # GitHub-hosted Windows runners do not provide a trustworthy interactive
+            # desktop/visible HWND. Still exercise the real frozen pywebview
+            # construction path with the exact production kwargs, but do not start
+            # its GUI event loop in the hosted runner session.
+            if VoiceAdapter._truthy("JARVIS_SMOKE_WEBVIEW"):
+                LOGGER.info("frozen pywebview import validation passed: %s", getattr(webview, "__version__", "unknown"))
+            required = {"title", "url", "width", "height", "fullscreen", "resizable", "min_size", "js_api"}
+            if set(window_kwargs) != required:
+                raise RuntimeError(f"native Jarvis window contract mismatch: {sorted(window_kwargs)}")
+            if window_kwargs["title"] != "Jarvis" or window_kwargs["width"] < 800 or window_kwargs["height"] < 600:
+                raise RuntimeError("native Jarvis window contract has invalid title or size")
+
+            LOGGER.info(
+                "constructing frozen Jarvis native window object; gui=%s url=%s size=%sx%s",
+                gui or "default",
+                window_kwargs["url"],
+                window_kwargs["width"],
+                window_kwargs["height"],
+            )
+            self._window = webview.create_window(**window_kwargs)
+            if self._window is None:
+                raise RuntimeError("pywebview returned no Jarvis window object")
+            if getattr(self._window, "title", "Jarvis") != "Jarvis":
+                raise RuntimeError("pywebview returned a native Jarvis window with the wrong title")
+            try:
+                self._window.events.before_show += self._on_window_before_show
+                self._window.events.loaded += self._on_window_loaded
+            except Exception:
+                LOGGER.exception("could not attach Jarvis text input loaded callback")
+            LOGGER.info(
+                "headless frozen Jarvis native window object created; gui=%s url=%s size=%sx%s",
+                gui or "default",
+                window_kwargs["url"],
+                window_kwargs["width"],
+                window_kwargs["height"],
+            )
+            threading.Event().wait()
+            return
+
+        LOGGER.info(
+            "creating native Jarvis window; gui=%s fullscreen=%s url=%s",
+            gui or "default",
+            self._fullscreen_enabled(),
+            self.visualizer.url(),
+        )
         self._window = webview.create_window(**window_kwargs)
         try:
+            self._window.events.before_show += self._on_window_before_show
             self._window.events.loaded += self._on_window_loaded
         except Exception:
             LOGGER.exception("could not attach Jarvis text input loaded callback")

@@ -61,6 +61,7 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("locations", "Persistent user-named locations backed by a local JSON store", "quality_of_life.location_memory.SavedLocationStore"))
     registry.register(ToolSpec("processes", "Guarded process and service inspection", "quality_of_life.processes.ProcessManager"))
     registry.register(ToolSpec("scheduler", "Bounded delayed background jobs", "quality_of_life.scheduler.Scheduler"))
+    registry.register(ToolSpec("spatial_windows", "Guarded native Windows geometry, visibility, and presentation capability adapter", "quality_of_life.spatial_windows.SpatialWindowManager"))
     registry.register(ToolSpec("screen", "Screen capture for computer-aware reasoning", "quality_of_life.screen.ScreenCapture"))
     registry.register(ToolSpec("self_coding", "Guarded autonomous repository coding with verification and rollback", "self_coding.agent.SelfCodingAgent"))
     registry.register(ToolSpec("system", "Structured system inspection and allowlisted settings", "quality_of_life.system.SystemController"))

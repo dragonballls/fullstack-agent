@@ -63,11 +63,11 @@ class ComputerController:
             raise ValueError("hotkey requires 1-5 keys")
         self.pyautogui.hotkey(*keys)
 
-    def open_app(self, command: str, *args: str) -> None:
+    def open_app(self, command: str, *args: str) -> subprocess.Popen[bytes]:
         self.policy.check(Capability.APP_LAUNCH)
         if not command.strip() or any("\x00" in part for part in (command, *args)):
             raise ValueError("invalid application command")
-        subprocess.Popen([command, *args], shell=False)
+        return subprocess.Popen([command, *args], shell=False)
 
     def open_known_app(self, name: str) -> None:
         """Open an exact-match Windows Start Menu shortcut without shell parsing."""

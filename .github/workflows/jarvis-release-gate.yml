@@ -14,6 +14,10 @@ permissions:
 env:
   PYTHONUNBUFFERED: '1'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   regression:
     name: Regression / ${{ matrix.os }} / Python ${{ matrix.python }}
@@ -25,6 +29,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
@@ -45,6 +51,10 @@ jobs:
     name: Native Windows Jarvis.exe
     needs: regression
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -153,7 +163,12 @@ jobs:
         shell: pwsh
         env:
           JARVIS_ALLOW_HEADLESS_GUI: '1'
+          JARVIS_UI_SMOKE: '1'
         run: ./scripts/verify_windows_gui_smoke.ps1
+      - name: Generate signed Jarvis.exe build attestation
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: dist/Jarvis.exe
       - name: Upload raw Jarvis.exe build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -169,11 +184,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      attestations: read
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: Jarvis-Windows-Exe
           path: dist
+      - name: Verify Jarvis.exe build attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify dist/Jarvis.exe -R "${{ github.repository }}" --signer-workflow "${{ github.repository }}/.github/workflows/jarvis-release-gate.yml"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
@@ -181,6 +201,7 @@ jobs:
           body: |
             commit: ${{ github.sha }}
             Generated only after the full Jarvis release gate passes.
+            The packaged binary is provenance-attested and verified before publication.
           files: dist/Jarvis.exe
           overwrite_files: true
           make_latest: false
@@ -192,11 +213,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      attestations: read
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: Jarvis-Windows-Exe
           path: dist
+      - name: Verify Jarvis.exe build attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify dist/Jarvis.exe -R "${{ github.repository }}" --signer-workflow "${{ github.repository }}/.github/workflows/jarvis-release-gate.yml"
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/Jarvis.exe
