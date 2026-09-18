@@ -564,6 +564,17 @@ class FullstackJarvisHost:
     def _fullscreen_enabled() -> bool:
         return os.environ.get("JARVIS_FULLSCREEN", "0").strip().lower() in {"1", "true", "yes", "on"}
 
+    def _on_window_before_show(self, window: Any) -> None:
+        try:
+            native = getattr(window, "native", None)
+            handle = int(native.Handle.ToInt32())
+            setter = getattr(self._web_api, "spatial_set_host_handle", None)
+            if callable(setter):
+                setter(handle)
+            LOGGER.info("native Jarvis host handle registered for spatial windows: %s", handle)
+        except Exception:
+            LOGGER.exception("could not register native Jarvis host handle for spatial windows")
+
     def _on_window_loaded(self, *_args: Any, **_kwargs: Any) -> None:
         window = self._window
         if window is None:
@@ -601,6 +612,7 @@ class FullstackJarvisHost:
         }
         self._window = webview.create_window(**window_kwargs)
         try:
+            self._window.events.before_show += self._on_window_before_show
             self._window.events.loaded += self._on_window_loaded
         except Exception:
             LOGGER.exception("could not attach Jarvis text input loaded callback")

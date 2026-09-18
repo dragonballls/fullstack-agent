@@ -463,6 +463,21 @@ class NeuralWorldBridgeMixin:
             pass
         return self._performance.sample().as_dict()
 
+    def spatial_set_host_handle(self, host_handle: int) -> dict[str, object]:
+        setter = getattr(self._spatial_windows, "set_host_handle", None)
+        if not callable(setter):
+            raise RuntimeError("native spatial hosting is unavailable")
+        return {"ok": True, "host_handle": setter(int(host_handle))}
+
+    def spatial_window_embedding_state(self, handle: int) -> dict[str, object]:
+        return self._spatial_windows.embedding_state(int(handle))
+
+    def spatial_window_embed(self, handle: int, x: int = 24, y: int = 24, width: int = 960, height: int = 640) -> dict[str, object]:
+        return self._spatial_windows.embed(int(handle), x=int(x), y=int(y), width=int(width), height=int(height), confirmed=True)
+
+    def spatial_window_unembed(self, handle: int) -> dict[str, object]:
+        return self._spatial_windows.unembed(int(handle), confirmed=True)
+
     def neural_window_state(self, key: str) -> dict[str, object] | None:
         state = self._layout.get(str(key))
         return state.as_dict() if state is not None else None

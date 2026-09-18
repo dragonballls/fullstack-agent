@@ -34,12 +34,120 @@ class SpatialWindowManager:
     SW_MAXIMIZE = 3
     SWP_NOACTIVATE = 0x0010
     SWP_NOZORDER = 0x0004
+    SWP_FRAMECHANGED = 0x0020
+    SWP_SHOWWINDOW = 0x0040
+    GWL_STYLE = -16
+    GWL_EXSTYLE = -20
+    WS_CHILD = 0x40000000
+    WS_POPUP = 0x80000000
+    WS_EX_APPWINDOW = 0x00040000
+    WS_EX_TOOLWINDOW = 0x00000080
 
     def __init__(self, policy: CapabilityPolicy, user32: Any | None = None) -> None:
         if platform.system() != "Windows" and user32 is None:
             raise SpatialWindowUnavailable("spatial window control is supported only on Windows")
         self.policy = policy
         self.user32 = user32 or ctypes.windll.user32
+        self._host_handle: int | None = None
+        self._embedded: dict[int, dict[str, int]] = {}
+
+    def set_host_handle(self, host_handle: int) -> int:
+        handle = self._validate(host_handle)
+        self._host_handle = handle
+        return handle
+
+    @property
+    def host_handle(self) -> int | None:
+        return self._host_handle
+
+    def _get_long(self, handle: int, index: int) -> int:
+        getter = getattr(self.user32, "GetWindowLongPtrW", None) or getattr(self.user32, "GetWindowLongW", None)
+        if getter is None:
+            raise SpatialWindowUnavailable("native style API is unavailable")
+        return int(getter(handle, index))
+
+    def _set_long(self, handle: int, index: int, value: int) -> int:
+        setter = getattr(self.user32, "SetWindowLongPtrW", None) or getattr(self.user32, "SetWindowLongW", None)
+        if setter is None:
+            raise SpatialWindowUnavailable("native style API is unavailable")
+        return int(setter(handle, index, value))
+
+    def embedding_state(self, identifier: int) -> dict[str, object]:
+        handle = self._validate(identifier)
+        state = self._embedded.get(handle)
+        return {"embedded": state is not None, **(state or {})}
+
+    def embed(
+        self, identifier: int, *, host_handle: int | None = None,
+        x: int = 24, y: int = 24, width: int = 960, height: int = 640,
+        confirmed: bool = False,
+    ) -> dict[str, object]:
+        self.policy.check(Capability.WINDOW_CONTROL)
+        if not confirmed:
+            raise PermissionError("confirmation is required to embed a native application")
+        child = self._validate(identifier)
+        host = self._validate(host_handle or self._host_handle or 0)
+        if child == host:
+            raise ValueError("a window cannot embed itself")
+        if child in self._embedded:
+            self.move_resize(child, x, y, width, height, confirmed=True)
+            return {"ok": True, "embedded": True, "handle": child, "host_handle": host, "already_embedded": True}
+
+        get_parent = getattr(self.user32, "GetParent", None)
+        old_parent = int(get_parent(child)) if get_parent else 0
+        if old_parent != 0:
+            raise SpatialWindowUnavailable("only top-level windows can be spatially embedded")
+        original_style = self._get_long(child, self.GWL_STYLE)
+        original_exstyle = self._get_long(child, self.GWL_EXSTYLE)
+        original_rect = self.rect(child).as_dict()
+
+        if not self.user32.SetParent(child, host):
+            raise SpatialWindowUnavailable("Windows rejected the spatial parent change")
+        try:
+            self._set_long(child, self.GWL_STYLE, (original_style & ~self.WS_POPUP) | self.WS_CHILD)
+            self._set_long(child, self.GWL_EXSTYLE, (original_exstyle & ~self.WS_EX_APPWINDOW) | self.WS_EX_TOOLWINDOW)
+            ok = self.user32.SetWindowPos(
+                child, 0, int(x), int(y), int(width), int(height),
+                self.SWP_NOACTIVATE | self.SWP_NOZORDER | self.SWP_FRAMECHANGED | self.SWP_SHOWWINDOW,
+            )
+            if not ok:
+                raise SpatialWindowUnavailable("embedded window could not be positioned")
+        except Exception:
+            try:
+                self.user32.SetParent(child, 0)
+                self._set_long(child, self.GWL_STYLE, original_style)
+                self._set_long(child, self.GWL_EXSTYLE, original_exstyle)
+            except Exception:
+                pass
+            raise
+
+        self._embedded[child] = {
+            "host_handle": host, "original_parent": old_parent,
+            "original_style": original_style, "original_exstyle": original_exstyle,
+            "original_x": original_rect["x"], "original_y": original_rect["y"],
+            "original_width": original_rect["width"], "original_height": original_rect["height"],
+        }
+        return {"ok": True, "embedded": True, "handle": child, "host_handle": host, "x": x, "y": y, "width": width, "height": height}
+
+    def unembed(self, identifier: int, *, confirmed: bool = False) -> dict[str, object]:
+        self.policy.check(Capability.WINDOW_CONTROL)
+        if not confirmed:
+            raise PermissionError("confirmation is required to restore a native application window")
+        handle = self._validate(identifier)
+        state = self._embedded.get(handle)
+        if state is None:
+            return {"ok": True, "embedded": False, "handle": handle}
+        if not self.user32.SetParent(handle, int(state["original_parent"])):
+            raise SpatialWindowUnavailable("Windows rejected the spatial parent restore")
+        self._set_long(handle, self.GWL_STYLE, int(state["original_style"]))
+        self._set_long(handle, self.GWL_EXSTYLE, int(state["original_exstyle"]))
+        self.user32.SetWindowPos(
+            handle, 0, int(state["original_x"]), int(state["original_y"]),
+            int(state["original_width"]), int(state["original_height"]),
+            self.SWP_NOACTIVATE | self.SWP_NOZORDER | self.SWP_FRAMECHANGED | self.SWP_SHOWWINDOW,
+        )
+        self._embedded.pop(handle, None)
+        return {"ok": True, "embedded": False, "handle": handle}
 
     def _validate(self, identifier: int) -> int:
         try:
