@@ -89,7 +89,7 @@ class UIBuildStoreTests(unittest.TestCase):
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             (build_dir / "script.js").write_text("old-neural-mesh", encoding="utf-8")
             second = UIBuildStore(tmp)
-            self.assertEqual(second.get("neural-mesh").version, "0.4.0")
+            self.assertEqual(second.get("neural-mesh").version, "0.5.0")
             self.assertNotEqual((build_dir / "script.js").read_text(encoding="utf-8"), "old-neural-mesh")
 
     def test_protected_builds_cannot_be_overwritten_or_deleted(self):
