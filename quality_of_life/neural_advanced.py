@@ -617,10 +617,11 @@ class TransferPacket:
 class CrossApplicationIntelligence:
     """Semantic transfer contracts for files, URLs, code, artifacts and workflows."""
 
-    KINDS = {"file", "url", "code", "artifact", "workflow", "task"}
+    KINDS = {"file", "url", "code", "artifact", "workflow", "task", "clipboard"}
 
     def __init__(self) -> None:
         self._history: deque[TransferPacket] = deque(maxlen=2048)
+        self._clipboard: dict[str, Any] = {}
 
     def suggest(self, kind: str, source: str, *, destinations: Sequence[str]) -> list[dict[str, Any]]:
         normalized = str(kind).lower()
@@ -657,8 +658,21 @@ class CrossApplicationIntelligence:
         self._history.append(packet)
         return packet.as_dict()
 
+    def clipboard_put(self, payload: Any, *, source: str = "jarvis", kind: str = "shared") -> dict[str, Any]:
+        packet = {
+            "kind": str(kind)[:80],
+            "source": str(source)[:240],
+            "payload": payload,
+            "timestamp": _now(),
+        }
+        self._clipboard = packet
+        return dict(packet)
+
+    def clipboard_get(self) -> dict[str, Any]:
+        return dict(self._clipboard)
+
     def snapshot(self) -> dict[str, Any]:
-        return {"transfers": [p.as_dict() for p in self._history]}
+        return {"transfers": [p.as_dict() for p in self._history], "clipboard": dict(self._clipboard)}
 
 
 @dataclass
@@ -1145,13 +1159,40 @@ class MultiUserBrain:
         self.profiles: dict[str, dict[str, Any]] = {}
         self.regions: dict[str, dict[str, Any]] = {}
         self.resources: dict[str, dict[str, Any]] = {}
+        self.workspaces: dict[str, dict[str, Any]] = {}
+        self.layouts: dict[str, dict[str, Any]] = {}
+        self.pins: dict[str, set[str]] = defaultdict(set)
 
     def profile(self, user_id: str, **preferences: Any) -> dict[str, Any]:
         current = self.profiles.setdefault(str(user_id), {"id": str(user_id)})
         current.update(preferences)
         current.setdefault("workspace", f"workspace:{user_id}")
         current.setdefault("private_region", f"brain:private:{user_id}")
+        current.setdefault("layout", {"mode": "3d", "surfaces": []})
+        current.setdefault("pinned_neurons", [])
         return dict(current)
+
+    def workspace(self, user_id: str, *, name: str | None = None) -> dict[str, Any]:
+        profile = self.profile(user_id)
+        item = {"id": str(profile["workspace"]), "owner": str(user_id), "name": str(name or profile["workspace"]), "updated_at": _now()}
+        self.workspaces[str(user_id)] = item
+        return dict(item)
+
+    def layout(self, user_id: str, layout: Mapping[str, Any]) -> dict[str, Any]:
+        value = {"mode": str(layout.get("mode", "3d")), "surfaces": list(layout.get("surfaces", [])), "updated_at": _now()}
+        self.layouts[str(user_id)] = value
+        self.profile(str(user_id))["layout"] = dict(value)
+        return dict(value)
+
+    def pin(self, user_id: str, neuron_id: str, *, pinned: bool = True) -> dict[str, Any]:
+        uid, nid = str(user_id), str(neuron_id)
+        if pinned:
+            self.pins[uid].add(nid)
+        else:
+            self.pins[uid].discard(nid)
+        values = sorted(self.pins[uid])
+        self.profile(uid)["pinned_neurons"] = values
+        return {"user_id": uid, "pinned_neurons": values}
 
     def region(self, region_id: str, *, owner: str, shared: bool = False, members: Sequence[str] = ()) -> dict[str, Any]:
         region = self.regions.setdefault(str(region_id), {"id": str(region_id), "owner": str(owner), "members": []})
@@ -1166,7 +1207,14 @@ class MultiUserBrain:
         return dict(resource)
 
     def snapshot(self) -> dict[str, Any]:
-        return {"profiles": dict(self.profiles), "regions": dict(self.regions), "resources": dict(self.resources)}
+        return {
+            "profiles": dict(self.profiles),
+            "regions": dict(self.regions),
+            "resources": dict(self.resources),
+            "workspaces": dict(self.workspaces),
+            "layouts": dict(self.layouts),
+            "pins": {key: sorted(values) for key, values in self.pins.items()},
+        }
 
 
 class WorldStreamer:
@@ -1278,7 +1326,7 @@ FEATURES = {
         "complete hybrid compositor", "mature detached reattached surfaces", "full monitor-wall workspace",
     ],
     "desktop_3d": ["desktop to 3d transition", "3d to desktop transition", "smooth visual handoff", "focus preservation", "camera layout handoff"],
-    "cross_application": ["semantic drag and drop", "file movement between applications", "url movement between applications", "code movement between applications", "artifact movement between applications", "drag into workflows", "semantic destination suggestions", "cross application intelligence", "browser to code movement", "build artifact movement"],
+    "cross_application": ["semantic drag and drop", "file movement between applications", "url movement between applications", "code movement between applications", "artifact movement between applications", "drag into workflows", "semantic destination suggestions", "cross application intelligence", "browser to code movement", "build artifact movement", "unified shared clipboard"],
     "browser": ["research wall automation", "side by side page layouts", "multi page research walls", "browser session reconstruction", "learned browser performance profiles", "browser memory gpu tracking"],
     "games": ["game specific profiles", "game specific quality profiles", "game capture strategy", "game update profile migration", "giant immersive game surface", "learned minecraft profile"],
     "performance": ["zero copy gpu path contract", "free threaded capture contract", "advanced occlusion culling", "texture streaming", "geometry streaming", "asset prewarming", "dynamic refraction adaptation", "advanced bloom adaptation", "advanced glow adaptation", "variable rate shading", "task resource allocation", "disk monitoring", "network monitoring", "advanced frame time monitoring", "per window cost measurement", "per neuron cost measurement", "historical baselines", "before after measurements", "long term memory growth tracking", "gpu spike tracking", "bottleneck analytics", "historical resource behavior", "background throttling", "driver awareness", "gpu assignment awareness", "mixed refresh handling", "mixed resolution handling", "ultrawide handling", "device display awareness"],
