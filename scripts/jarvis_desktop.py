@@ -926,6 +926,7 @@ class FullstackJarvisHost:
                 self._window.events.loaded += self._on_window_loaded
             except Exception:
                 LOGGER.exception("could not attach Jarvis text input loaded callback")
+            self._create_floating_window(webview)
             LOGGER.info(
                 "headless frozen Jarvis native window object created; gui=%s url=%s size=%sx%s",
                 gui or "default",
@@ -948,7 +949,9 @@ class FullstackJarvisHost:
             self._window.events.loaded += self._on_window_loaded
         except Exception:
             LOGGER.exception("could not attach Jarvis text input loaded callback")
-        LOGGER.info("native Jarvis window object created; entering GUI event loop")
+        self._create_floating_window(webview)
+        self.floating_hotkey.start()
+        LOGGER.info("native Jarvis window object created; floating text link ready; hotkey=%s", FLOATING_HOTKEY_LABEL)
         if gui is None:
             webview.start(debug=False)
         else:
