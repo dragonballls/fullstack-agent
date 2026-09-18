@@ -36,6 +36,7 @@ _OBSERVE_STOP = re.compile(r"^(?:stop|hide|close)\s+(?:the\s+)?(?:live\s+)?(?:pr
 _SHAPE = re.compile(r"^(?:make|turn|change)\s+(?:the\s+)?(.+?)\s+(?:neuron|node)?\s*(?:into|as)\s+(.+)$", re.IGNORECASE)
 _SHAPE_REVERT_ALL = re.compile(r"^(?:revert|restore|reset)\s+(?:everything|all)\s+(?:to\s+)?(?:the\s+)?(?:original|original\s+state)(?:\s+state)?$", re.IGNORECASE)
 _SHAPE_REVERT = re.compile(r"^(?:revert|restore|reset)\s+(?:the\s+)?(.+?)(?:\s+to\s+)?(?:its\s+)?original(?:\s+state)?$", re.IGNORECASE)
+_SHAPE_REMOVE = re.compile(r"^(?:remove|delete)\s+(?:it|this\s+(?:object|shape|neuron|node|surface|tab|window)|the\s+(?:object|shape|neuron|node|surface|tab|window))$", re.IGNORECASE)
 _SHAPE_CREATE = re.compile(r"^(?:create|generate|build|make)\s+(?:a|an|the)?\s*(.+?)(?:\s+(?:called|named)\s+(.+))?$", re.IGNORECASE)
 _SHAPE_APPLY = re.compile(r"^(?:make|turn|change|reshape)\s+(.+?)\s+(?:into|as|to|the shape of)\s+(?:a|an|the)?\s*(.+)$", re.IGNORECASE)
 _ROTATION_SPEED = re.compile(r"^(.*?)\s+and\s+(?:give|set)\s+(?:it\s+)?(?:a\s+)?(?:rotational|rotation|angular)\s+speed\s+(-?\d+(?:\.\d+)?)\s*(rpm|rps|degrees?\s*(?:per|/)\s*second|rad(?:ian)?s?\s*(?:per|/)\s*second)?(?:\s+(?:around|on)\s+([xyz]|xyz))?\s*$", re.IGNORECASE)
@@ -64,6 +65,8 @@ def parse_intent(text: str) -> Intent:
         return Intent("neural_shape_revert_all", {})
     match = _SHAPE_REVERT.match(value)
     if match:
+    if _SHAPE_REMOVE.match(value):
+        return Intent("neural_shape_remove", {})
         return Intent("neural_shape_revert", {"target": match.group(1).strip()})
     match = _SHAPE_APPLY.match(value)
     if match:
