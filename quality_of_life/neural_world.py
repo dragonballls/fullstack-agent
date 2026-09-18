@@ -272,10 +272,14 @@ class NeuralWorld:
     def search(self, query: str = "", *, kind: str | None = None,
                source: str | None = None, status: str | None = None,
                lifecycle: str | None = None, connected_to: str | None = None,
+               updated_within_seconds: int | None = None,
                limit: int = 100) -> list[dict[str, object]]:
         needle = " ".join(str(query).casefold().split())
         lifecycle_value = str(lifecycle).casefold() if lifecycle else None
-        if not any((needle, kind, source, status, lifecycle_value, connected_to)):
+        cutoff = None
+        if updated_within_seconds is not None:
+            cutoff = datetime.now(timezone.utc).timestamp() - max(1, min(31_536_000, int(updated_within_seconds)))
+        if not any((needle, kind, source, status, lifecycle_value, connected_to, cutoff is not None)):
             raise ValueError("search query or filter must not be empty")
         with self._lock:
             connected_ids: set[str] | None = None
@@ -304,6 +308,12 @@ class NeuralWorld:
                     continue
                 if lifecycle and node.lifecycle.value != lifecycle_value:
                     continue
+                if cutoff is not None:
+                    try:
+                        if datetime.fromisoformat(node.updated_at.replace("Z", "+00:00")).timestamp() < cutoff:
+                            continue
+                    except (TypeError, ValueError):
+                        continue
                 if needle:
                     haystack = " ".join((node.id, node.label, node.source, str(node.metadata))).casefold()
                     if needle not in haystack:
@@ -531,8 +541,8 @@ class NeuralWorldBridgeMixin:
             self._neural_world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
             return {"id": entity.id, "shape": normalized}
 
-    def neural_search(self, query: str = "", kind: str | None = None, source: str | None = None, status: str | None = None, lifecycle: str | None = None, connected_to: str | None = None, limit: int = 100) -> list[dict[str, object]]:
-        return self._neural_world.search(query, kind=kind, source=source, status=status, lifecycle=lifecycle, connected_to=connected_to, limit=limit)
+    def neural_search(self, query: str = "", kind: str | None = None, source: str | None = None, status: str | None = None, lifecycle: str | None = None, connected_to: str | None = None, updated_within_seconds: int | None = None, limit: int = 100) -> list[dict[str, object]]:
+        return self._neural_world.search(query, kind=kind, source=source, status=status, lifecycle=lifecycle, connected_to=connected_to, updated_within_seconds=updated_within_seconds, limit=limit)
 
     def neural_trace(self, start: str, target: str, max_hops: int = 8) -> list[dict[str, object]]:
         return self._neural_world.trace(start, target, max_hops=max_hops)
