@@ -34,7 +34,14 @@ class NeuralMeshBuildTests(unittest.TestCase):
             self.skipTest("node is unavailable")
         from quality_of_life.neural_mesh import NEURAL_MESH_BUILTIN
         script = NEURAL_MESH_BUILTIN["script"]
-        compile_result = subprocess.run(["node", "-e", "new Function(\"root\", process.argv[1]);", script], capture_output=True, text=True)
+        with TemporaryDirectory() as tmp:
+            script_path = Path(tmp) / "neural_mesh.js"
+            script_path.write_text(script, encoding="utf-8")
+            compile_result = subprocess.run(
+                ["node", "-e", "new Function(\\\"root\\\", require(\\\"fs\\\").readFileSync(process.argv[1], \\\"utf8\\\"));", str(script_path)],
+                capture_output=True,
+                text=True,
+            )
         self.assertEqual(compile_result.returncode, 0, compile_result.stderr)
 
 
