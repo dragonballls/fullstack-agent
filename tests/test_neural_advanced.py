@@ -1,5 +1,6 @@
 import unittest
 
+from quality_of_life.capabilities import OPERATION_CATALOG
 from quality_of_life.neural_advanced import (
     FEATURES,
     LiquidEcology,
@@ -10,6 +11,11 @@ from quality_of_life.neural_advanced import (
 
 
 class NeuralAdvancedRuntimeTests(unittest.TestCase):
+    def test_advanced_operations_are_in_capability_catalog(self):
+        names = {spec.name for spec in OPERATION_CATALOG}
+        for required in ("neural.advanced.inspect", "neural.workspace.compose", "neural.cross_application.transfer", "neural.browser.research_wall", "neural.performance.sample", "neural.display.update", "neural.history.snapshot", "neural.planning.dry_run", "neural.reliability.reset", "neural.audio.event", "neural.multiuser.region", "neural.remote.region", "neural.streaming.region", "neural.simulation.run", "neural.accessibility.update"):
+            self.assertIn(required, names)
+
     def test_feature_catalog_contains_requested_domains(self):
         expected = {
             "core_neural", "spatial_windows", "desktop_3d", "cross_application",
