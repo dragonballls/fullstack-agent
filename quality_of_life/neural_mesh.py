@@ -670,15 +670,18 @@ function buildSearchFilters(){
   };
 }
 async function search(value){
-  const a=api();if(!value.trim()&& !ui.querySelector("#jn-kind").value && !ui.querySelector("#jn-life").value||!a)return;
+  const a=api();
+  const filters=buildSearchFilters();
+  const hasFilter=Boolean(value.trim()||filters.kind||filters.lifecycle||filters.connected_to||filters.source||filters.updated_within_seconds);
+  if(!hasFilter||!a)return;
   try{
     if(S.view==="earth"&&a.gods_eye_globe_search&&value.trim()){
       S.earthData=await a.gods_eye_globe_search(value.trim());
       const box=ui.querySelector("#jn-response");box.textContent=(S.earthData.locators&&S.earthData.locators.length)?("Located "+S.earthData.locators[0].label):"No Earth locations found";box.classList.add("visible");return;
     }
     if(!a.neural_search)return;
-    const filters=buildSearchFilters();
-    const r=await a.neural_search(value.trim()||"",filters.kind,filters.source,null,filters.lifecycle,filters.connected_to,filters.updated_within_seconds,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
+    const r=await a.neural_search(value.trim()||"",filters.kind,filters.source,null,filters.lifecycle,filters.connected_to,filters.updated_within_seconds,12);
+    if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
   }catch(_){ }
 }
 async function chat(){
