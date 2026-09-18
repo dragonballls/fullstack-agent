@@ -140,11 +140,12 @@ class NeuralShapeController:
                 return existing
             entity = None
             layout = None
-            with self.world._lock:
-                node = self.world._entities.get(target_id)
-                if node is not None:
-                    entity = node.as_dict()
-            if target_id.startswith("window:"):
+            if not generated:
+                with self.world._lock:
+                    node = self.world._entities.get(target_id)
+                    if node is not None:
+                        entity = node.as_dict()
+            if not generated and target_id.startswith("window:"):
                 state = self.layout.get(target_id)
                 if state is not None:
                     layout = state.as_dict()
