@@ -591,31 +591,60 @@ class FullstackJarvisHost:
         except Exception:
             LOGGER.exception("centered Jarvis text input overlay failed to inject")
 
+    @staticmethod
+    def _native_window_kwargs(url: str, fullscreen: bool) -> dict[str, Any]:
+        """Return the exact native pywebview window contract used by production."""
+        return {
+            "title": "Jarvis",
+            "url": url,
+            "width": 1200,
+            "height": 800,
+            "fullscreen": fullscreen,
+            "resizable": True,
+            "min_size": (800, 600),
+        }
+
     def run_window(self) -> None:
         """Create the native visualizer window on the foreground thread."""
-        smoke = os.environ.get("JARVIS_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
-        if smoke:
-            if VoiceAdapter._truthy("JARVIS_SMOKE_WEBVIEW"):
-                import webview
-                LOGGER.info("frozen pywebview import validation passed: %s", getattr(webview, "__version__", "unknown"))
-            threading.Event().wait()
-            return
+        headless_smoke = os.environ.get("JARVIS_UI_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
         try:
             import webview
         except ImportError as exc:
             raise RuntimeError("pywebview is required for the native Jarvis window") from exc
+
         gui = "edgechromium" if sys.platform == "win32" else None
-        LOGGER.info("creating native Jarvis window; gui=%s fullscreen=%s url=%s", gui or "default", self._fullscreen_enabled(), self.visualizer.url())
-        window_kwargs = {
-            "title": "Jarvis",
-            "url": self.visualizer.url(),
-            "width": 1200,
-            "height": 800,
-            "fullscreen": self._fullscreen_enabled(),
-            "resizable": True,
-            "min_size": (800, 600),
-            "js_api": self.web_api,
-        }
+        window_kwargs = self._native_window_kwargs(self.visualizer.url(), self._fullscreen_enabled())
+        window_kwargs["js_api"] = self.web_api
+
+        if headless_smoke:
+            # GitHub-hosted Windows runners do not provide an interactive desktop.
+            # Calling the real GUI backend there can block forever or depend on
+            # unavailable windowing state. Validate the frozen pywebview import and
+            # the exact production window contract instead, then keep the real EXE
+            # alive long enough for the runner to prove initialization/cleanup.
+            if VoiceAdapter._truthy("JARVIS_SMOKE_WEBVIEW"):
+                LOGGER.info("frozen pywebview import validation passed: %s", getattr(webview, "__version__", "unknown"))
+            required = {"title", "url", "width", "height", "fullscreen", "resizable", "min_size", "js_api"}
+            if set(window_kwargs) != required:
+                raise RuntimeError(f"native Jarvis window contract mismatch: {sorted(window_kwargs)}")
+            if window_kwargs["title"] != "Jarvis" or window_kwargs["width"] < 800 or window_kwargs["height"] < 600:
+                raise RuntimeError("native Jarvis window contract has invalid title or size")
+            LOGGER.info(
+                "headless frozen Jarvis native window contract validated; gui=%s url=%s size=%sx%s",
+                gui or "default",
+                window_kwargs["url"],
+                window_kwargs["width"],
+                window_kwargs["height"],
+            )
+            threading.Event().wait()
+            return
+
+        LOGGER.info(
+            "creating native Jarvis window; gui=%s fullscreen=%s url=%s",
+            gui or "default",
+            self._fullscreen_enabled(),
+            self.visualizer.url(),
+        )
         self._window = webview.create_window(**window_kwargs)
         try:
             self._window.events.before_show += self._on_window_before_show
