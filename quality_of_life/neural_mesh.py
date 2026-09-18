@@ -57,6 +57,7 @@ NEURAL_MESH_BUILTIN = {
   <input id="jn-search" autocomplete="off" spellcheck="false" placeholder="Search the neural world…" />
   <div id="jn-actions">
     <button class="jn-btn" id="jn-home">CORE</button>
+  <button class="jn-btn" id="jn-trace">TRACE</button>
     <button class="jn-btn" id="jn-earth">EARTH</button>
     <button class="jn-btn" id="jn-windows">WINDOWS</button>
     <button class="jn-btn" id="jn-giant">GIANT</button>
@@ -81,7 +82,7 @@ const gl=canvas.getContext("webgl2",{antialias:false,alpha:true,powerPreference:
 if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAILABLE";return;}
 
 const S={
-  nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,
+  nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
   quality:"maximum",mode:"foreground",view:"network",frozen:false,giant:false,showWindows:true,
@@ -285,7 +286,7 @@ function render(now){
   attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,centerBuf,1);attr(droplet,"aScale",1,scaleBuf,1);attr(droplet,"aEnergy",1,energyBuf,1);attr(droplet,"aPhase",1,phaseBuf,1);attr(droplet,"aSelected",1,selectedBuf,1);attr(droplet,"aShape",1,shapeBuf,1);attr(droplet,"aBirth",1,birthBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,nodes.length);
 
   const map=new Map(nodes.map(function(n){return[n.id,n]})),lp=[],ls=[],lg=[];
-  for(const r of S.links){if(S.dragNode&&(r.source===S.dragNode||r.target===S.dragNode))continue;const a=map.get(r.source),b=map.get(r.target);if(!a||!b)continue;const ap=nodePosition(a),bp=nodePosition(b),mid=[(ap[0]+bp[0])*.5,(ap[1]+bp[1])*.5,(ap[2]+bp[2])*.5],bend=norm(cross(norm(sub(bp,ap)),[0,1,0])),mag=.16+Math.min(1.1,Math.hypot(...sub(bp,ap))*.055),p1=add(mid,mul3(bend,mag)),p2=add(mid,mul3(bend,-mag)),pts=[ap,p1,p1,p2,p2,bp];pts.forEach(function(p,i){lp.push(...p);ls.push(r.strength||.4);lg.push((i%2)*.5);});}
+  const visibleRelationCap=S.mode==="background"?600:S.quality==="performance"?1200:4200;let relationCount=0;for(const r of S.links){if(relationCount>=visibleRelationCap)break;if(S.dragNode&&(r.source===S.dragNode||r.target===S.dragNode))continue;const a=map.get(r.source),b=map.get(r.target);if(!a||!b)continue;relationCount++;const ap=nodePosition(a),bp=nodePosition(b),mid=[(ap[0]+bp[0])*.5,(ap[1]+bp[1])*.5,(ap[2]+bp[2])*.5],bend=norm(cross(norm(sub(bp,ap)),[0,1,0])),mag=.16+Math.min(1.1,Math.hypot(...sub(bp,ap))*.055),p1=add(mid,mul3(bend,mag)),p2=add(mid,mul3(bend,-mag)),pts=[ap,p1,p1,p2,p2,bp];pts.forEach(function(p,i){lp.push(...p);ls.push(r.strength||.4);lg.push((i%2)*.5);});}
   upload(lineBuf,new Float32Array(lp));upload(lineStrengthBuf,new Float32Array(ls));upload(lineProgressBuf,new Float32Array(lg));
   gl.useProgram(lineProg);gl.uniformMatrix4fv(gl.getUniformLocation(lineProg,"uMvp"),false,mvp);gl.uniform1f(gl.getUniformLocation(lineProg,"uTime"),nowMs);attr(lineProg,"aPos",3,lineBuf);attr(lineProg,"aStrength",1,lineStrengthBuf);attr(lineProg,"aProgress",1,lineProgressBuf);gl.drawArrays(gl.LINES,0,lp.length/3);
 
@@ -511,6 +512,23 @@ function renderSpatialWindows(){
   });
   for(const[key,el]of current)if(!keep.has(key))el.remove();
 }
+async function traceSelected(){
+  if(!S.selected)return;
+  const a=api();if(!a||!a.neural_trace)return;
+  try{
+    const path=await a.neural_trace("jarvis.core",S.selected,12);
+    S.tracePath=Array.isArray(path)?path:[];S.traceIndex=0;
+    if(S.traceTimer)clearInterval(S.traceTimer);
+    if(!S.tracePath.length)return;
+    const step=function(){
+      const item=S.tracePath[S.traceIndex++];
+      if(!item||S.traceIndex>S.tracePath.length){clearInterval(S.traceTimer);S.traceTimer=null;return;}
+      const node=S.nodes.find(function(n){return n.id===item.to});
+      if(node)focus(node);
+    };
+    step();S.traceTimer=setInterval(step,760);
+  }catch(_){}
+}
 async function search(value){
   const a=api();if(!value.trim()||!a||!a.neural_search)return;
   try{const r=await a.neural_search(value.trim(),null,null,null,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}}catch(_){}
@@ -550,6 +568,7 @@ canvas.addEventListener("pointercancel",function(){release()});
 canvas.addEventListener("wheel",function(e){e.preventDefault();S.distance=Math.max(3.5,Math.min(180,S.distance*Math.exp(e.deltaY*.001)));},{passive:false});
 canvas.addEventListener("dblclick",function(e){const n=pick(e.clientX,e.clientY);if(n)focus(n)});
 ui.querySelector("#jn-search").addEventListener("input",function(e){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(e.target.value)},260)});
+ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
 ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
 ui.querySelector("#jn-windows").addEventListener("click",function(){S.showWindows=!S.showWindows;ui.querySelector("#jn-windows").textContent=S.showWindows?"WINDOWS":"WINDOWS OFF";renderSpatialWindows()});
@@ -560,7 +579,7 @@ ui.querySelector("#jn-chat-send").addEventListener("click",chat);
 ui.querySelector("#jn-chat-input").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();chat()}});
 window.addEventListener("resize",resize);
 document.addEventListener("visibilitychange",function(){const hidden=document.hidden;canvas.style.visibility=hidden?"hidden":"visible";ui.querySelector("#jn-surfaces").style.visibility=hidden?"hidden":"visible";});
-function tick(){const now=performance.now();if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastHandPoll>S.handPollMs)pollHand();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
+function tick(){const now=performance.now();if(document.hidden){setTimeout(tick,1500);return;}if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastHandPoll>S.handPollMs)pollHand();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
 pollSnapshot();pollEvents();pollWindows();pollLayouts();pollEarth();pollObservation();pollHand();tick();render(performance.now());
 })();
 """
