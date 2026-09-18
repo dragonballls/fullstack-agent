@@ -248,6 +248,16 @@ class NeuralWorld:
     def neural_advanced_command(self, domain: str, operation: str, payload: Mapping[str, object] | None = None) -> dict[str, object]:
         data = dict(payload or {})
         op = str(operation)
+        if domain == "core":
+            if op == "reorganize": return self.advanced.liquid.reorganize_core(dict(data.get("priorities", {})))
+            if op == "mitosis": return {"events": self.advanced.liquid.mitosis(str(data["id"]), count=int(data.get("count", 2)))}
+            if op == "apoptosis": return {"events": self.advanced.liquid.apoptosis_sequence(str(data["id"]), steps=int(data.get("steps", 6))), "state": self.advanced.liquid.apoptosis(str(data["id"]))}
+            if op == "reconnect": return self.advanced.liquid.reconnect(str(data["source"]), str(data["target"]), strength=float(data.get("strength", .9)))
+            if op == "satellite": return self.advanced.liquid.create_satellite(str(data["id"]), orbit=float(data.get("orbit", .65)))
+            if op == "magnetic": return self.advanced.liquid.magnetic_relationship(str(data["source"]), str(data["target"]), polarity=float(data.get("polarity", 1)), strength=float(data.get("strength", .8)))
+            if op == "growth": return {"events": self.advanced.liquid.growth_sequence(str(data["id"]), steps=int(data.get("steps", 5)))}
+        if domain == "fluid":
+            if op == "tick": return self.advanced.liquid.step(float(data.get("dt", .016)), activity=float(data.get("activity", .5)), cohesion=float(data.get("cohesion", .72)), elasticity=float(data.get("elasticity", .35)), turbulence=float(data.get("turbulence", .16)))
         if domain == "workspace":
             return self.advanced.command_workspace(op, data)
         if domain == "cross_application":
@@ -801,6 +811,8 @@ class NeuralWorldBridgeMixin:
         data = dict(payload or {})
         required = {
             "workspace": Capability.WINDOW_CONTROL,
+            "core": Capability.SYSTEM_DIAGNOSTICS,
+            "fluid": Capability.SYSTEM_DIAGNOSTICS,
             "cross_application": Capability.FILE_WRITE,
             "browser": Capability.BROWSER_CONTROL,
             "game": Capability.APP_WRITE,
