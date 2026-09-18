@@ -83,6 +83,30 @@ class LocationProviderRegistry:
                 detail=f"provider unavailable ({type(exc).__name__})",
             )
 
+    def locations(self, kind: ProviderKind) -> list[dict[str, object]]:
+        if kind not in _PROVIDER_KINDS:
+            raise ValueError(f"unsupported location provider kind: {kind}")
+        provider = self._providers.get(kind)
+        if provider is None:
+            return []
+        try:
+            state = self.status(kind)
+            if not (state.available and state.authorized and state.live):
+                return []
+            method = getattr(provider, "locations", None)
+            if not callable(method):
+                return []
+            raw = method()
+            if not isinstance(raw, (list, tuple)):
+                return []
+            output: list[dict[str, object]] = []
+            for item in raw:
+                if isinstance(item, dict):
+                    output.append(dict(item))
+            return output[:100]
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return []
+
     def snapshot(self) -> tuple[ProviderState, ...]:
         return tuple(self.status(kind) for kind in _PROVIDER_KINDS)
 
