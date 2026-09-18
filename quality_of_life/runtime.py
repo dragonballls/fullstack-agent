@@ -243,6 +243,10 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.type_text", lambda text: self._tool("computer").type_text(text)))
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.hotkey", lambda *keys: self._tool("computer").hotkey(*keys)))
         self.orchestrator.register(Action(Capability.APP_LAUNCH, "computer.open_app", lambda command, *args: self._tool("computer").open_app(command, *args)))
+        self.orchestrator.register(Action(Capability.APP_LAUNCH, "spatial.open_application", lambda application, embed=True, confirmed=False: self.open_application_spatial(application, embed=embed, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_list", lambda: self._tool("spatial_windows").list_windows()))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_embed", lambda identifier, x=24, y=24, width=960, height=640, confirmed=False: self._tool("spatial_windows").embed(identifier, x=x, y=y, width=width, height=height, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_unembed", lambda identifier, confirmed=False: self._tool("spatial_windows").unembed(identifier, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SCREEN_READ, "screen.capture", lambda output=None: self._tool("screen").capture(output)))
         self.orchestrator.register(Action(Capability.CLIPBOARD, "clipboard.read", lambda: self._tool("clipboard").read()))
         self.orchestrator.register(Action(Capability.CLIPBOARD, "clipboard.write", lambda text: self._tool("clipboard").write(text)))
@@ -322,6 +326,65 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.DEVICE_APPS, "devices.apps", lambda device_id, app_id, **kwargs: self._tool("devices").open_app(device_id, app_id, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_AUTOMATION, "devices.automate", lambda device_id, steps, **kwargs: self._tool("devices").automate(device_id, steps, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.hand_target", lambda device_id: self._set_hand_target(device_id)))
+
+    def open_application_spatial(self, application: str, *, confirmed: bool = False, embed: bool = True) -> dict[str, object]:
+        self.policy.check(Capability.APP_LAUNCH)
+        if self.policy.needs_confirmation(Capability.APP_LAUNCH) and not confirmed:
+            raise PermissionError("application launch requires confirmation")
+        computer = self._tool("computer")
+        spatial = self._tool("spatial_windows")
+        baseline = {int(item["handle"]) for item in spatial.list_windows() if item.get("handle") is not None}
+        launched = None
+        requested = str(application).strip()
+        if not requested:
+            raise ValueError("application is required")
+        try:
+            resolved = self._tool("applications").resolve(requested)
+            computer.open_known_app(resolved.name)
+            title_hint = resolved.name.casefold()
+        except Exception:
+            launched = computer.open_app(requested)
+            title_hint = requested.casefold()
+        deadline = __import__("time").monotonic() + 10.0
+        selected = None
+        while __import__("time").monotonic() < deadline:
+            for item in spatial.list_windows():
+                handle = int(item.get("handle", 0) or 0)
+                if not handle or handle in baseline:
+                    continue
+                title = str(item.get("title", ""))
+                pid = int(item.get("process_id", 0) or 0)
+                launched_pid = int(getattr(launched, "pid", 0) or 0)
+                if (launched_pid and pid == launched_pid) or (title_hint and title_hint in title.casefold()):
+                    selected = item
+                    break
+            if selected is not None:
+                break
+            __import__("time").sleep(0.25)
+        result: dict[str, object] = {
+            "launched": launched is not None or selected is not None,
+            "pid": int(getattr(launched, "pid", 0) or 0),
+            "embedded": False,
+            "window": selected,
+        }
+        if selected is None or not embed:
+            return result
+        if self.policy.needs_confirmation(Capability.WINDOW_CONTROL) and not confirmed:
+            result["embedding_error"] = "window-control confirmation required"
+            return result
+        try:
+            rect = selected.get("rect", {}) if isinstance(selected, dict) else {}
+            result["embedding"] = spatial.embed(
+                int(selected["handle"]),
+                x=24, y=24,
+                width=min(1280, int(rect.get("width", 960) or 960)),
+                height=min(900, int(rect.get("height", 640) or 640)),
+                confirmed=confirmed,
+            )
+            result["embedded"] = True
+        except (RuntimeError, LookupError, ValueError, PermissionError) as exc:
+            result["embedding_error"] = type(exc).__name__
+        return result
 
     def _start_hand_control(self) -> dict[str, object]:
         runtime = self._tool("hand_control_runtime")
