@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import time
 from typing import Any, Callable, Iterable, Iterator
 
@@ -19,6 +20,8 @@ from .router import CloudModelRouter, ProviderResult
 from .tool_broker import ToolResult, UNIVERSAL_OPERATION_SPECS, UniversalToolBroker
 from .web_tools import WebToolAdapter
 from .workflows import WorkflowService, WorkflowStore
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -389,8 +392,11 @@ class AgentOrchestrator:
             return
         try:
             self.runtime.neural_task_finished(task_id, success=False, message=f"{type(exc).__name__}: {str(exc)[:300]}")
-        except Exception:
-            pass
+        except Exception as finalization_exc:
+            LOGGER.warning(
+                "neural task finalization failed (%s)",
+                type(finalization_exc).__name__,
+            )
 
     def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
         started = time.monotonic()
