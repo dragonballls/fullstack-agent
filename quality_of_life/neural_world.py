@@ -269,25 +269,49 @@ class NeuralWorld:
                 self.events.publish("relation.updated", entity_id=source, payload=relation.as_dict())
             return relation
 
-    def search(self, query: str, *, kind: str | None = None,
+    def search(self, query: str = "", *, kind: str | None = None,
                source: str | None = None, status: str | None = None,
+               lifecycle: str | None = None, connected_to: str | None = None,
                limit: int = 100) -> list[dict[str, object]]:
         needle = " ".join(str(query).casefold().split())
-        if not needle:
-            raise ValueError("search query must not be empty")
+        if lifecycle:
+            lifecycle_value = str(lifecycle).casefold()
+        else:
+            lifecycle_value = None
         with self._lock:
+            connected_ids: set[str] | None = None
+            if connected_to:
+                wanted = str(connected_to).casefold()
+                connected_ids = set()
+                for entity_id, node in self._entities.items():
+                    if wanted in entity_id.casefold() or wanted in node.label.casefold():
+                        connected_ids.add(entity_id)
+                if not connected_ids:
+                    return []
+                connected_ids = {
+                    rel.target if rel.source in connected_ids else rel.source
+                    for rel in self._relations.values()
+                    if rel.source in connected_ids or rel.target in connected_ids
+                }
             scored: list[tuple[int, NeuralEntity]] = []
             for node in self._entities.values():
+                if connected_ids is not None and node.id not in connected_ids:
+                    continue
                 if kind and node.kind.value != str(kind):
                     continue
                 if source and node.source != str(source):
                     continue
                 if status and node.status != str(status):
                     continue
-                haystack = " ".join((node.id, node.label, node.source, str(node.metadata))).casefold()
-                if needle not in haystack:
+                if lifecycle and node.lifecycle.value != lifecycle_value:
                     continue
-                score = 100 if node.label.casefold() == needle else 50 if needle in node.label.casefold() else 10
+                if needle:
+                    haystack = " ".join((node.id, node.label, node.source, str(node.metadata))).casefold()
+                    if needle not in haystack:
+                        continue
+                    score = 100 if node.label.casefold() == needle else 50 if needle in node.label.casefold() else 10
+                else:
+                    score = 0
                 scored.append((score, node))
             scored.sort(key=lambda item: (-item[0], item[1].label.casefold(), item[1].id))
             return [node.as_dict() for _, node in scored[:max(1, min(500, int(limit)))]]
