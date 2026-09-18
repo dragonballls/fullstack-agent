@@ -854,6 +854,19 @@ class FullstackJarvisHost:
             "position_persisted": FLOATING_POSITION_FILE.exists(),
         }
 
+    def _on_main_window_closing(self, *_args: Any, **_kwargs: Any) -> None:
+        """Destroy the hidden floating bar when the main Jarvis window closes."""
+        self._floating_visible = False
+        with self._floating_lock:
+            self._save_floating_position()
+            floating = self._floating_window
+            self._floating_window = None
+            if floating is not None:
+                try:
+                    floating.destroy()
+                except Exception:
+                    LOGGER.exception("floating command bar failed to close with the main Jarvis window")
+
     def _on_window_before_show(self, window: Any) -> None:
         try:
             native = getattr(window, "native", None)
@@ -928,6 +941,7 @@ class FullstackJarvisHost:
             try:
                 self._window.events.before_show += self._on_window_before_show
                 self._window.events.loaded += self._on_window_loaded
+            self._window.events.closing += self._on_main_window_closing
             except Exception:
                 LOGGER.exception("could not attach Jarvis text input loaded callback")
             self._create_floating_window(webview)
@@ -951,6 +965,7 @@ class FullstackJarvisHost:
         try:
             self._window.events.before_show += self._on_window_before_show
             self._window.events.loaded += self._on_window_loaded
+            self._window.events.closing += self._on_main_window_closing
         except Exception:
             LOGGER.exception("could not attach Jarvis text input loaded callback")
         self._create_floating_window(webview)
