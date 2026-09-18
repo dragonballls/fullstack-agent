@@ -105,6 +105,13 @@ class ShapeIntentTests(unittest.TestCase):
         self.assertEqual(command.arguments["rotation_unit"], "radians per second")
         self.assertEqual(command.arguments["rotation_speed"], 2.0)
 
+        remove = parse_intent("remove it")
+        self.assertEqual(remove.kind, "neural_shape_remove")
+
+        revert = parse_intent("revert this to original state")
+        self.assertEqual(revert.kind, "neural_shape_revert")
+        self.assertEqual(revert.arguments["target"], "this")
+
         brain = parse_intent("revert everything to original state")
         self.assertEqual(brain.kind, "neural_shape_revert_all")
 
