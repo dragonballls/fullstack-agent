@@ -316,7 +316,7 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.type_text", lambda text: self._tool("computer").type_text(text)))
         self.orchestrator.register(Action(Capability.KEYBOARD_CONTROL, "computer.hotkey", lambda *keys: self._tool("computer").hotkey(*keys)))
         self.orchestrator.register(Action(Capability.APP_LAUNCH, "computer.open_app", lambda command, *args: self._tool("computer").open_app(command, *args)))
-        self.orchestrator.register(Action(Capability.APP_LAUNCH, "spatial.open_application", lambda application, embed=True, confirmed=False: self.open_application_spatial(application, embed=embed, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.APP_LAUNCH, "spatial.open_application", lambda application, embed=True, confirmed=False, wait_seconds=10.0: self.open_application_spatial(application, embed=embed, confirmed=confirmed, wait_seconds=wait_seconds)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_list", lambda: self._tool("spatial_windows").list_windows()))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_embed", lambda identifier, x=24, y=24, width=960, height=640, confirmed=False: self._tool("spatial_windows").embed(identifier, x=x, y=y, width=width, height=height, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "spatial.window_unembed", lambda identifier, confirmed=False: self._tool("spatial_windows").unembed(identifier, confirmed=confirmed)))
@@ -400,8 +400,10 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.DEVICE_AUTOMATION, "devices.automate", lambda device_id, steps, **kwargs: self._tool("devices").automate(device_id, steps, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.hand_target", lambda device_id: self._set_hand_target(device_id)))
 
-    def open_application_spatial(self, application: str, *, confirmed: bool = False, embed: bool = True) -> dict[str, object]:
+    def open_application_spatial(self, application: str, *, confirmed: bool = False, embed: bool = True, wait_seconds: float = 10.0) -> dict[str, object]:
         self.policy.check(Capability.APP_LAUNCH)
+        if embed and not confirmed:
+            raise PermissionError("confirmation is required to open an application in spatial mode")
         if self.policy.needs_confirmation(Capability.APP_LAUNCH) and not confirmed:
             raise PermissionError("application launch requires confirmation")
         computer = self._tool("computer")
@@ -418,7 +420,7 @@ class JarvisRuntime:
         except Exception:
             launched = computer.open_app(requested)
             title_hint = requested.casefold()
-        deadline = __import__("time").monotonic() + 10.0
+        deadline = __import__("time").monotonic() + max(0.0, min(60.0, float(wait_seconds)))
         selected = None
         while __import__("time").monotonic() < deadline:
             for item in spatial.list_windows():
