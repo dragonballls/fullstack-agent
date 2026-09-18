@@ -475,6 +475,20 @@ TEXT_INPUT_SCRIPT = r'''
       font-size: 16px;
     }
     #jarvis-text-send:hover { border-color: rgba(143,232,184,.68); background: rgba(61,220,132,.13); }
+    #jarvis-text-float {
+      flex: 0 0 auto;
+      width: 32px;
+      height: 42px;
+      border: 1px solid rgba(143,232,184,.17);
+      border-radius: 9px;
+      color: #7ea698;
+      background: rgba(143,232,184,.025);
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+    }
+    #jarvis-text-float:hover { border-color: rgba(143,232,184,.58); color: #d8ffe8; background: rgba(61,220,132,.08); }
+    #jarvis-text-float:disabled { opacity: .4; cursor: default; }
     #jarvis-text-status {
       margin: 7px 3px 0;
       min-height: 14px;
@@ -503,6 +517,7 @@ TEXT_INPUT_SCRIPT = r'''
     <div id="jarvis-text-label"><span id="jarvis-text-dot"></span>JARVIS TEXT LINK</div>
     <div id="jarvis-text-row">
       <input id="jarvis-text-input" type="text" autocomplete="off" spellcheck="false" placeholder="Hover here and type to talk to Jarvis..." aria-label="Talk to Jarvis by text" disabled />
+      <button id="jarvis-text-float" type="button" aria-label="Detach Jarvis text link into a floating desktop window" title="Detach to a movable desktop window" disabled>↗</button>
       <button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button>
     </div>
     <div id="jarvis-text-status"></div>
@@ -511,6 +526,7 @@ TEXT_INPUT_SCRIPT = r'''
   document.body.appendChild(shell);
 
   const input = shell.querySelector("#jarvis-text-input");
+  const floatButton = shell.querySelector("#jarvis-text-float");
   const send = shell.querySelector("#jarvis-text-send");
   const status = shell.querySelector("#jarvis-text-status");
   let apiReady = false;
@@ -575,10 +591,21 @@ TEXT_INPUT_SCRIPT = r'''
     }
   });
   send.addEventListener("click", function () { submit(false); });
+  floatButton.addEventListener("click", async function () {
+    if (!apiReady || !window.pywebview.api.toggle_text_link) return;
+    try {
+      await window.pywebview.api.toggle_text_link(true);
+      shell.style.display = "none";
+    } catch (error) {
+      status.classList.add("jarvis-error");
+      status.textContent = "FLOAT LINK ERROR: " + String(error);
+    }
+  });
 
   function markReady() {
     apiReady = !!(window.pywebview && window.pywebview.api);
     input.disabled = !apiReady;
+    floatButton.disabled = !apiReady;
     send.disabled = !apiReady;
     if (apiReady) {
       status.textContent = "READY — TEXT LINK ONLINE";
@@ -587,6 +614,16 @@ TEXT_INPUT_SCRIPT = r'''
 
   window.addEventListener("pywebviewready", markReady, { once: true });
   if (window.pywebview && window.pywebview.api) markReady();
+
+  window.jarvisTextInput = {
+    setVisible: function (visible) {
+      shell.style.display = visible ? "" : "none";
+      if (!visible) setActive(false);
+    },
+    focus: function () {
+      if (apiReady) input.focus();
+    }
+  };
 })();
 '''
 
