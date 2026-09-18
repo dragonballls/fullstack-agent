@@ -22,8 +22,8 @@ NEURAL_MESH_BUILTIN = {
 #jn-search{position:absolute;right:24px;top:20px;width:min(340px,36vw);box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:12px;padding:11px 13px;outline:none;color:#dff6ff;background:rgba(2,12,24,.72);box-shadow:0 0 28px rgba(20,130,220,.1);backdrop-filter:blur(10px)}
 #jn-kind,#jn-life{position:absolute;top:63px;width:145px;box-sizing:border-box;padding:7px 8px;border:1px solid rgba(91,190,255,.18);border-radius:9px;color:#88cfff;background:rgba(2,12,24,.68);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.1em;pointer-events:auto;text-transform:uppercase}
 #jn-kind{right:322px}#jn-life{right:165px}
-#jn-kind,#jn-life,#jn-connected{position:absolute;right:24px;box-sizing:border-box;border:1px solid rgba(91,190,255,.18);border-radius:9px;padding:8px 10px;outline:none;color:#9bd9f5;background:rgba(2,12,24,.72);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px)}
-#jn-kind{top:112px;width:150px}#jn-life{top:112px;right:182px;width:140px}#jn-connected{top:150px;width:min(298px,32vw)}
+#jn-kind,#jn-life,#jn-connected,#jn-source,#jn-age{position:absolute;right:24px;box-sizing:border-box;border:1px solid rgba(91,190,255,.18);border-radius:9px;padding:8px 10px;outline:none;color:#9bd9f5;background:rgba(2,12,24,.72);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px)}
+#jn-kind{top:112px;width:150px}#jn-life{top:112px;right:182px;width:140px}#jn-connected{top:150px;width:min(298px,32vw)}#jn-source{top:188px;width:180px}#jn-age{top:188px;right:212px;width:130px}
 #jn-actions{position:absolute;right:24px;top:63px;display:flex;gap:7px;pointer-events:auto;flex-wrap:wrap;justify-content:flex-end;max-width:450px}
 .jn-btn{border:1px solid rgba(91,190,255,.2);border-radius:9px;padding:7px 9px;color:#88cfff;background:rgba(2,12,24,.52);cursor:pointer;font:9px/1.2 Inter,Segoe UI,sans-serif;letter-spacing:.12em;text-transform:uppercase}
 .jn-btn:hover{border-color:rgba(124,210,255,.6);box-shadow:0 0 18px rgba(39,151,239,.1)}
@@ -68,6 +68,8 @@ NEURAL_MESH_BUILTIN = {
   <select id="jn-kind" aria-label="neuron type"><option value="">ALL TYPES</option><option value="application">APPS</option><option value="file">FILES</option><option value="repository">REPOS</option><option value="browser">BROWSERS</option><option value="task">TASKS</option><option value="agent">AGENTS</option><option value="location">LOCATIONS</option><option value="window">WINDOWS</option></select>
   <select id="jn-life" aria-label="neuron lifecycle"><option value="">ALL STATES</option><option value="active">ACTIVE</option><option value="waiting">WAITING</option><option value="dormant">DORMANT</option><option value="failed">FAILED</option></select>
   <input id="jn-connected" autocomplete="off" spellcheck="false" placeholder="Connected to…" />
+  <input id="jn-source" autocomplete="off" spellcheck="false" placeholder="Source…" />
+  <select id="jn-age" aria-label="recency"><option value="">ANY TIME</option><option value="900">15 MIN</option><option value="3600">1 HR</option><option value="86400">24 HR</option><option value="604800">7 DAYS</option></select>
   <select id="jn-kind" aria-label="Neural type filter"><option value="">ALL TYPES</option><option value="file">FILES</option><option value="application">APPS</option><option value="window">WINDOWS</option><option value="page">PAGES</option><option value="repository">REPOS</option><option value="agent">AGENTS</option><option value="task">TASKS</option><option value="memory">MEMORY</option><option value="location">LOCATIONS</option><option value="process">PROCESSES</option></select>
   <select id="jn-life" aria-label="Neural lifecycle filter"><option value="">ALL STATES</option><option value="active">ACTIVE</option><option value="waiting">WAITING</option><option value="mature">MATURE</option><option value="dormant">DORMANT</option><option value="failed">FAILED</option><option value="retired">RETIRED</option></select>
   <div id="jn-actions">
@@ -599,7 +601,9 @@ function buildSearchFilters(){
   return {
     kind:(ui.querySelector("#jn-kind")||{}).value||null,
     lifecycle:(ui.querySelector("#jn-life")||{}).value||null,
-    connected_to:(ui.querySelector("#jn-connected")||{}).value||null
+    connected_to:(ui.querySelector("#jn-connected")||{}).value||null,
+    source:(ui.querySelector("#jn-source")||{}).value||null,
+    updated_within_seconds:Number((ui.querySelector("#jn-age")||{}).value)||null
   };
 }
 async function search(value){
@@ -611,7 +615,7 @@ async function search(value){
     }
     if(!a.neural_search)return;
     const filters=buildSearchFilters();
-    const r=await a.neural_search(value.trim()||"",filters.kind,null,null,filters.lifecycle,filters.connected_to,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
+    const r=await a.neural_search(value.trim()||"",filters.kind,filters.source,null,filters.lifecycle,filters.connected_to,filters.updated_within_seconds,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
   }catch(_){ }
 }
 async function chat(){
@@ -652,6 +656,8 @@ ui.querySelector("#jn-search").addEventListener("input",function(e){clearTimeout
 ui.querySelector("#jn-kind").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
 ui.querySelector("#jn-life").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
 ui.querySelector("#jn-connected").addEventListener("input",function(){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(ui.querySelector("#jn-search").value)},260)});
+ui.querySelector("#jn-source").addEventListener("input",function(){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(ui.querySelector("#jn-search").value)},260)});
+ui.querySelector("#jn-age").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
 ui.querySelector("#jn-follow").addEventListener("click",function(){S.follow=!S.follow;ui.querySelector("#jn-follow").textContent=S.follow?"FOLLOWING":"FOLLOW";});
 ui.querySelector("#jn-map").addEventListener("click",function(){S.minimap=!S.minimap;ui.querySelector("#jn-map").textContent=S.minimap?"MAP ON":"MAP";renderMinimap();});
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
