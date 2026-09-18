@@ -207,6 +207,101 @@ class LiquidEcology:
                 "fluid_environment": "active",
             }
 
+    def create_satellite(self, parent_id: str, *, orbit: float = 0.65) -> dict[str, Any]:
+        with self._lock:
+            parent = self._particles.get(parent_id)
+            if parent is None:
+                raise KeyError(parent_id)
+            self._generation += 1
+            child_id = f"{parent_id}:satellite:{self._generation}"
+            if len(self._particles) >= self.max_particles:
+                return {"id": child_id, "status": "capacity"}
+            phase = _stable(child_id) * math.tau
+            child = LiquidParticle(
+                child_id,
+                parent.position.add(Vector3(math.cos(phase) * float(orbit), math.sin(phase) * 0.18, math.sin(phase) * float(orbit))),
+                mass=parent.mass * 0.15,
+                cohesion=parent.cohesion,
+                elasticity=parent.elasticity,
+                energy=_clamp(parent.energy * 0.55),
+                satellite_of=parent_id,
+            )
+            self._particles[child_id] = child
+            event = {"kind": "satellite", "parent": parent_id, "id": child_id, "orbit": float(orbit)}
+            self._events.append(event)
+            return event
+
+    def filaments(self, *, max_edges: int = 256) -> list[dict[str, Any]]:
+        with self._lock:
+            items = list(self._particles.values())
+            edges: list[dict[str, Any]] = []
+            for index, left in enumerate(items):
+                if len(edges) >= max_edges:
+                    break
+                nearest: tuple[float, LiquidParticle] | None = None
+                for right in items[index + 1:]:
+                    dx = left.position.x - right.position.x
+                    dy = left.position.y - right.position.y
+                    dz = left.position.z - right.position.z
+                    distance = math.sqrt(dx * dx + dy * dy + dz * dz)
+                    if nearest is None or distance < nearest[0]:
+                        nearest = (distance, right)
+                if nearest is not None:
+                    distance, right = nearest
+                    edges.append({
+                        "source": left.id,
+                        "target": right.id,
+                        "length": round(distance, 6),
+                        "tension": _clamp(1.0 - distance / 8.0),
+                        "thickness": 0.02 + _clamp(left.energy + right.energy) * 0.08,
+                    })
+            return edges
+
+    def magnetic_relationship(self, source_id: str, target_id: str, *, polarity: float = 1.0, strength: float = 0.8) -> dict[str, Any]:
+        with self._lock:
+            source = self._particles.get(source_id)
+            target = self._particles.get(target_id)
+            if source is None or target is None:
+                raise KeyError("magnetic endpoints must exist")
+            delta = target.position.add(source.position.scale(-1.0))
+            distance = max(0.05, delta.length())
+            normalized = delta.normalized()
+            signed = 1.0 if float(polarity) >= 0 else -1.0
+            force = _clamp(strength) * signed / (distance * distance)
+            source.velocity = source.velocity.add(normalized.scale(force * 0.08))
+            target.velocity = target.velocity.add(normalized.scale(-force * 0.08))
+            event = {"kind": "magnetic", "source": source_id, "target": target_id, "polarity": signed, "strength": _clamp(strength), "force": force}
+            self._events.append(event)
+            return event
+
+    def growth_sequence(self, parent_id: str, *, steps: int = 5) -> list[dict[str, Any]]:
+        with self._lock:
+            particle = self._particles.get(parent_id)
+            if particle is None:
+                raise KeyError(parent_id)
+            sequence = []
+            for index in range(max(2, min(16, int(steps)))):
+                progress = (index + 1) / max(2, min(16, int(steps)))
+                sequence.append({"kind": "growth", "id": parent_id, "phase": index + 1, "progress": progress, "scale": 0.45 + progress * 0.55, "energy": _clamp(particle.energy + progress * 0.15)})
+            self._events.extend(sequence[-8:])
+            return sequence
+
+    def apoptosis_sequence(self, particle_id: str, *, steps: int = 6) -> list[dict[str, Any]]:
+        with self._lock:
+            particle = self._particles.get(particle_id)
+            if particle is None:
+                raise KeyError(particle_id)
+            count = max(2, min(16, int(steps)))
+            sequence = [{"kind": "apoptosis", "id": particle_id, "phase": index + 1, "progress": (index + 1) / count, "opacity": max(0.0, 1.0 - (index + 1) / count)} for index in range(count)]
+            particle.state = "apoptosing"
+            particle.energy = 0.0
+            self._events.extend(sequence[-8:])
+            return sequence
+
+    def activity_current(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [{"id": p.id, "magnitude": round(_clamp(p.energy) * min(1.0, p.velocity.length() / 4.0 + 0.1), 6), "direction": p.velocity.normalized().as_dict()} for p in self._particles.values()]
+
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
@@ -416,6 +511,41 @@ class SpatialWorkspace:
             cols = max(1, round(math.sqrt(max(1, len(surface_ids)))))
             return self.tile(surface_ids, columns=cols, cell_width=width / cols - 20, cell_height=height / max(1, math.ceil(len(surface_ids) / cols)) - 20, gap=20)
 
+    def jiggle(self, surface_id: str, *, impulse: float = 0.35, phase: float = 0.0) -> dict[str, Any]:
+        with self._lock:
+            surface = self._surfaces[surface_id]
+            surface.position = surface.position.add(Vector3(math.sin(float(phase)) * impulse, math.cos(float(phase) * 1.13) * impulse, 0.0))
+            surface.rotation = surface.rotation.add(Vector3(0.0, 0.0, math.sin(float(phase)) * impulse * 0.08))
+            return surface.as_dict()
+
+    def elastic_move(self, surface_id: str, target: Vector3, *, stiffness: float = 0.35) -> dict[str, Any]:
+        with self._lock:
+            surface = self._surfaces[surface_id]
+            alpha = _clamp(stiffness)
+            surface.position = surface.position.add(target.add(surface.position.scale(-1.0)).scale(alpha))
+            return surface.as_dict()
+
+    def tether(self, surface_id: str, anchor_id: str, *, rest_length: float = 120.0, stiffness: float = 0.4) -> dict[str, Any]:
+        with self._lock:
+            surface = self._surfaces[surface_id]
+            surface.anchored_to = str(anchor_id)
+            surface.tether = {"anchor": str(anchor_id), "rest_length": max(0.0, float(rest_length)), "stiffness": _clamp(stiffness)}
+            return surface.as_dict()
+
+    def freeform(self, surface_id: str, *, position: Vector3 | None = None, rotation: Vector3 | None = None, scale: Vector3 | None = None) -> dict[str, Any]:
+        with self._lock:
+            surface = self._surfaces[surface_id]
+            if position is not None: surface.position = position
+            if rotation is not None: surface.rotation = rotation
+            if scale is not None: surface.scale = scale
+            return surface.as_dict()
+
+    def navigate_wall(self, display_id: str, *, dx: float = 0.0, dy: float = 0.0) -> dict[str, Any]:
+        with self._lock:
+            display = self._displays.setdefault(str(display_id), {"id": str(display_id), "width": 1920, "height": 1080, "connected": True})
+            display["camera_offset"] = {"x": float(display.get("camera_offset", {}).get("x", 0.0)) + float(dx), "y": float(display.get("camera_offset", {}).get("y", 0.0)) + float(dy)}
+            return dict(display)
+
     def detach(self, surface_id: str) -> dict[str, Any]:
         with self._lock:
             surface = self._surfaces[surface_id]
@@ -608,6 +738,39 @@ class PerformanceIntelligence:
             "gpu_assignment_policy": "prefer_discrete_for_interactive" if gpu_pressure < 0.85 else "prefer_integrated_for_background",
             "display_refresh_target_hz": 60 if pressure >= 0.75 else 120,
         }
+
+    def resource_heatmap(self, metric: str = "frame_ms", bins: int = 12) -> dict[str, Any]:
+        with self._lock:
+            values = [getattr(item, str(metric), None) for item in self.samples]
+            numeric = [float(value) for value in values if value is not None]
+            count = max(1, min(32, int(bins)))
+            if not numeric:
+                return {"metric": str(metric), "bins": [0.0] * count, "count": 0}
+            low, high = min(numeric), max(numeric)
+            span = max(1e-9, high - low)
+            buckets = [0] * count
+            for value in numeric:
+                index = min(count - 1, int((value - low) / span * count))
+                buckets[index] += 1
+            return {"metric": str(metric), "min": low, "max": high, "bins": buckets, "count": len(numeric)}
+
+    def regression_alerts(self, *, frame_limit_ms: float = 33.4, ram_growth_limit: float = 10.0) -> list[dict[str, Any]]:
+        with self._lock:
+            alerts = []
+            frames = [s.frame_ms for s in self.samples if s.frame_ms is not None]
+            if frames and statistics.fmean(frames[-min(20, len(frames)):]) > float(frame_limit_ms):
+                alerts.append({"kind": "frame_time", "threshold": float(frame_limit_ms), "current": statistics.fmean(frames[-min(20, len(frames)):])})
+            rams = [s.ram for s in self.samples if s.ram is not None]
+            if len(rams) >= 2 and rams[-1] - rams[0] >= float(ram_growth_limit):
+                alerts.append({"kind": "ram_growth", "threshold": float(ram_growth_limit), "delta": rams[-1] - rams[0]})
+            return alerts
+
+    def baseline_comparison(self, name: str, current: float) -> dict[str, Any]:
+        before = self.baselines.get(str(name))
+        result = {"name": str(name), "baseline": before, "current": float(current)}
+        result["delta"] = None if before is None else float(current) - before
+        result["regression"] = None if before is None else float(current) > before
+        return result
 
     def analytics(self) -> dict[str, Any]:
         with self._lock:
