@@ -1,5 +1,6 @@
 import unittest
 
+from quality_of_life.neural_world import NeuralWorld
 from quality_of_life.capabilities import OPERATION_CATALOG
 from quality_of_life.neural_advanced import (
     FEATURES,
@@ -63,7 +64,6 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         self.assertEqual(death["kind"], "apoptosis")
 
     def test_core_physics_commands(self):
-        from quality_of_life.neural_world import NeuralWorld
         world = NeuralWorld()
         world.advanced.liquid.seed([{"id": "core-a", "position": (0, 0, 0), "energy": 0.9}, {"id": "core-b", "position": (1, 0, 0), "energy": 0.6}])
         reorganized = world.neural_advanced_command("core", "reorganize", {"priorities": {"coding": 0.9, "browser": 0.4}})
@@ -177,7 +177,7 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
     def test_master_behavior_level_verification_is_exhaustive(self):
         runtime = NeuralAdvancedRuntime()
         contract = runtime.behavioral_verification()
-        self.assertGreater(contract["total"], 150)
+        self.assertEqual(contract["total"], 285)
         verification = runtime.verify_all_master_features()
         self.assertEqual(verification["status"], "pass", verification["failures"])
         self.assertEqual(verification["failed"], 0)
@@ -188,7 +188,7 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         status = runtime.master_scope_status()
         self.assertEqual(status["status"], "100%_added")
         self.assertEqual(status["missing"], [])
-        self.assertGreater(status["total"], 150)
+        self.assertEqual(status["total"], 285)
 
         smoke = runtime.master_smoke_test()
         self.assertEqual(smoke["status"], "pass", smoke["failures"])
