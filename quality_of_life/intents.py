@@ -34,6 +34,7 @@ _DEVICE_SCREEN = re.compile(r"^(?:show|view)\s+(?:me\s+)?(?:(?:my|the)\s+)?(?:ph
 _OBSERVE_START = re.compile(r"^(?:show|let\s+me\s+see|walk\s+me\s+through|take\s+me\s+through)\s+(?:what\s+(?:you['’]?re|you\s+are)\s+doing|your\s+process|the\s+process|what\s+you\s+are\s+working\s+on)(?:\s+(.+))?$", re.IGNORECASE)
 _OBSERVE_STOP = re.compile(r"^(?:stop|hide|close)\s+(?:the\s+)?(?:live\s+)?(?:process|observation|activity\s+view)$|^(?:stop|hide)\s+showing\s+me\s+(?:what\s+you['’]?re|what\s+you\s+are)\s+doing$", re.IGNORECASE)
 _SHAPE = re.compile(r"^(?:make|turn|change)\s+(?:the\s+)?(.+?)\s+(?:neuron|node)?\s*(?:into|as)\s+(.+)$", re.IGNORECASE)
+_SPATIAL_OPEN = re.compile(r"^(?:open|launch|start|put)\s+(?:the\s+)?(.+?)\s+(?:in|inside|within)\s+(?:the\s+)?(?:3d\s+)?(?:space|spatial\s+space|jarvis\s+space|neural\s+space)$", re.IGNORECASE)
 
 
 def parse_intent(text: str) -> Intent:
@@ -41,6 +42,9 @@ def parse_intent(text: str) -> Intent:
     if not value:
         return Intent("chat", {"text": ""})
     lowered = value.casefold()
+    match = _SPATIAL_OPEN.match(value)
+    if match:
+        return Intent("spatial_open", {"application": match.group(1).strip()})
     match = _OBSERVE_START.match(value)
     if match:
         return Intent("neural_observe_start", {"focus": (match.group(1) or "").strip() or "auto", "reason": value})
