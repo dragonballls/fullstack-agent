@@ -186,7 +186,7 @@ class ActivityStore:
             raise KeyError(f"unknown activity: {activity_id}") from exc
 
     def _trim(self) -> None:
-        while len(self._records) > self.max_records:
+        while len(self._records) >= self.max_records:
             removed = False
             for activity_id, record in self._records.items():
                 if record.status in _TERMINAL:
