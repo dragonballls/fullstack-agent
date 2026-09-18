@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Protocol
 from urllib.parse import quote
+from .location_providers import LocationProviderRegistry
 
 
 @dataclass(frozen=True)
