@@ -82,7 +82,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 
 const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,
-  localOffsets:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
+  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
   quality:"maximum",mode:"foreground",view:"network",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,observation:{enabled:false,focus:"auto"},
@@ -223,6 +223,40 @@ function activeNodes(){
     return(b.energy||0)-(a.energy||0)+(da-db)*.0005;
   }).slice(0,max);
 }
+function simulateFluid(dt,nodes){
+  if(S.mode==="background"||S.quality==="minimal"||S.dragNode)return;
+  const step=Math.min(34,Math.max(0,dt))*.0015;
+  const maxPairs=12000;
+  const cellSize=1.8,grid=new Map(),positions=new Map();
+  nodes.forEach(function(n){
+    const p=nodePosition(n),key=Math.floor(p[0]/cellSize)+":"+Math.floor(p[1]/cellSize)+":"+Math.floor(p[2]/cellSize);
+    if(!grid.has(key))grid.set(key,[]);grid.get(key).push(n);positions.set(n.id,p);
+  });
+  let pairs=0;
+  nodes.forEach(function(n){
+    const base=n.position,o=S.localOffsets.get(n.id)||[0,0,0],p=positions.get(n.id),v=S.velocities.get(n.id)||[0,0,0];
+    let fx=-o[0]*1.65,fy=-o[1]*1.65,fz=-o[2]*1.65;
+    const gx=Math.floor(p[0]/cellSize),gy=Math.floor(p[1]/cellSize),gz=Math.floor(p[2]/cellSize);
+    for(let ix=-1;ix<=1;ix++)for(let iy=-1;iy<=1;iy++)for(let iz=-1;iz<=1;iz++){
+      const bucket=grid.get((gx+ix)+":"+(gy+iy)+":"+(gz+iz));if(!bucket)continue;
+      for(const other of bucket){
+        if(other.id===n.id||pairs>=maxPairs)continue;
+        const q=positions.get(other.id),dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],d=Math.hypot(dx,dy,dz);
+        if(d>0&&d<1.55){
+          const push=(1.55-d)*1.9/d;fx+=dx*push;fy+=dy*push;fz+=dz*push;pairs++;
+        }else if(d>1.55&&d<4.2&&other.kind===n.kind){
+          const pull=(d-1.55)*.035;fx-=dx*pull;fy-=dy*pull;fz-=dz*pull;
+        }
+      }
+    }
+    v[0]=(v[0]+fx*step)*.93;v[1]=(v[1]+fy*step)*.93;v[2]=(v[2]+fz*step)*.93;
+    const next=[o[0]+v[0]*step*18,o[1]+v[1]*step*18,o[2]+v[2]*step*18];
+    const mag=Math.hypot(...next);
+    const cap=.95;
+    if(mag>cap){next[0]*=cap/mag;next[1]*=cap/mag;next[2]*=cap/mag;}
+    S.velocities.set(n.id,v);S.localOffsets.set(n.id,next);
+  });
+}
 function resize(){
   const dpr=Math.min(window.devicePixelRatio||1,S.quality==="maximum"?1.5:1.0),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}
@@ -235,6 +269,7 @@ function render(now){
   if(S.mode==="foreground"&&S.frameMs>28)S.quality="performance";
   if(S.mode==="foreground"&&S.frameMs<18&&S.nodes.length<800)S.quality="maximum";
   resize();
+  const nodesForPhysics=activeNodes();simulateFluid(dt,nodesForPhysics);
   const c=camera(),aspect=canvas.width/Math.max(1,canvas.height),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
   perspective(proj,Math.PI/3,aspect,.05,2000);lookAt(view,c.eye,S.target);multiply(mvp,proj,view);
   gl.clearColor(0,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
