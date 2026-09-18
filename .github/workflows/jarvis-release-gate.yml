@@ -163,6 +163,7 @@ jobs:
         shell: pwsh
         env:
           JARVIS_ALLOW_HEADLESS_GUI: '1'
+          JARVIS_UI_SMOKE: '1'
         run: ./scripts/verify_windows_gui_smoke.ps1
       - name: Generate signed Jarvis.exe build attestation
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
