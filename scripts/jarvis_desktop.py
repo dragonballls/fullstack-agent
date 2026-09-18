@@ -764,9 +764,13 @@ class FullstackJarvisHost:
             if x is not None and y is not None:
                 kwargs["x"], kwargs["y"] = x, y
             self._floating_window = webview.create_window(**kwargs)
-            self._floating_window.events.moved += self._on_floating_moved
-            self._floating_window.events.closing += self._on_floating_closing
-            self._floating_window.events.loaded += self._on_floating_loaded
+            events = getattr(self._floating_window, "events", None)
+            if events is not None:
+                events.moved += self._on_floating_moved
+                events.closing += self._on_floating_closing
+                events.loaded += self._on_floating_loaded
+            else:
+                LOGGER.debug("floating command bar mock window exposes no event container")
             LOGGER.info("floating command bar window object created; hotkey=%s", FLOATING_HOTKEY_LABEL)
             return self._floating_window
 
