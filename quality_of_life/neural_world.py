@@ -732,6 +732,70 @@ class NeuralWorldBridgeMixin:
     def neural_advanced_snapshot_from_world(self) -> dict[str, object]:
         return self._advanced.snapshot()
 
+
+    def neural_advanced_command(self, domain: str, operation: str, payload: Mapping[str, object] | None = None) -> dict[str, object]:
+        data = dict(payload or {})
+        op = str(operation)
+        if domain == "workspace":
+            return self._advanced.command_workspace(op, data)
+        if domain == "cross_application":
+            if op == "suggest":
+                return {"suggestions": self._advanced.cross_app.suggest(str(data["kind"]), str(data["source"]), destinations=[str(v) for v in data.get("destinations", [])])}
+            if op == "transfer":
+                return self._advanced.cross_app.transfer(str(data["kind"]), str(data["source"]), str(data["destination"]), str(data.get("payload_ref")) if data.get("payload_ref") else None)
+        if domain == "performance":
+            if op == "sample": return self._advanced.performance.sample(**data)
+            if op == "cost": return self._advanced.performance.cost(windows=data.get("windows"), neurons=data.get("neurons"))
+            if op == "compare": return self._advanced.performance.compare(str(data["name"]), float(data["before"]), float(data["after"]))
+            if op == "policy": return self._advanced.performance.optimization_policy(**{key: float(value) for key, value in data.items() if key in {"gpu_pressure", "cpu_pressure", "ram_pressure", "battery", "thermal"}})
+        if domain == "display":
+            if op == "update": return self._advanced.displays.upsert(str(data["id"]), **dict(data.get("state", {})))
+            if op == "disconnect": return self._advanced.displays.disconnect(str(data["id"]))
+            if op == "reconnect": return self._advanced.displays.reconnect(str(data["id"]), **dict(data.get("state", {})))
+            if op == "save": return self._advanced.displays.save_arrangement()
+        if domain in {"browser", "game"}:
+            if op == "learn": return self._advanced.profile_learning(domain, str(data["name"]), **dict(data.get("metrics", {})))
+            if op == "migrate": return self._advanced.browser_games.migrate_profile(domain, str(data["name"]), str(data["version"]))
+            if domain == "browser" and op == "research_wall": return self._advanced.browser_games.research_wall(str(data["id"]), [str(v) for v in data.get("pages", [])], columns=int(data.get("columns", 3)))
+            if domain == "browser" and op == "reconstruct": return self._advanced.browser_games.reconstruct_browser_session(str(data["id"]), [str(v) for v in data.get("pages", [])], layout=str(data.get("layout", "side-by-side")))
+        if domain == "history":
+            if op == "bookmark": return self._advanced.history.bookmark(str(data["name"]), dict(data.get("payload", {})))
+            if op == "snapshot": return self._advanced.history.save_snapshot(str(data["id"]), dict(data.get("world", {})))
+            if op == "decay": return self._advanced.history.decay_relationships(float(data.get("half_life_seconds", 86400)))
+            if op == "prune": return self._advanced.history.prune(int(data.get("keep_recent", 128)))
+            if op == "time_machine": return self._advanced.time_machine(compare=(str(data.get("left")), str(data.get("right"))) if data.get("left") and data.get("right") else None, replay_id=str(data.get("replay_id")) if data.get("replay_id") else None)
+        if domain == "planning":
+            if op == "dry_run": return self._advanced.planner.dry_run(list(data.get("actions", [])), known_good=data.get("known_good"))
+            if op == "restore": return self._advanced.planner.restore(str(data["simulation_id"])) or {"restored": False}
+        if domain == "reliability":
+            if op == "sleep": return self._advanced.reliability.sleep()
+            if op == "wake": return self._advanced.reliability.wake()
+            if op == "monitor_change": return self._advanced.reliability.monitor_changed()
+            if op in {"reset", "region_reset"}: return self._advanced.reliability.reset(str(data.get("region")) if data.get("region") else None)
+            if op == "migrate": return self._advanced.reliability.migrate(dict(data.get("payload", {})), int(data.get("from_version", 1)))
+        if domain == "inspect":
+            return self._advanced.inspect()
+        if domain == "remote":
+            if op == "upsert": return self._advanced.remote.upsert(str(data["id"]), **dict(data.get("state", {})))
+            if op == "reconnect": return self._advanced.remote.reconnect(str(data["id"]))
+        if domain == "accessibility":
+            return self._advanced.xr_accessibility.update(**data)
+        if domain == "audio":
+            if op == "event": return self._advanced.audio.emit(str(data["kind"]), source=str(data.get("source", "jarvis")), position=data.get("position"), intensity=float(data.get("intensity", .5)), priority=float(data.get("priority", .5)))
+            if op == "policy": return self._advanced.audio.policy(game_active=bool(data.get("game_active", False)), performance_pressure=float(data.get("performance_pressure", 0)))
+        if domain == "multi_user":
+            if op == "profile": return self._advanced.multi_user.profile(str(data["id"]), **dict(data.get("preferences", {})))
+            if op == "region": return self._advanced.multi_user.region(str(data["id"]), owner=str(data["owner"]), shared=bool(data.get("shared", False)), members=[str(v) for v in data.get("members", [])])
+            if op == "resource": return self._advanced.multi_user.resource(str(data["id"]), owner=str(data["owner"]), shared=bool(data.get("shared", False)), controls=dict(data.get("controls", {})))
+        if domain == "streaming":
+            if op == "request": return self._advanced.streaming.request(str(data["id"]), priority=float(data.get("priority", .5)))
+            if op == "pump": return self._advanced.streaming.pump(int(data.get("budget", 4)))
+            if op == "unload": return self._advanced.streaming.unload(str(data["id"]))
+        if domain == "simulation":
+            if op == "generate": return self._advanced.simulation.generate(**{key: int(value) for key, value in data.items() if key in {"neurons", "windows", "tasks", "relationships"}})
+            if op == "benchmark": return self._advanced.simulation_run(str(data.get("scenario", "cpu_stress")), count=int(data.get("count", 1000)))
+        raise ValueError(f"unknown advanced command: {domain}.{operation}")
+
     def _refresh_real_windows(self) -> None:
         for window in self._spatial_windows.list_windows():
             handle = str(window.get("handle"))
