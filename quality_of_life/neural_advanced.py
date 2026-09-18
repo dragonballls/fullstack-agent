@@ -1366,6 +1366,26 @@ class WorldStreamer:
             self.cache[rid] = item
         return {"id": rid, "status": "cached" if item is not None else "absent"}
 
+    def start_worker(self, interval: float = 0.05) -> bool:
+        if self._worker is not None and self._worker.is_alive():
+            return False
+        self._worker_stop.clear()
+        def run() -> None:
+            while not self._worker_stop.wait(max(0.01, float(interval))):
+                self.pump(8)
+        self._worker = threading.Thread(target=run, name="jarvis-advanced-stream", daemon=True)
+        self._worker.start()
+        return True
+
+    def stop_worker(self) -> bool:
+        worker = self._worker
+        self._worker_stop.set()
+        self._worker = None
+        if worker is None:
+            return False
+        worker.join(timeout=1.0)
+        return True
+
     def snapshot(self) -> dict[str, Any]:
         return {"loaded": list(self.loaded.values()), "cache": list(self.cache.values()), "pending": list(self.pending), "max_regions": self.max_regions, "spatial_index_cells": len(self.index_cells), "async_worker": bool(self._worker and self._worker.is_alive())}
 
