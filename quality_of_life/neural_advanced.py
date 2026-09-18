@@ -112,6 +112,7 @@ class LiquidEcology:
                 raise KeyError(f"unknown liquid cell: {parent_id}")
             children: list[dict[str, Any]] = []
             self._generation += 1
+            animation = ["membrane", "split", "bud", "separate", "stabilize"]
             for index in range(max(1, min(4, int(count)))):
                 if len(self._particles) >= self.max_particles:
                     break
@@ -123,7 +124,7 @@ class LiquidEcology:
                     cohesion=parent.cohesion, elasticity=parent.elasticity,
                     energy=_clamp(parent.energy * 0.82), state="growing",
                 )
-                event = {"kind": "mitosis", "phase": "complete", "parent": parent_id, "child": child_id, "generation": self._generation}
+                event = {"kind": "mitosis", "phase": "complete", "animation": animation, "parent": parent_id, "child": child_id, "generation": self._generation}
                 self._events.append(event)
                 children.append(event)
             return children
@@ -154,7 +155,7 @@ class LiquidEcology:
             )
             source.position = source.position.add(midpoint.add(source.position.scale(-1.0)).scale(0.06 * _clamp(strength)))
             target.position = target.position.add(midpoint.add(target.position.scale(-1.0)).scale(0.06 * _clamp(strength)))
-            event = {"kind": "reconnect", "source": source_id, "target": target_id, "strength": _clamp(strength)}
+            event = {"kind": "reconnect", "phases": ["detach", "seek", "reform", "stabilize"], "source": source_id, "target": target_id, "strength": _clamp(strength)}
             self._events.append(event)
             return event
 
@@ -206,6 +207,19 @@ class LiquidEcology:
                 "local_turbulence": _clamp(turbulence),
                 "fluid_environment": "active",
             }
+
+    def reorganize_core(self, priorities: Mapping[str, float]) -> dict[str, Any]:
+        with self._lock:
+            ranked = sorted(((str(key), _clamp(value)) for key, value in priorities.items()), key=lambda item: (-item[1], item[0]))[:64]
+            total = sum(weight for _, weight in ranked) or 1.0
+            targets = []
+            for index, (key, weight) in enumerate(ranked):
+                angle = math.tau * index / max(1, len(ranked))
+                radius = 1.0 + 2.5 * (1.0 - weight / total)
+                targets.append({"priority": key, "weight": weight, "target": [round(math.cos(angle) * radius, 6), round(math.sin(angle) * radius, 6), round(weight * 2.0, 6)]})
+            event = {"kind": "core.reorganization", "priorities": targets, "timestamp": _now()}
+            self._events.append(event)
+            return event
 
     def create_satellite(self, parent_id: str, *, orbit: float = 0.65) -> dict[str, Any]:
         with self._lock:
@@ -1355,7 +1369,7 @@ class NeuralAdvancedRuntime:
         physics = self.liquid.step(dt, activity=activity)
         policy = self.performance.optimization_policy()
         self._optimization_history.append({"timestamp": _now(), "policy": policy})
-        return {"physics": physics, "policy": policy, "timestamp": _now()}
+        return {"physics": physics, "satellite_particles": sum(1 for p in self.liquid.snapshot()["particles"] if p.get("satellite_of")), "policy": policy, "timestamp": _now()}
 
     def command_workspace(self, operation: str, payload: Mapping[str, Any]) -> dict[str, Any]:
         op = str(operation)
@@ -1387,6 +1401,16 @@ class NeuralAdvancedRuntime:
             return self.workspace.attach(str(payload["id"]), display_id=payload.get("display_id"))
         if op == "restore":
             return {"surfaces": self.workspace.restore_visible(list(payload.get("members", [])))}
+        if op == "jiggle":
+            return self.workspace.jiggle(str(payload["id"]), impulse=float(payload.get("impulse", 0.35)), phase=float(payload.get("phase", 0.0)))
+        if op == "elastic_move":
+            return self.workspace.elastic_move(str(payload["id"]), Vector3(*map(float, payload.get("target", (0, 0, 0)))), stiffness=float(payload.get("stiffness", 0.35)))
+        if op == "tether":
+            return self.workspace.tether(str(payload["id"]), str(payload["anchor"]), rest_length=float(payload.get("rest_length", 120.0)), stiffness=float(payload.get("stiffness", 0.4)))
+        if op == "freeform":
+            return self.workspace.freeform(str(payload["id"]), position=Vector3(*map(float, payload["position"])) if payload.get("position") is not None else None, rotation=Vector3(*map(float, payload["rotation"])) if payload.get("rotation") is not None else None, scale=Vector3(*map(float, payload["scale"])) if payload.get("scale") is not None else None)
+        if op == "monitor_wall_navigate":
+            return self.workspace.navigate_wall(str(payload["display_id"]), dx=float(payload.get("dx", 0.0)), dy=float(payload.get("dy", 0.0)))
         if op == "collision":
             return self.workspace.collision_report()
         raise ValueError(f"unknown workspace operation: {operation}")
