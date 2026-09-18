@@ -1266,7 +1266,6 @@ class NeuralAdvancedRuntime:
     def optimize(self, name: str, *, before: float, after: float, strategy: str) -> dict[str, Any]:
         result = self.performance.compare(name, before, after)
         item = {"timestamp": _now(), "name": str(name), "strategy": str(strategy), "measurement": result}
-        self._optimization_history.append(item)
         if result["after"] > result["before"]:
             item["rollback_recommended"] = True
         else:
