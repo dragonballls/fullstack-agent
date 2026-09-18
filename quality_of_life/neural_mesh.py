@@ -151,7 +151,7 @@ const earthProg=program(
 precision highp float;
 layout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;
 uniform mat4 uMvp;uniform mat4 uModel;out vec3 vPos;out vec3 vNormal;
-void main(){vPos=aPos;vNormal=mat3(uModel)*aNormal;gl_Position=uMvp*uModel*vec4(aPos,1.);`,
+void main(){vPos=aPos;vNormal=mat3(uModel)*aNormal;gl_Position=uMvp*uModel*vec4(aPos,1.);}`,
 `#version 300 es
 precision highp float;
 in vec3 vPos;in vec3 vNormal;out vec4 outColor;
