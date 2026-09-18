@@ -412,7 +412,7 @@ class PerformanceGovernor:
         return self._controller.snapshot()
 
 def _safe_window_dict(window: Mapping[str, object]) -> dict[str, object]:
-    allowed = ("handle", "title", "process_id", "rect", "visible", "minimized", "presentation")
+    allowed = ("handle", "title", "process_id", "rect", "visible", "minimized", "presentation", "embedded")
     return {key: window.get(key) for key in allowed if key in window}
 
 
@@ -428,7 +428,14 @@ class NeuralWorldBridgeMixin:
         snapshot = self._neural_world.snapshot(limit=limit)
         try:
             self._refresh_real_windows()
-            snapshot["windows"] = [_safe_window_dict(item) for item in self._spatial_windows.list_windows()]
+            snapshot["windows"] = []
+            for item in self._spatial_windows.list_windows():
+                safe = _safe_window_dict(item)
+                try:
+                    safe["embedded"] = bool(self._spatial_windows.embedding_state(int(item["handle"])).get("embedded", False))
+                except Exception:
+                    safe["embedded"] = False
+                snapshot["windows"].append(safe)
         except (PermissionError, RuntimeError, OSError):
             snapshot["windows"] = []
         snapshot["performance"] = self._performance.detail()
@@ -544,7 +551,15 @@ class NeuralWorldBridgeMixin:
     def spatial_windows_catalog(self) -> list[dict[str, object]]:
         try:
             self._refresh_real_windows()
-            return [_safe_window_dict(item) for item in self._spatial_windows.list_windows()]
+            results = []
+            for item in self._spatial_windows.list_windows():
+                safe = _safe_window_dict(item)
+                try:
+                    safe["embedded"] = bool(self._spatial_windows.embedding_state(int(item["handle"])).get("embedded", False))
+                except Exception:
+                    safe["embedded"] = False
+                results.append(safe)
+            return results
         except (PermissionError, RuntimeError, OSError):
             return []
 
@@ -559,6 +574,12 @@ class NeuralWorldBridgeMixin:
     def spatial_window_visibility(self, handle: int, visible: bool) -> dict[str, object]:
         self._spatial_windows.set_visible(int(handle), bool(visible), confirmed=True)
         return {"ok": True, "handle": int(handle), "visible": bool(visible)}
+
+    def spatial_unembed_all(self) -> dict[str, object]:
+        method = getattr(self._spatial_windows, "unembed_all", None)
+        if not callable(method):
+            return {"ok": False, "results": []}
+        return {"ok": True, "results": method(confirmed=True)}
 
     def spatial_window_capture(self, handle: int, max_width: int = 720) -> dict[str, object]:
         return {"ok": True, "handle": int(handle), "png_base64": self._spatial_windows.capture_png(int(handle), max_width=max_width)}
