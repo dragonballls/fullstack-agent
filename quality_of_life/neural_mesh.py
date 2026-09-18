@@ -103,7 +103,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
-  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
+  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
