@@ -40,7 +40,8 @@ NEURAL_MESH_BUILTIN = {
 #jn-chat button{width:44px;height:40px}
 #jn-help{position:absolute;left:50%;bottom:128px;transform:translateX(-50%);color:rgba(120,178,208,.56);font-size:8px;letter-spacing:.13em;pointer-events:none;white-space:nowrap}
 #jn-perf{position:absolute;bottom:22px;right:24px;font-size:8px;color:#438eb9;letter-spacing:.12em;pointer-events:none}
-#jn-surfaces{position:absolute;inset:0;pointer-events:none;perspective:1600px;transform-style:preserve-3d;overflow:hidden}
+#jn-surfaces{position:absolute;inset:0;pointer-events:none;perspective:1600px;transform-style:preserve-3d;overflow:hidden;transition:perspective .25s ease}
+#jn-surfaces.flat-2d{perspective:none;transform-style:flat}
 .jn-spatial-window{position:absolute;left:0;top:0;width:360px;height:250px;transform-style:preserve-3d;pointer-events:auto;border:1px solid rgba(92,200,255,.25);border-radius:14px;background:rgba(4,16,30,.62);box-shadow:0 18px 70px rgba(0,0,0,.42),0 0 32px rgba(31,151,238,.09),inset 0 0 24px rgba(37,155,232,.05);overflow:hidden;backdrop-filter:blur(7px)}
 .jn-spatial-window.giant{width:740px;height:470px}
 .jn-spatial-window.shape-circle{border-radius:50%}.jn-spatial-window.shape-oval{border-radius:48%}.jn-spatial-window.shape-pill{border-radius:999px}.jn-spatial-window.shape-hex{clip-path:polygon(25% 4%,75% 4%,98% 50%,75% 96%,25% 96%,2% 50%)}.jn-spatial-window.shape-diamond{clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)}.jn-spatial-window.shape-triangle{clip-path:polygon(50% 0%,100% 100%,0% 100%)}.jn-spatial-window.shape-star{clip-path:polygon(50% 0%,61% 36%,98% 36%,68% 58%,79% 100%,50% 74%,21% 100%,32% 58%,2% 36%,39% 36%)}
@@ -66,6 +67,7 @@ NEURAL_MESH_BUILTIN = {
     <button class="jn-btn" id="jn-home">CORE</button>
   <button class="jn-btn" id="jn-trace">TRACE</button>
     <button class="jn-btn" id="jn-earth">EARTH</button>
+    <button class="jn-btn" id="jn-mode">3D</button>
     <button class="jn-btn" id="jn-windows">WINDOWS</button>
     <button class="jn-btn" id="jn-giant">GIANT</button>
     <button class="jn-btn" id="jn-perf-btn">PERF</button>
@@ -92,7 +94,7 @@ const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
-  quality:"maximum",mode:"foreground",view:"network",frozen:false,giant:false,showWindows:true,
+  quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),
@@ -519,6 +521,13 @@ async function preview(info,el,index){
   const a=api();if(!a||!a.spatial_window_capture)return;
   try{const cap=await a.spatial_window_capture(Number(info.handle),S.giant?1000:720);if(!cap||!cap.png_base64)return;const img=document.createElement("img");img.className="jn-window-preview";img.alt="";img.src="data:image/png;base64,"+cap.png_base64;const old=el.querySelector(".jn-window-empty,.jn-window-preview");if(old)old.replaceWith(img);}catch(_){}
 }
+function setSurfaceMode(mode){
+  S.surfaceMode=mode==="2d"?"2d":"3d";
+  const layer=ui.querySelector("#jn-surfaces");
+  layer.classList.toggle("flat-2d",S.surfaceMode==="2d");
+  ui.querySelector("#jn-mode").textContent=S.surfaceMode.toUpperCase();
+  renderSpatialWindows();
+}
 function surfaceShapeClass(shape){const n=String(shape&&shape.name||"rectangle").toLowerCase();const m={circle:"circle",sphere:"circle",oval:"oval",pill:"pill",hexagon:"hex",hex:"hex",diamond:"diamond",triangle:"triangle",star:"star"};return m[n]||"";}
 function applySurfaceTransform(el){
   const x=Number(el.dataset.x)||0,y=Number(el.dataset.y)||0,scale=Number(el.dataset.scale)||1,z=Number(el.dataset.z)||0;
@@ -620,6 +629,7 @@ ui.querySelector("#jn-life").addEventListener("change",function(){search(ui.quer
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
 ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
+ui.querySelector("#jn-mode").addEventListener("click",function(){setSurfaceMode(S.surfaceMode==="3d"?"2d":"3d")});
 ui.querySelector("#jn-windows").addEventListener("click",function(){S.showWindows=!S.showWindows;ui.querySelector("#jn-windows").textContent=S.showWindows?"WINDOWS":"WINDOWS OFF";renderSpatialWindows()});
 ui.querySelector("#jn-giant").addEventListener("click",function(){S.giant=!S.giant;ui.querySelector("#jn-giant").textContent=S.giant?"NORMAL":"GIANT";renderSpatialWindows()});
 ui.querySelector("#jn-perf-btn").addEventListener("click",async function(){const a=api(),next=S.mode==="foreground"?"background":"foreground";if(a&&a.neural_set_performance_mode)try{const r=await a.neural_set_performance_mode(next);S.mode=r.mode||next;S.quality=r.quality||S.quality;}catch(_){}});
