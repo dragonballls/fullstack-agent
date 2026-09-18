@@ -104,7 +104,7 @@ class LocationProviderRegistry:
                 if isinstance(item, dict):
                     output.append(dict(item))
             return output[:100]
-        except (OSError, RuntimeError, TypeError, ValueError):
+        except Exception:
             return []
 
     def snapshot(self) -> tuple[ProviderState, ...]:
