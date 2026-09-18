@@ -52,7 +52,13 @@ def parse_intent(text: str) -> Intent:
         return Intent("neural_observe_stop", {})
     match = _SHAPE.match(value)
     if match:
-        return Intent("neural_shape", {"target": match.group(1).strip(), "shape": match.group(2).strip()})
+        target = match.group(1).strip()
+        requested_shape = match.group(2).strip()
+        if requested_shape.casefold().startswith("a "):
+            requested_shape = requested_shape[2:].strip()
+        elif requested_shape.casefold().startswith("an "):
+            requested_shape = requested_shape[3:].strip()
+        return Intent("neural_shape", {"target": target, "shape": requested_shape})
     if _HAND_START.match(value):
         return Intent("hand_control_start", {})
     if _HAND_STOP.match(value):
