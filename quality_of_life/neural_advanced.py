@@ -1733,6 +1733,7 @@ class NeuralAdvancedRuntime:
                 result = {"filaments": self.liquid.filaments(max_edges=int(data.get("max_edges", 512)))}
             elif "reorganization" in lower:
                 result = self.liquid.reorganize_core(data.get("priorities", {"coding": 0.9, "browser": 0.6, "system": 0.4}))
+                result["reorganized"] = True
             else:
                 result = self.liquid.step(
                     float(data.get("dt", 0.016)),
