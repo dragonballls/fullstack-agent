@@ -631,6 +631,14 @@ def install(desktop_module: Any) -> None:
 class _UnavailableSpatialWindows:
     def list_windows(self) -> list[dict[str, object]]:
         return []
+    def embedding_state(self, *_args: Any, **_kwargs: Any) -> dict[str, object]:
+        return {"embedded": False}
+    def embed(self, *_args: Any, **_kwargs: Any) -> dict[str, object]:
+        raise RuntimeError("native spatial windows unavailable")
+    def unembed(self, *_args: Any, **_kwargs: Any) -> dict[str, object]:
+        raise RuntimeError("native spatial windows unavailable")
+    def unembed_all(self, *_args: Any, **_kwargs: Any) -> list[dict[str, object]]:
+        return []
     def focus(self, *_args: Any, **_kwargs: Any) -> bool:
         raise RuntimeError("native spatial windows unavailable")
     def move_resize(self, *_args: Any, **_kwargs: Any) -> bool:
