@@ -42,6 +42,21 @@ class FloatingCommandBarContractTests(unittest.TestCase):
         self.assertIn("_save_floating_position", self.desktop)
         self.assertIn('json.dumps({"x": x, "y": y})', self.desktop)
 
+    def test_position_loader_rejects_non_object_and_boolean_coordinates(self):
+        from pathlib import Path
+        import json
+        from unittest.mock import patch
+
+        controller = Mock()
+        host = FullstackJarvisHost(controller, visualizer=Mock(), voice=Mock(), hands=Mock())
+
+        test_path = Path("/tmp/jarvis-floating-position-test.json")
+        for payload in ([1, 2], {"x": True, "y": 20}, {"x": 10, "y": False}):
+            with patch("scripts.jarvis_desktop.FLOATING_POSITION_FILE", test_path):
+                test_path.write_text(json.dumps(payload), encoding="utf-8")
+                self.assertEqual(host._load_floating_position(), (None, None))
+        test_path.unlink(missing_ok=True)
+
     def test_main_window_close_destroys_hidden_floating_window(self):
         controller = Mock()
         host = FullstackJarvisHost(controller, visualizer=Mock(), voice=Mock(), hands=Mock())
