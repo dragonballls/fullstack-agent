@@ -205,7 +205,7 @@ class NeuralWorld:
                 existing.label = str(label)[:500]
                 existing.source = str(source)[:200]
                 existing.status = str(status)[:120]
-                existing.lifecycle = LifecycleState(str(lifecycle))
+                existing.lifecycle = lifecycle if isinstance(lifecycle, LifecycleState) else LifecycleState(str(lifecycle))
                 existing.position = tuple(float(v) for v in (position or existing.position))  # type: ignore[assignment]
                 existing.scale = max(0.1, min(8.0, float(scale)))
                 existing.energy = max(0.0, min(1.0, float(energy)))
@@ -221,9 +221,9 @@ class NeuralWorld:
                     self.events.publish("entity.updated", entity_id=existing.id, payload=after)
                 return existing
             node = NeuralEntity(
-                id=safe_id, kind=EntityKind(str(kind)), label=str(label)[:500],
+                id=safe_id, kind=kind if isinstance(kind, EntityKind) else EntityKind(str(kind)), label=str(label)[:500],
                 source=str(source)[:200], status=str(status)[:120],
-                lifecycle=LifecycleState(str(lifecycle)),
+                lifecycle=lifecycle if isinstance(lifecycle, LifecycleState) else LifecycleState(str(lifecycle)),
                 position=position or _stable_position(safe_id),
                 scale=max(0.1, min(8.0, float(scale))),
                 energy=max(0.0, min(1.0, float(energy))),
@@ -232,7 +232,7 @@ class NeuralWorld:
                 created_at=now, updated_at=now,
             )
             self._entities[safe_id] = node
-            self.events.publish('entity.created', entity_id=node.id, payload={'kind': node.kind.value, 'label': node.label, 'lifecycle': node.lifecycle.value})
+            self.events.publish("entity.created", entity_id=node.id, payload={"kind": node.kind.value, "label": node.label, "lifecycle": node.lifecycle.value, "shape": node.shape})
             return node
 
     def retire(self, entity_id: str, *, remove: bool = False) -> bool:
