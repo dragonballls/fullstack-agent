@@ -1115,6 +1115,12 @@ class RemoteRegionManager:
     def reconnect(self, region_id: str) -> dict[str, Any]:
         return self.upsert(region_id, connected=True, reconnect_count=int(self.regions.get(str(region_id), {}).get("reconnect_count", 0)) + 1)
 
+    def sync_world(self, region_id: str, world: Mapping[str, Any]) -> dict[str, Any]:
+        rid = str(region_id)
+        world_copy = dict(world)
+        digest = hashlib.sha256(repr(sorted((str(k), repr(v)) for k, v in world_copy.items())).encode("utf-8")).hexdigest()
+        return self.upsert(rid, synchronized=True, world_digest=digest, world_state=world_copy)
+
     def snapshot(self) -> dict[str, Any]:
         return {"regions": dict(self.regions), "distributed_ready": True}
 
@@ -1249,6 +1255,22 @@ class WorldStreamer:
         self.loaded: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self.cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self.pending: deque[dict[str, Any]] = deque()
+
+    def virtual_regions(self, center: Sequence[float], *, radius: int = 2, priority: float = 0.7) -> dict[str, Any]:
+        values = list(center)[:3]
+        while len(values) < 3:
+            values.append(0.0)
+        center_cell = [math.floor(float(v) / 32.0) for v in values]
+        radius_i = max(0, min(5, int(radius)))
+        requested = []
+        for dx in range(-radius_i, radius_i + 1):
+            for dy in range(-radius_i, radius_i + 1):
+                for dz in range(-radius_i, radius_i + 1):
+                    distance = abs(dx) + abs(dy) + abs(dz)
+                    rid = f"region:{center_cell[0]+dx}:{center_cell[1]+dy}:{center_cell[2]+dz}"
+                    requested.append(self.request(rid, priority=max(0.0, float(priority) - 0.02 * distance)))
+        requested.sort(key=lambda item: (-float(item.get("priority", 0.0)), str(item.get("region_id", item.get("id", "")))))
+        return {"virtual": True, "center_cell": center_cell, "radius": radius_i, "requested": requested, "count": len(requested)}
 
     def request(self, region_id: str, *, priority: float = 0.5) -> dict[str, Any]:
         rid = str(region_id)
