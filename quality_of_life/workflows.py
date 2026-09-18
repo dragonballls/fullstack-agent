@@ -471,7 +471,7 @@ class WorkflowService:
             errors=tuple(errors[:8]),
             needs_confirmation=needs_confirmation,
         )
-        if activity is not None and not cancelled and not needs_confirmation:
+        if activity is not None and activity.status != ActivityStatus.FAILED and not cancelled and not needs_confirmation:
             final_status = ActivityStatus.SUCCEEDED if summary.success else ActivityStatus.FAILED
             activity = activity_store.update(
                 activity.id,
