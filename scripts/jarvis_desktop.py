@@ -8,6 +8,7 @@ brain. The obsolete 640x118 Tk chat bar is intentionally gone.
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import os
 from pathlib import Path
@@ -30,6 +31,9 @@ except ImportError:
 LOG_DIR = Path.home() / "AppData" / "Local" / "Jarvis" / "logs"
 LOG_FILE = LOG_DIR / "desktop.log"
 AUTO_UPDATE_INTERVAL = max(60, int(os.environ.get("JARVIS_AUTO_UPDATE_INTERVAL", "300")))
+FLOATING_HOTKEY_LABEL = "Ctrl+Alt+Shift+F12"
+FLOATING_HOTKEY_ID = 0x4A52
+FLOATING_POSITION_FILE = LOG_DIR.parent / "settings" / "floating_text_link.json"
 
 
 def _logger() -> logging.Logger:
@@ -190,6 +194,89 @@ class HandsAdapter:
             self.started = False
 
 
+class FloatingTextHotkey:
+    """Register a dedicated system-wide hotkey for the floating Jarvis command bar."""
+
+    MOD_CONTROL = 0x0002
+    MOD_ALT = 0x0001
+    MOD_SHIFT = 0x0004
+    MOD_NOREPEAT = 0x4000
+    VK_F12 = 0x7B
+    WM_HOTKEY = 0x0312
+    WM_QUIT = 0x0012
+
+    def __init__(self, callback: callable) -> None:
+        self.callback = callback
+        self.thread: threading.Thread | None = None
+        self.stop_event = threading.Event()
+        self.thread_id: int | None = None
+        self.registered = False
+
+    @property
+    def enabled(self) -> bool:
+        return sys.platform == "win32" and os.environ.get("JARVIS_SMOKE", "0").strip().lower() not in {"1", "true", "yes", "on"}
+
+    def start(self) -> None:
+        if not self.enabled or (self.thread and self.thread.is_alive()):
+            return
+        self.stop_event.clear()
+        self.thread = threading.Thread(target=self._run, name="jarvis-floating-hotkey", daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        thread_id = self.thread_id
+        if thread_id is not None and sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.user32.PostThreadMessageW(thread_id, self.WM_QUIT, 0, 0)
+            except Exception:
+                pass
+        if self.thread is not None and self.thread.is_alive() and threading.current_thread() is not self.thread:
+            self.thread.join(timeout=2)
+        self.thread = None
+        self.thread_id = None
+        self.registered = False
+
+    def _run(self) -> None:
+        if not self.enabled:
+            return
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        self.thread_id = int(kernel32.GetCurrentThreadId())
+        modifiers = self.MOD_CONTROL | self.MOD_ALT | self.MOD_SHIFT | self.MOD_NOREPEAT
+        try:
+            msg = wintypes.MSG()
+            user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)
+            if not user32.RegisterHotKey(None, FLOATING_HOTKEY_ID, modifiers, self.VK_F12):
+                LOGGER.warning("floating command bar hotkey %s could not be registered; it remains available from the UI", FLOATING_HOTKEY_LABEL)
+                return
+            self.registered = True
+            LOGGER.info("floating command bar global hotkey registered: %s", FLOATING_HOTKEY_LABEL)
+            while not self.stop_event.is_set():
+                result = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+                if result in (-1, 0):
+                    break
+                if msg.message == self.WM_HOTKEY and int(msg.wParam) == FLOATING_HOTKEY_ID:
+                    try:
+                        self.callback()
+                    except Exception:
+                        LOGGER.exception("floating command bar hotkey callback failed")
+                user32.TranslateMessage(ctypes.byref(msg))
+                user32.DispatchMessageW(ctypes.byref(msg))
+        except Exception:
+            LOGGER.exception("floating command bar hotkey listener failed")
+        finally:
+            if self.registered:
+                try:
+                    user32.UnregisterHotKey(None, FLOATING_HOTKEY_ID)
+                except Exception:
+                    pass
+            self.registered = False
+
+
 class AutoUpdateController:
     """Poll the verified rolling GitHub release and hand off a replacement safely."""
 
@@ -275,6 +362,12 @@ class JarvisWebApi:
             "text": str(getattr(result, "text", result)),
             "needs_confirmation": bool(getattr(result, "needs_confirmation", False)),
         }
+
+    def toggle_text_link(self, detached: bool | None = None) -> dict[str, Any]:
+        return self.host.toggle_text_link(detached)
+
+    def text_link_state(self) -> dict[str, Any]:
+        return self.host.text_link_state()
 
     def submit_text(self, text: str, confirmed: bool = False) -> dict[str, Any]:
         normalized = str(text or "").strip()
@@ -382,6 +475,20 @@ TEXT_INPUT_SCRIPT = r'''
       font-size: 16px;
     }
     #jarvis-text-send:hover { border-color: rgba(143,232,184,.68); background: rgba(61,220,132,.13); }
+    #jarvis-text-float {
+      flex: 0 0 auto;
+      width: 32px;
+      height: 42px;
+      border: 1px solid rgba(143,232,184,.17);
+      border-radius: 9px;
+      color: #7ea698;
+      background: rgba(143,232,184,.025);
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+    }
+    #jarvis-text-float:hover { border-color: rgba(143,232,184,.58); color: #d8ffe8; background: rgba(61,220,132,.08); }
+    #jarvis-text-float:disabled { opacity: .4; cursor: default; }
     #jarvis-text-status {
       margin: 7px 3px 0;
       min-height: 14px;
@@ -410,6 +517,7 @@ TEXT_INPUT_SCRIPT = r'''
     <div id="jarvis-text-label"><span id="jarvis-text-dot"></span>JARVIS TEXT LINK</div>
     <div id="jarvis-text-row">
       <input id="jarvis-text-input" type="text" autocomplete="off" spellcheck="false" placeholder="Hover here and type to talk to Jarvis..." aria-label="Talk to Jarvis by text" disabled />
+      <button id="jarvis-text-float" type="button" aria-label="Detach Jarvis text link into a floating desktop window" title="Detach to a movable desktop window" disabled>↗</button>
       <button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button>
     </div>
     <div id="jarvis-text-status"></div>
@@ -418,6 +526,7 @@ TEXT_INPUT_SCRIPT = r'''
   document.body.appendChild(shell);
 
   const input = shell.querySelector("#jarvis-text-input");
+  const floatButton = shell.querySelector("#jarvis-text-float");
   const send = shell.querySelector("#jarvis-text-send");
   const status = shell.querySelector("#jarvis-text-status");
   let apiReady = false;
@@ -482,10 +591,21 @@ TEXT_INPUT_SCRIPT = r'''
     }
   });
   send.addEventListener("click", function () { submit(false); });
+  floatButton.addEventListener("click", async function () {
+    if (!apiReady || !window.pywebview.api.toggle_text_link) return;
+    try {
+      await window.pywebview.api.toggle_text_link(true);
+      shell.style.display = "none";
+    } catch (error) {
+      status.classList.add("jarvis-error");
+      status.textContent = "FLOAT LINK ERROR: " + String(error);
+    }
+  });
 
   function markReady() {
     apiReady = !!(window.pywebview && window.pywebview.api);
     input.disabled = !apiReady;
+    floatButton.disabled = !apiReady;
     send.disabled = !apiReady;
     if (apiReady) {
       status.textContent = "READY — TEXT LINK ONLINE";
@@ -494,8 +614,33 @@ TEXT_INPUT_SCRIPT = r'''
 
   window.addEventListener("pywebviewready", markReady, { once: true });
   if (window.pywebview && window.pywebview.api) markReady();
+
+  window.jarvisTextInput = {
+    setVisible: function (visible) {
+      shell.style.display = visible ? "" : "none";
+      if (!visible) setActive(false);
+    },
+    focus: function () {
+      if (apiReady) input.focus();
+    }
+  };
 })();
 '''
+
+
+
+
+FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis Floating Text Link</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030806;color:#e8f0f2;font-family:Consolas,"SFMono-Regular",monospace}#frame{width:100%;height:100%;padding:10px;border:1px solid rgba(61,220,132,.28);border-radius:16px;background:linear-gradient(145deg,rgba(5,17,12,.98),rgba(2,7,5,.96));box-shadow:0 12px 36px rgba(0,0,0,.5),inset 0 0 24px rgba(61,220,132,.05)}#bar{display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:move;user-select:none}.pywebview-drag-region{cursor:move}.dot{width:7px;height:7px;border-radius:50%;background:#3ddc84;box-shadow:0 0 11px rgba(61,220,132,.7)}#title{flex:1;font-size:9px;letter-spacing:.22em;color:#8fc4a8}#hotkey{font-size:7px;letter-spacing:.09em;color:#5d756b}#close{width:24px;height:22px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:transparent;color:#789087;cursor:pointer;font:inherit}#close:hover{border-color:rgba(255,140,152,.38);color:#ff9aa5}#row{display:flex;gap:8px;align-items:center}#input{min-width:0;flex:1;height:42px;border:1px solid rgba(143,232,184,.28);border-radius:9px;outline:none;padding:0 13px;background:rgba(0,0,0,.28);color:#e8f0f2;font:inherit;font-size:13px;letter-spacing:.03em;caret-color:#8fe8b8}#input:focus{border-color:rgba(143,232,184,.72);box-shadow:0 0 18px rgba(61,220,132,.13)}#input::placeholder{color:#637a71}#send{width:44px;height:42px;border:1px solid rgba(143,232,184,.30);border-radius:9px;background:rgba(61,220,132,.07);color:#a6ffd0;cursor:pointer;font:inherit;font-size:17px}#send:hover{background:rgba(61,220,132,.15);border-color:rgba(143,232,184,.7)}#status{margin-top:7px;min-height:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#78958a;font-size:8px;letter-spacing:.09em}#status.error{color:#ff8c98}</style>
+</head>
+<body><div id="frame"><div id="bar" class="pywebview-drag-region"><span class="dot"></span><span id="title">JARVIS FLOATING TEXT LINK</span><span id="hotkey">CTRL+ALT+SHIFT+F12</span><button id="close" type="button" aria-label="Return Jarvis text link to the main app">×</button></div><div id="row"><input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis from anywhere on your desktop…" disabled><button id="send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div><div id="status">CONNECTING…</div></div>
+<script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn,{once:true});if(window.pywebview&&window.pywebview.api)readyFn()})();</script>
+</body></html>'''
 
 
 class FullstackJarvisHost:
@@ -509,9 +654,14 @@ class FullstackJarvisHost:
         self.started = False
         self.stopped = False
         self._window: Any | None = None
+        self._floating_window: Any | None = None
+        self._floating_visible = False
+        self._floating_lock = threading.RLock()
+        self._shutting_down = False
         self._web_api = JarvisWebApi(self)
         self._update_stop = threading.Event()
         self.updater = AutoUpdateController(self._update_stop, self._exit_for_update)
+        self.floating_hotkey = FloatingTextHotkey(self._toggle_text_link_from_hotkey)
 
     @property
     def web_api(self) -> JarvisWebApi:
@@ -544,6 +694,16 @@ class FullstackJarvisHost:
     def stop(self) -> None:
         if self.stopped:
             return
+        self._shutting_down = True
+        self.floating_hotkey.stop()
+        with self._floating_lock:
+            self._save_floating_position()
+            if self._floating_window is not None:
+                try:
+                    self._floating_window.destroy()
+                except Exception:
+                    LOGGER.exception("floating command bar failed to close cleanly")
+                self._floating_window = None
         self.updater.stop()
         try:
             save = getattr(self._web_api, "neural_world_save", None)
@@ -569,6 +729,154 @@ class FullstackJarvisHost:
     @staticmethod
     def _fullscreen_enabled() -> bool:
         return os.environ.get("JARVIS_FULLSCREEN", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _load_floating_position(self) -> tuple[int | None, int | None]:
+        try:
+            payload = json.loads(FLOATING_POSITION_FILE.read_text(encoding="utf-8"))
+            x, y = payload.get("x"), payload.get("y")
+            if isinstance(x, int) and isinstance(y, int):
+                return x, y
+        except (OSError, ValueError, TypeError):
+            pass
+        return None, None
+
+    def _save_floating_position(self) -> None:
+        window = self._floating_window
+        if window is None:
+            return
+        try:
+            x, y = int(window.x), int(window.y)
+            FLOATING_POSITION_FILE.parent.mkdir(parents=True, exist_ok=True)
+            FLOATING_POSITION_FILE.write_text(json.dumps({"x": x, "y": y}), encoding="utf-8")
+        except Exception:
+            LOGGER.exception("could not persist floating command bar position")
+
+    def _create_floating_window(self, webview: Any) -> Any:
+        with self._floating_lock:
+            if self._floating_window is not None:
+                return self._floating_window
+            x, y = self._load_floating_position()
+            kwargs: dict[str, Any] = {
+                "title": "Jarvis Floating Text Link",
+                "html": FLOATING_TEXT_INPUT_HTML,
+                "js_api": self.web_api,
+                "width": 620,
+                "height": 112,
+                "resizable": True,
+                "min_size": (460, 96),
+                "hidden": True,
+                "frameless": True,
+                "easy_drag": True,
+                "shadow": True,
+                "on_top": True,
+                "background_color": "#030806",
+            }
+            if x is not None and y is not None:
+                kwargs["x"], kwargs["y"] = x, y
+            self._floating_window = webview.create_window(**kwargs)
+            events = getattr(self._floating_window, "events", None)
+            if events is not None:
+                events.moved += self._on_floating_moved
+                events.closing += self._on_floating_closing
+                events.loaded += self._on_floating_loaded
+            else:
+                LOGGER.debug("floating command bar mock window exposes no event container")
+            LOGGER.info("floating command bar window object created; hotkey=%s", FLOATING_HOTKEY_LABEL)
+            return self._floating_window
+
+    def _on_floating_loaded(self, *_args: Any, **_kwargs: Any) -> None:
+        LOGGER.info("floating command bar DOM loaded")
+        if self._floating_visible and self._floating_window is not None:
+            try:
+                self._floating_window.evaluate_js("window.setTimeout(function(){var e=document.getElementById('input'); if(e)e.focus();},80);")
+            except Exception:
+                pass
+
+    def _on_floating_moved(self, *_args: Any, **_kwargs: Any) -> None:
+        self._save_floating_position()
+
+    def _on_floating_closing(self, *_args: Any, **_kwargs: Any) -> bool | None:
+        if self._shutting_down:
+            return True
+        self._floating_visible = False
+        try:
+            if self._floating_window is not None:
+                self._save_floating_position()
+                self._floating_window.hide()
+            self._show_main_text_link()
+        except Exception:
+            LOGGER.exception("could not convert floating command bar close into a hide action")
+        return False
+
+    def _show_main_text_link(self) -> None:
+        window = self._window
+        if window is None:
+            return
+        try:
+            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(true); window.jarvisTextInput && window.jarvisTextInput.focus();")
+        except Exception:
+            LOGGER.exception("could not restore in-app Jarvis text link")
+
+    def _hide_main_text_link(self) -> None:
+        window = self._window
+        if window is None:
+            return
+        try:
+            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(false);")
+        except Exception:
+            LOGGER.exception("could not hide in-app Jarvis text link")
+
+    def _toggle_text_link_from_hotkey(self) -> None:
+        self.toggle_text_link(None)
+
+    def toggle_text_link(self, detached: bool | None = None) -> dict[str, Any]:
+        with self._floating_lock:
+            target = (not self._floating_visible) if detached is None else bool(detached)
+            window = self._floating_window
+            if window is None:
+                import webview
+                window = self._create_floating_window(webview)
+            self._floating_visible = target
+            if target:
+                self._hide_main_text_link()
+                try:
+                    window.on_top = True
+                except Exception:
+                    pass
+                window.show()
+                try:
+                    window.evaluate_js("window.setTimeout(function(){var e=document.getElementById('input'); if(e)e.focus();},80);")
+                except Exception:
+                    pass
+                LOGGER.info("floating command bar shown")
+            else:
+                self._save_floating_position()
+                window.hide()
+                self._show_main_text_link()
+                LOGGER.info("floating command bar hidden")
+            return self.text_link_state()
+
+    def text_link_state(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "floating": bool(self._floating_visible),
+            "hotkey": FLOATING_HOTKEY_LABEL,
+            "position_persisted": FLOATING_POSITION_FILE.exists(),
+        }
+
+    def _on_main_window_closing(self, *_args: Any, **_kwargs: Any) -> None:
+        """Destroy the hidden floating bar when the main Jarvis window closes."""
+        self._shutting_down = True
+        self._floating_visible = False
+        with self._floating_lock:
+            self._save_floating_position()
+            floating = self._floating_window
+            self._floating_window = None
+            if floating is not None:
+                try:
+                    floating.destroy()
+                except Exception:
+                    LOGGER.exception("floating command bar failed to close with the main Jarvis window")
 
     def _on_window_before_show(self, window: Any) -> None:
         try:
@@ -644,8 +952,10 @@ class FullstackJarvisHost:
             try:
                 self._window.events.before_show += self._on_window_before_show
                 self._window.events.loaded += self._on_window_loaded
+                self._window.events.closing += self._on_main_window_closing
             except Exception:
                 LOGGER.exception("could not attach Jarvis text input loaded callback")
+            self._create_floating_window(webview)
             LOGGER.info(
                 "headless frozen Jarvis native window object created; gui=%s url=%s size=%sx%s",
                 gui or "default",
@@ -666,9 +976,12 @@ class FullstackJarvisHost:
         try:
             self._window.events.before_show += self._on_window_before_show
             self._window.events.loaded += self._on_window_loaded
+            self._window.events.closing += self._on_main_window_closing
         except Exception:
             LOGGER.exception("could not attach Jarvis text input loaded callback")
-        LOGGER.info("native Jarvis window object created; entering GUI event loop")
+        self._create_floating_window(webview)
+        self.floating_hotkey.start()
+        LOGGER.info("native Jarvis window object created; floating text link ready; hotkey=%s", FLOATING_HOTKEY_LABEL)
         if gui is None:
             webview.start(debug=False)
         else:
