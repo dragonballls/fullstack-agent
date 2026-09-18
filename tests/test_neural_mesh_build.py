@@ -11,7 +11,8 @@ class NeuralMeshBuildTests(unittest.TestCase):
             self.assertTrue(store.get("neural-mesh").protected)
 
     def test_entrypoint_installs_bridge(self):
-        text = Path("scripts/jarvis_desktop.pyw").read_text(encoding="utf-8")
+        root = Path(__file__).resolve().parents[1]
+        text = (root / "scripts" / "jarvis_desktop.pyw").read_text(encoding="utf-8")
         self.assertIn("install_neural_world", text)
 
     def test_webgl_and_chat_contract(self):
