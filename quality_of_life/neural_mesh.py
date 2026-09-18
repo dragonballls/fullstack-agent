@@ -22,6 +22,8 @@ NEURAL_MESH_BUILTIN = {
 #jn-search{position:absolute;right:24px;top:20px;width:min(340px,36vw);box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:12px;padding:11px 13px;outline:none;color:#dff6ff;background:rgba(2,12,24,.72);box-shadow:0 0 28px rgba(20,130,220,.1);backdrop-filter:blur(10px)}
 #jn-kind,#jn-life{position:absolute;top:63px;width:145px;box-sizing:border-box;padding:7px 8px;border:1px solid rgba(91,190,255,.18);border-radius:9px;color:#88cfff;background:rgba(2,12,24,.68);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.1em;pointer-events:auto;text-transform:uppercase}
 #jn-kind{right:322px}#jn-life{right:165px}
+#jn-kind,#jn-life,#jn-connected{position:absolute;right:24px;box-sizing:border-box;border:1px solid rgba(91,190,255,.18);border-radius:9px;padding:8px 10px;outline:none;color:#9bd9f5;background:rgba(2,12,24,.72);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px)}
+#jn-kind{top:112px;width:150px}#jn-life{top:112px;right:182px;width:140px}#jn-connected{top:150px;width:min(298px,32vw)}
 #jn-actions{position:absolute;right:24px;top:63px;display:flex;gap:7px;pointer-events:auto;flex-wrap:wrap;justify-content:flex-end;max-width:450px}
 .jn-btn{border:1px solid rgba(91,190,255,.2);border-radius:9px;padding:7px 9px;color:#88cfff;background:rgba(2,12,24,.52);cursor:pointer;font:9px/1.2 Inter,Segoe UI,sans-serif;letter-spacing:.12em;text-transform:uppercase}
 .jn-btn:hover{border-color:rgba(124,210,255,.6);box-shadow:0 0 18px rgba(39,151,239,.1)}
@@ -34,6 +36,8 @@ NEURAL_MESH_BUILTIN = {
 #jn-response.visible{opacity:1}
 #jn-observe{position:absolute;right:24px;bottom:92px;width:min(390px,calc(100vw - 48px));max-height:180px;overflow:auto;padding:10px;border:1px solid rgba(91,190,255,.12);border-radius:11px;background:rgba(1,9,18,.54);color:#88bddc;font-size:8px;line-height:1.45;pointer-events:none;opacity:0;backdrop-filter:blur(10px)}
 #jn-observe.visible{opacity:1}
+#jn-minimap{position:absolute;right:24px;bottom:64px;width:180px;height:110px;border:1px solid rgba(91,190,255,.12);border-radius:10px;background:rgba(1,9,18,.35);opacity:.72;pointer-events:none;display:none}
+#jn-minimap.visible{display:block}
 #jn-chat{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:min(820px,calc(100vw - 48px));display:flex;gap:9px;padding:9px;box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:16px;background:rgba(1,9,18,.76);box-shadow:0 0 36px rgba(20,128,255,.12);backdrop-filter:blur(14px)}
 #jn-chat input{min-width:0;flex:1;border:0;outline:none;color:#e6f8ff;background:transparent;padding:10px 11px;font:13px/1.2 Inter,Segoe UI,sans-serif}
 #jn-chat input::placeholder{color:rgba(137,190,217,.66)}
@@ -61,6 +65,9 @@ NEURAL_MESH_BUILTIN = {
   <div id="jn-hud"><div id="jn-title">JARVIS</div><div id="jn-status">NEURAL MESH · 3D WORLD · ONLINE</div></div>
   <div id="jn-focus"></div>
   <input id="jn-search" autocomplete="off" spellcheck="false" placeholder="Search the neural world…" />
+  <select id="jn-kind" aria-label="neuron type"><option value="">ALL TYPES</option><option value="application">APPS</option><option value="file">FILES</option><option value="repository">REPOS</option><option value="browser">BROWSERS</option><option value="task">TASKS</option><option value="agent">AGENTS</option><option value="location">LOCATIONS</option><option value="window">WINDOWS</option></select>
+  <select id="jn-life" aria-label="neuron lifecycle"><option value="">ALL STATES</option><option value="active">ACTIVE</option><option value="waiting">WAITING</option><option value="dormant">DORMANT</option><option value="failed">FAILED</option></select>
+  <input id="jn-connected" autocomplete="off" spellcheck="false" placeholder="Connected to…" />
   <select id="jn-kind" aria-label="Neural type filter"><option value="">ALL TYPES</option><option value="file">FILES</option><option value="application">APPS</option><option value="window">WINDOWS</option><option value="page">PAGES</option><option value="repository">REPOS</option><option value="agent">AGENTS</option><option value="task">TASKS</option><option value="memory">MEMORY</option><option value="location">LOCATIONS</option><option value="process">PROCESSES</option></select>
   <select id="jn-life" aria-label="Neural lifecycle filter"><option value="">ALL STATES</option><option value="active">ACTIVE</option><option value="waiting">WAITING</option><option value="mature">MATURE</option><option value="dormant">DORMANT</option><option value="failed">FAILED</option><option value="retired">RETIRED</option></select>
   <div id="jn-actions">
@@ -68,6 +75,8 @@ NEURAL_MESH_BUILTIN = {
   <button class="jn-btn" id="jn-trace">TRACE</button>
     <button class="jn-btn" id="jn-earth">EARTH</button>
     <button class="jn-btn" id="jn-mode">3D</button>
+    <button class="jn-btn" id="jn-follow">FOLLOW</button>
+    <button class="jn-btn" id="jn-map">MAP</button>
     <button class="jn-btn" id="jn-windows">WINDOWS</button>
     <button class="jn-btn" id="jn-giant">GIANT</button>
     <button class="jn-btn" id="jn-perf-btn">PERF</button>
@@ -75,7 +84,7 @@ NEURAL_MESH_BUILTIN = {
   </div>
   <div id="jn-inspector"><div class="jn-mini">SELECTED NEURON</div><div class="jn-name" id="jn-name"></div><div class="jn-meta" id="jn-meta"></div></div>
   <div id="jn-response"></div>
-  <div id="jn-observe"></div>
+  <div id="jn-observe"></div><canvas id="jn-minimap" width="180" height="110"></canvas>
   <div id="jn-help">DRAG · ORBIT · WHEEL · ZOOM · GRAB NEURON · TYPE TALK · SPATIAL WINDOWS</div>
   <div id="jn-chat"><input id="jn-chat-input" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…" /><button class="jn-btn" id="jn-chat-send">↵</button></div>
   <div id="jn-perf">AUTO QUALITY</div>
@@ -91,7 +100,7 @@ const gl=canvas.getContext("webgl2",{antialias:false,alpha:true,powerPreference:
 if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAILABLE";return;}
 
 const S={
-  nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,
+  nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
@@ -278,6 +287,7 @@ function resize(){
 function render(now){
   requestAnimationFrame(render);
   if(document.hidden)return;
+  renderMinimap();
   if(S.view==="earth"){resize();renderEarth(now);return;}
   const dt=now-S.lastFrame;S.lastFrame=now;S.frameMs=S.frameMs*.92+dt*.08;
   if(S.mode==="foreground"&&S.frameMs>28)S.quality="performance";
@@ -414,6 +424,13 @@ async function pollHand(){
   }catch(_){}
   S.lastHandPoll=performance.now();
 }
+function renderMinimap(){
+  const c=ui.querySelector("#jn-minimap");if(!S.minimap||S.view!=="network"){c.classList.remove("visible");return;}
+  c.classList.add("visible");const g=c.getContext("2d");if(!g)return;g.clearRect(0,0,c.width,c.height);
+  const nodes=S.nodes.slice(0,420),sx=c.width*.5,sy=c.height*.5;
+  nodes.forEach(function(n){const x=sx+n.position[0]*4.2,y=sy+n.position[2]*3.0;g.fillStyle=n.id===S.selected?"#dff6ff":"#3aa8ee";g.globalAlpha=Math.max(.18,Math.min(.9,(n.energy||.2)));g.fillRect(x,y,n.id===S.selected?3:1.5,n.id===S.selected?3:1.5);});
+  g.globalAlpha=.5;g.strokeStyle="#3aa8ee";g.strokeRect(sx-2,sy-2,4,4);
+}
 function rootStatus(text){ui.querySelector("#jn-perf").textContent=text}
 function worldToScreen(p){
   const c=camera(),rel=sub(p,c.eye),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];if(depth<=.1)return null;
@@ -427,7 +444,7 @@ function pick(x,y){
   return bestD<75?best:null;
 }
 function focus(n){
-  S.selected=n.id;S.target=[...nodePosition(n)];S.distance=Math.max(5,Math.min(90,11/Math.max(.5,n.scale||1)));
+  S.selected=n.id;S.target=[...nodePosition(n)];if(S.follow){S.yaw+=.0008;S.pitch+=.0004;}S.distance=Math.max(5,Math.min(90,11/Math.max(.5,n.scale||1)));
   ui.querySelector("#jn-name").textContent=n.label;ui.querySelector("#jn-meta").textContent=n.kind+" · "+n.status+" · "+n.source+" · "+n.lifecycle;
   ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="FOCUS · "+n.label;
 }
@@ -578,6 +595,13 @@ async function traceSelected(){
     step();S.traceTimer=setInterval(step,760);
   }catch(_){}
 }
+function buildSearchFilters(){
+  return {
+    kind:(ui.querySelector("#jn-kind")||{}).value||null,
+    lifecycle:(ui.querySelector("#jn-life")||{}).value||null,
+    connected_to:(ui.querySelector("#jn-connected")||{}).value||null
+  };
+}
 async function search(value){
   const a=api();if(!value.trim()&& !ui.querySelector("#jn-kind").value && !ui.querySelector("#jn-life").value||!a)return;
   try{
@@ -586,7 +610,8 @@ async function search(value){
       const box=ui.querySelector("#jn-response");box.textContent=(S.earthData.locators&&S.earthData.locators.length)?("Located "+S.earthData.locators[0].label):"No Earth locations found";box.classList.add("visible");return;
     }
     if(!a.neural_search)return;
-    const r=await a.neural_search(value.trim(),ui.querySelector("#jn-kind").value||null,null,null,ui.querySelector("#jn-life").value||null,null,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
+    const filters=buildSearchFilters();
+    const r=await a.neural_search(value.trim()||"",filters.kind,null,null,filters.lifecycle,filters.connected_to,12);if(r.length){focus(r[0]);const box=ui.querySelector("#jn-response");box.textContent="Located "+r[0].label;box.classList.add("visible");}
   }catch(_){ }
 }
 async function chat(){
@@ -626,6 +651,9 @@ canvas.addEventListener("dblclick",function(e){const n=pick(e.clientX,e.clientY)
 ui.querySelector("#jn-search").addEventListener("input",function(e){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(e.target.value)},260)});
 ui.querySelector("#jn-kind").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
 ui.querySelector("#jn-life").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
+ui.querySelector("#jn-connected").addEventListener("input",function(){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(ui.querySelector("#jn-search").value)},260)});
+ui.querySelector("#jn-follow").addEventListener("click",function(){S.follow=!S.follow;ui.querySelector("#jn-follow").textContent=S.follow?"FOLLOWING":"FOLLOW";});
+ui.querySelector("#jn-map").addEventListener("click",function(){S.minimap=!S.minimap;ui.querySelector("#jn-map").textContent=S.minimap?"MAP ON":"MAP";renderMinimap();});
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
 ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
