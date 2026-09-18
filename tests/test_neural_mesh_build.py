@@ -38,7 +38,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
             script_path = Path(tmp) / "neural_mesh.js"
             script_path.write_text(script, encoding="utf-8")
             compile_result = subprocess.run(
-                ["node", "-e", "new Function(\\\"root\\\", require(\\\"fs\\\").readFileSync(process.argv[1], \\\"utf8\\\"));", str(script_path)],
+                ["node", "-e", 'new Function("root", require("fs").readFileSync(process.argv[1], "utf8"));' , str(script_path)],
                 capture_output=True,
                 text=True,
             )
