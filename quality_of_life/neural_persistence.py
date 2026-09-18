@@ -77,7 +77,12 @@ class NeuralPersistence:
                 payload = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 return None
-            if not isinstance(payload, dict) or int(payload.get("schema_version", 0)) != CURRENT_SCHEMA_VERSION:
+            if not isinstance(payload, dict):
+                return None
+            schema_version = payload.get("schema_version")
+            if isinstance(schema_version, bool) or not isinstance(schema_version, int):
+                return None
+            if schema_version != CURRENT_SCHEMA_VERSION:
                 return None
             entities = payload.get("entities", [])
             relations = payload.get("relations", [])
