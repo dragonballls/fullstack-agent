@@ -211,16 +211,22 @@ class AgentOrchestrator:
             result = self.runtime.neural_shape_save(name, shape)
             return f"Saved shape {result['name']}.", True, [], False
         if intent.kind == "neural_shape_revert_all":
-            result = self.runtime.neural_shape_revert_all()
+            try:
+                result = self.runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.revert_all")
+            except Exception as exc:
+                return "", False, [str(exc)], False
             if not result.get("ok", False):
                 return "", False, [f"Some shape changes could not be reverted: {result.get('failed', [])}"], False
             return f"Reverted {result.get('reverted', 0)} shape change target(s) and restored the recorded original state.", True, [], False
         if intent.kind == "neural_shape_revert":
             target_query = str(intent.arguments.get("target", "")).strip()
             if target_query.casefold() in {"this", "it"} or target_query.casefold().startswith("this "):
-                target_query = getattr(self.runtime, "neural_current_selection", lambda: None)() or target_query.replace("this ", "", 1).strip()
+                selected = getattr(self.runtime, "neural_current_selection", lambda: None)()
+                if not selected:
+                    return "", False, ["Select a 3D object first, then ask Jarvis to revert it."], False
+                target_query = selected
             try:
-                result = self.runtime.neural_shape_revert(target_query) if hasattr(self.runtime, "neural_shape_revert") else self.runtime.neural_shape_remove(target_query)
+                result = self.runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.revert", target=target_query)
             except Exception as exc:
                 return "", False, [str(exc)], False
             return f"Restored the original state of {target_query}.", bool(result.get("reverted", False)), [], False
@@ -229,28 +235,35 @@ class AgentOrchestrator:
             if not target_query:
                 return "", False, ["Select a 3D object first, then ask Jarvis to remove it."], False
             try:
-                result = self.runtime.neural_shape_remove(target_query)
+                result = self.runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.remove", target=target_query)
             except Exception as exc:
                 return "", False, [str(exc)], False
             return f"Removed the selected 3D object: {target_query}.", bool(result.get("reverted", False)), [], False
         if intent.kind == "neural_shape_create":
             shape = str(intent.arguments.get("shape", "droplet")).strip()
             label = str(intent.arguments.get("name", "")).strip() or shape.title()
-            result = self.runtime.neural_shape_create(label, shape)
+            try:
+                result = self.runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.shape.create", label=label, shape=shape)
+            except Exception as exc:
+                return "", False, [str(exc)], False
             return f"Created {label} as {shape}.", bool(result.get("created", False)), [], False
         if intent.kind == "neural_shape":
             target_query = str(intent.arguments.get("target", "")).strip()
             normalized_target = target_query.casefold()
             shape = str(intent.arguments.get("shape", "droplet")).strip()
-            if normalized_target.startswith("this "):
+            if normalized_target in {"this", "it"} or normalized_target.startswith("this "):
                 selected = getattr(self.runtime, "neural_current_selection", lambda: None)()
-                target_query = selected or target_query.replace("this ", "", 1).strip()
+                if not selected:
+                    return "", False, ["Select a 3D object first, then ask Jarvis to reshape it."], False
+                target_query = selected
             else:
                 target_query = target_query.replace("the ", "", 1).strip()
             try:
-                result = self.runtime.neural_shape_apply(
-                    target_query,
-                    shape,
+                result = self.runtime.dispatch(
+                    Capability.SYSTEM_DIAGNOSTICS,
+                    "neural.shape.apply",
+                    target=target_query,
+                    shape=shape,
                     rotation_speed=float(intent.arguments.get("rotation_speed", 0.0)),
                     rotation_unit=intent.arguments.get("rotation_unit"),
                     rotation_axis=str(intent.arguments.get("rotation_axis", "y")),
