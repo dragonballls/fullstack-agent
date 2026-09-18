@@ -94,6 +94,13 @@ class NeuralCompletenessTests(unittest.TestCase):
         engine.execute("Complete shared-world infrastructure", {"id": "brain:shared", "owner": "user-a"})
         engine.execute("Full ownership/permissions model for multiple users", {"id": "resource:shared", "owner": "user-a"})
 
+    def test_every_remaining_feature_executes(self):
+        engine = NeuralFeatureCompleteness()
+        result = engine.smoke_all()
+        self.assertEqual(result["status"], "pass", result["failures"])
+        self.assertEqual(result["requested"], result["executed"])
+        self.assertEqual(result["failures"], [])
+
     def test_all_bound_names_are_unique(self):
         engine = NeuralFeatureCompleteness()
         names = [item["name"] for item in engine.status()["features"]]
