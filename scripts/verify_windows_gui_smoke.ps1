@@ -102,7 +102,7 @@ try {
         if ($process.HasExited) {
             throw "Jarvis.exe exited after native window-object creation with code $($process.ExitCode)"
         }
-        $floatingMarker = 'floating command bar window object created; pid=\\d+ hotkey=' + [regex]::Escape('Ctrl+Alt+Shift+F12')
+        $floatingMarker = 'floating command bar window object created; pid=\d+ hotkey=' + [regex]::Escape('Ctrl+Alt+Shift+F12')
         if ($contents -notmatch $floatingMarker) {
             throw 'Frozen Jarvis.exe did not create the floating command bar window object'
         }
