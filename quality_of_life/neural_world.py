@@ -9,8 +9,10 @@ from enum import Enum
 import hashlib
 import math
 import threading
+import time
 from typing import Any, Mapping
 
+from .neural_discovery import NeuralDiscovery
 from .neural_events import NeuralEventBus
 from .neural_persistence import NeuralPersistence
 from .spatial_layout import SpatialLayoutStore
@@ -414,6 +416,13 @@ def _safe_window_dict(window: Mapping[str, object]) -> dict[str, object]:
 
 class NeuralWorldBridgeMixin:
     def neural_world_snapshot(self, limit: int = 1800) -> dict[str, object]:
+        now = time.monotonic()
+        if now - self._last_discovery >= 8.0:
+            try:
+                self._discovery.sync()
+            except Exception:
+                pass
+            self._last_discovery = now
         snapshot = self._neural_world.snapshot(limit=limit)
         try:
             self._refresh_real_windows()
@@ -428,6 +437,11 @@ class NeuralWorldBridgeMixin:
 
     def neural_trace(self, start: str, target: str, max_hops: int = 8) -> list[dict[str, object]]:
         return self._neural_world.trace(start, target, max_hops=max_hops)
+
+    def neural_discover(self) -> dict[str, int]:
+        result = self._discovery.sync()
+        self._last_discovery = time.monotonic()
+        return result
 
     def neural_events(self, sequence: int = 0, limit: int = 500) -> list[dict[str, object]]:
         return self._neural_world.event_snapshot(sequence, limit)
@@ -509,6 +523,8 @@ def install(desktop_module: Any) -> None:
             self._neural_world = NeuralWorld()
             self._performance = PerformanceGovernor()
             self._layout = SpatialLayoutStore()
+            self._discovery = NeuralDiscovery(self._neural_world, host.controller.runtime)
+            self._last_discovery = 0.0
             try:
                 policy = host.controller.runtime.policy
             except Exception:

@@ -545,6 +545,12 @@ class FullstackJarvisHost:
         if self.stopped:
             return
         self.updater.stop()
+        try:
+            save = getattr(self._web_api, "neural_world_save", None)
+            if callable(save):
+                save()
+        except Exception:
+            LOGGER.exception("neural world persistence failed during shutdown")
         for component in (self.hands, self.voice, self.visualizer):
             try:
                 component.stop()
