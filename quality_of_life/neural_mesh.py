@@ -589,6 +589,22 @@ function applySurfaceTransform(el){
   const x=Number(el.dataset.x)||0,y=Number(el.dataset.y)||0,scale=Number(el.dataset.scale)||1,z=Number(el.dataset.z)||0;
   el.style.transform="translate3d("+x+"px,"+y+"px,"+z+"px) scale("+scale+")";
 }
+async function syncEmbeddedVisibility(){
+  const now=performance.now();
+  if(now-S.lastNativeVisibility<S.nativeVisibilityMs)return;
+  S.lastNativeVisibility=now;
+  const a=api();if(!a||!a.spatial_window_visibility)return;
+  const hidden=document.hidden||S.mode==="background";
+  for(const info of S.windows){
+    if(!info.embedded)continue;
+    const el=ui.querySelector('.jn-spatial-window[data-handle="'+String(info.handle).replace(/"/g,"")+'"]');
+    const visible=!hidden&&el?(()=>{
+      const rect=el.getBoundingClientRect();
+      return rect.right>0&&rect.bottom>0&&rect.left<window.innerWidth&&rect.top<window.innerHeight;
+    })():false;
+    try{await a.spatial_window_visibility(Number(info.handle),visible);}catch(_){}
+  }
+}
 function renderSpatialWindows(){
   const layer=ui.querySelector("#jn-surfaces");if(!S.showWindows){layer.replaceChildren();return;}
   const current=new Map(Array.from(layer.children).map(function(e){return[e.dataset.handle,e]})),keep=new Set();
@@ -709,7 +725,7 @@ ui.querySelector("#jn-chat-send").addEventListener("click",chat);
 ui.querySelector("#jn-chat-input").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();chat()}});
 window.addEventListener("resize",resize);
 document.addEventListener("visibilitychange",function(){const hidden=document.hidden;canvas.style.visibility=hidden?"hidden":"visible";ui.querySelector("#jn-surfaces").style.visibility=hidden?"hidden":"visible";});
-function tick(){const now=performance.now();if(document.hidden){setTimeout(tick,1500);return;}if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastHandPoll>S.handPollMs)pollHand();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
+function tick(){const now=performance.now();if(document.hidden){setTimeout(tick,1500);return;}syncEmbeddedVisibility();if(!S.frozen&&now-S.lastSnapshot>S.snapshotMs)pollSnapshot();if(!S.frozen&&now-S.lastEvents>S.eventsMs)pollEvents();if(!S.frozen&&now-S.lastHandPoll>S.handPollMs)pollHand();if(!S.frozen&&now-S.lastWindows>S.windowsMs)pollWindows();if(!S.frozen&&now-S.lastLayoutPoll>S.layoutPollMs)pollLayouts();if(!S.frozen&&now-S.earthLastPoll>3200)pollEarth();if(!S.frozen&&now-S.lastPoll>900)pollObservation();setTimeout(tick,220)}
 pollSnapshot();pollEvents();pollWindows();pollLayouts();pollEarth();pollObservation();pollHand();tick();render(performance.now());
 })();
 """
