@@ -420,7 +420,7 @@ TEXT_INPUT_SCRIPT = r'''
       width: min(640px, calc(100vw - 36px));
       opacity: 1;
       border-color: rgba(61,220,132,.56);
-      box-shadow: 0 0 34px rgba(61,220,132,.18), inset 0 0 22px rgba(61,220,132,.05);
+      box-shadow: 0 0 34px rgba(61,220,132,.18), inset 0 0 22px rgba(35,133,205,.05);
     }
     #jarvis-text-label {
       display: flex;
@@ -429,14 +429,14 @@ TEXT_INPUT_SCRIPT = r'''
       margin: 0 3px 7px;
       font-size: 9px;
       letter-spacing: .28em;
-      color: #8fc4a8;
+      color: #9edbff;
       user-select: none;
     }
     #jarvis-text-dot {
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: #3ddc84;
+      background: #4dc7ff;
       box-shadow: 0 0 10px rgba(61,220,132,.55);
       flex: 0 0 auto;
     }
@@ -458,7 +458,7 @@ TEXT_INPUT_SCRIPT = r'''
       font-size: 13px;
       letter-spacing: .04em;
       cursor: text;
-      caret-color: #8fe8b8;
+      caret-color: #7edcff;
     }
     #jarvis-text-input::placeholder { color: #6d8580; }
     #jarvis-text-input:focus { border-color: rgba(143,232,184,.58); box-shadow: 0 0 18px rgba(61,220,132,.10); }
@@ -466,15 +466,15 @@ TEXT_INPUT_SCRIPT = r'''
       flex: 0 0 auto;
       width: 42px;
       height: 42px;
-      border: 1px solid rgba(143,232,184,.28);
+      border: 1px solid rgba(91,190,255,.28);
       border-radius: 9px;
-      color: #a6ffd0;
+      color: #b9e9ff;
       background: rgba(61,220,132,.06);
       cursor: pointer;
       font: inherit;
       font-size: 16px;
     }
-    #jarvis-text-send:hover { border-color: rgba(143,232,184,.68); background: rgba(61,220,132,.13); }
+    #jarvis-text-send:hover { border-color: rgba(143,232,184,.68); background: rgba(41,151,224,.14); }
     #jarvis-text-float {
       flex: 0 0 auto;
       width: 32px;
@@ -500,12 +500,12 @@ TEXT_INPUT_SCRIPT = r'''
       color: #839b94;
       white-space: pre-wrap;
     }
-    #jarvis-text-status.jarvis-error { color: #ff8c98; }
+    #jarvis-text-status.jarvis-error { color: #ff8fa8; }
     #jarvis-text-hint {
       margin: 7px 3px 0;
       font-size: 8px;
       letter-spacing: .17em;
-      color: #566a64;
+      color: #536b83;
       user-select: none;
     }
   `;
@@ -517,7 +517,7 @@ TEXT_INPUT_SCRIPT = r'''
     <div id="jarvis-text-label"><span id="jarvis-text-dot"></span>JARVIS TEXT LINK</div>
     <div id="jarvis-text-row">
       <input id="jarvis-text-input" type="text" autocomplete="off" spellcheck="false" placeholder="Hover here and type to talk to Jarvis..." aria-label="Talk to Jarvis by text" disabled />
-      <button id="jarvis-text-float" type="button" aria-label="Detach Jarvis text link into a floating desktop window" title="Detach to a movable desktop window" disabled>↗</button>
+      <button id="jarvis-text-float" type="button" aria-label="Detach Jarvis text link into a floating desktop window" title="Detach the neural command surface into a movable desktop window" disabled>↗</button>
       <button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button>
     </div>
     <div id="jarvis-text-status"></div>
@@ -634,11 +634,11 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jarvis Floating Text Link</title>
+<title>Jarvis Neural Floating Command</title>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030806;color:#e8f0f2;font-family:Consolas,"SFMono-Regular",monospace}#frame{width:100%;height:100%;padding:10px;border:1px solid rgba(61,220,132,.28);border-radius:16px;background:linear-gradient(145deg,rgba(5,17,12,.98),rgba(2,7,5,.96));box-shadow:0 12px 36px rgba(0,0,0,.5),inset 0 0 24px rgba(61,220,132,.05)}#bar{display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:move;user-select:none}.pywebview-drag-region{cursor:move}.dot{width:7px;height:7px;border-radius:50%;background:#3ddc84;box-shadow:0 0 11px rgba(61,220,132,.7)}#title{flex:1;font-size:9px;letter-spacing:.22em;color:#8fc4a8}#hotkey{font-size:7px;letter-spacing:.09em;color:#5d756b}#close{width:24px;height:22px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:transparent;color:#789087;cursor:pointer;font:inherit}#close:hover{border-color:rgba(255,140,152,.38);color:#ff9aa5}#row{display:flex;gap:8px;align-items:center}#input{min-width:0;flex:1;height:42px;border:1px solid rgba(143,232,184,.28);border-radius:9px;outline:none;padding:0 13px;background:rgba(0,0,0,.28);color:#e8f0f2;font:inherit;font-size:13px;letter-spacing:.03em;caret-color:#8fe8b8}#input:focus{border-color:rgba(143,232,184,.72);box-shadow:0 0 18px rgba(61,220,132,.13)}#input::placeholder{color:#637a71}#send{width:44px;height:42px;border:1px solid rgba(143,232,184,.30);border-radius:9px;background:rgba(61,220,132,.07);color:#a6ffd0;cursor:pointer;font:inherit;font-size:17px}#send:hover{background:rgba(61,220,132,.15);border-color:rgba(143,232,184,.7)}#status{margin-top:7px;min-height:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#78958a;font-size:8px;letter-spacing:.09em}#status.error{color:#ff8c98}</style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020914;color:#e6f7ff;font-family:Consolas,"SFMono-Regular",monospace}#frame{width:100%;height:100%;padding:10px;border:1px solid rgba(79,188,255,.28);border-radius:16px;background:linear-gradient(145deg,rgba(5,17,12,.98),rgba(2,7,5,.96));box-shadow:0 12px 36px rgba(0,0,0,.5),inset 0 0 24px rgba(35,133,205,.05)}#bar{display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:move;user-select:none}.pywebview-drag-region{cursor:move}.dot{width:7px;height:7px;border-radius:50%;background:#4dc7ff;box-shadow:0 0 11px rgba(77,199,255,.78)}#title{flex:1;font-size:9px;letter-spacing:.22em;color:#9edbff}#hotkey{font-size:7px;letter-spacing:.09em;color:#5d7891}#close{width:24px;height:22px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:transparent;color:#789087;cursor:pointer;font:inherit}#close:hover{border-color:rgba(255,140,152,.38);color:#ff9aa5}#row{display:flex;gap:8px;align-items:center}#input{min-width:0;flex:1;height:42px;border:1px solid rgba(91,190,255,.28);border-radius:9px;outline:none;padding:0 13px;background:rgba(0,0,0,.28);color:#e8f0f2;font:inherit;font-size:13px;letter-spacing:.03em;caret-color:#7edcff}#input:focus{border-color:rgba(91,190,255,.72);box-shadow:0 0 18px rgba(41,151,224,.14)}#input::placeholder{color:#627d95}#send{width:44px;height:42px;border:1px solid rgba(91,190,255,.30);border-radius:9px;background:rgba(61,220,132,.07);color:#b9e9ff;cursor:pointer;font:inherit;font-size:17px}#send:hover{background:rgba(61,220,132,.15);border-color:rgba(143,232,184,.7)}#status{margin-top:7px;min-height:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#799bb7;font-size:8px;letter-spacing:.09em}#status.error{color:#ff8fa8}</style>
 </head>
-<body><div id="frame"><div id="bar" class="pywebview-drag-region"><span class="dot"></span><span id="title">JARVIS FLOATING TEXT LINK</span><span id="hotkey">CTRL+ALT+SHIFT+F12</span><button id="close" type="button" aria-label="Return Jarvis text link to the main app">×</button></div><div id="row"><input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis from anywhere on your desktop…" disabled><button id="send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div><div id="status">CONNECTING…</div></div>
+<body><div id="frame"><div id="bar" class="pywebview-drag-region"><span class="dot"></span><span id="title">JARVIS NEURAL FLOATING LINK</span><span id="hotkey">CTRL+ALT+SHIFT+F12</span><button id="close" type="button" aria-label="Return Jarvis text link to the main app">×</button></div><div id="row"><input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis from anywhere on your desktop…" disabled><button id="send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div><div id="status">CONNECTING…</div></div>
 <script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn,{once:true});if(window.pywebview&&window.pywebview.api)readyFn()})();</script>
 </body></html>'''
 
@@ -813,7 +813,7 @@ class FullstackJarvisHost:
         if window is None:
             return
         try:
-            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(true); window.jarvisTextInput && window.jarvisTextInput.focus();")
+            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(true); window.jarvisNeuralCommandSurface && window.jarvisNeuralCommandSurface.setVisible(true); window.jarvisNeuralCommandSurface && window.jarvisNeuralCommandSurface.focus(); window.jarvisTextInput && window.jarvisTextInput.focus();")
         except Exception:
             LOGGER.exception("could not restore in-app Jarvis text link")
 
@@ -822,7 +822,7 @@ class FullstackJarvisHost:
         if window is None:
             return
         try:
-            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(false);")
+            window.evaluate_js("window.jarvisTextInput && window.jarvisTextInput.setVisible(false); window.jarvisNeuralCommandSurface && window.jarvisNeuralCommandSurface.setVisible(false);")
         except Exception:
             LOGGER.exception("could not hide in-app Jarvis text link")
 
