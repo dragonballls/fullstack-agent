@@ -410,6 +410,9 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.simulation.run", lambda scenario="cpu_stress", count=1000: self._neural_advanced_command("simulation", "benchmark", {"scenario": scenario, "count": count})))
         self.orchestrator.register(Action(Capability.SYSTEM_SETTINGS, "neural.accessibility.update", lambda **settings: self._neural_advanced_command("accessibility", "update", settings)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.fullstack.command", lambda domain, operation, payload=None: self._neural_advanced_command("fullstack", "route", {"domain": domain, "operation": operation, "payload": payload or {}})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status", lambda: self._neural_advanced_command("master", "status", {})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None: self._neural_advanced_command("master", "execute", {"feature": feature, "payload": payload or {}})))
+        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.smoke", lambda limit=None: self._neural_advanced_command("master", "smoke", {"limit": limit} if limit is not None else {})))
 
     def _neural_advanced_command(self, domain: str, operation: str, payload: dict[str, object] | None = None) -> dict[str, object]:
         world = self._neural_world_service
