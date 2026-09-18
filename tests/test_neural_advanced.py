@@ -141,5 +141,17 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         self.assertIn("workspace", payload)
 
 
+    def test_advanced_runtime_can_be_invoked_through_guarded_runtime_dispatch(self):
+        from quality_of_life.permissions import Capability, CapabilityPolicy
+        from quality_of_life.runtime import JarvisRuntime
+        from quality_of_life.neural_world import NeuralWorld
+
+        runtime = JarvisRuntime(CapabilityPolicy())
+        world = NeuralWorld()
+        runtime.set_neural_world_service(world)
+        result = runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.advanced.inspect")
+        self.assertIn("performance", result)
+
+
 if __name__ == "__main__":
     unittest.main()
