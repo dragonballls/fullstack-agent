@@ -1,4 +1,7 @@
 import unittest
+from unittest.mock import patch
+
+from quality_of_life import spatial_windows
 from quality_of_life.permissions import CapabilityPolicy
 from quality_of_life.spatial_windows import SpatialWindowManager, SpatialWindowUnavailable, WindowRect
 
@@ -13,6 +16,27 @@ class SpatialWindowTests(unittest.TestCase):
         except SpatialWindowUnavailable:
             return
         self.skipTest("runner is Windows")
+
+    def test_graphics_capture_probe_is_cached(self):
+        previous = spatial_windows._WINRT_CAPTURE
+        spatial_windows._WINRT_CAPTURE = None
+        calls = 0
+        real_import = __import__
+
+        def fake_import(name, *args, **kwargs):
+            nonlocal calls
+            if name == "winrt.windows.graphics.capture":
+                calls += 1
+                raise ImportError("not installed")
+            return real_import(name, *args, **kwargs)
+
+        try:
+            with patch("builtins.__import__", side_effect=fake_import):
+                self.assertFalse(spatial_windows._winrt_capture_available())
+                self.assertFalse(spatial_windows._winrt_capture_available())
+            self.assertEqual(calls, 1)
+        finally:
+            spatial_windows._WINRT_CAPTURE = previous
 
     def test_policy_is_enforced(self):
         class User32:
