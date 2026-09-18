@@ -31,7 +31,7 @@ class ProviderTarget:
         parsed = urllib.parse.urlparse(self.base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
             raise ValueError("base_url must be an absolute HTTP(S) URL without embedded credentials")
-        if parsed.scheme == "http" and not _is_loopback_hostname(parsed.hostname):
+        if parsed.scheme == "http" and not is_loopback_hostname(parsed.hostname):
             raise ValueError("HTTPS is required for non-loopback cloud targets")
         if not self.name.strip():
             raise ValueError("name must be non-empty")
