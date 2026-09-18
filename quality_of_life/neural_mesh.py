@@ -512,6 +512,8 @@ function makeSurface(info){
   const finish=function(){
     if(head.dataset.dragging!=="1")return;head.dataset.dragging="0";
     const key="window:"+info.handle;const x=Number(el.dataset.x)||0,y=Number(el.dataset.y)||0;
+    const nativeApi=api();
+    if(nativeApi&&nativeApi.spatial_window_move_resize&&info.embedded){const w=Math.max(80,Math.round(el.getBoundingClientRect().width)),h=Math.max(60,Math.round(el.getBoundingClientRect().height));nativeApi.spatial_window_move_resize(Number(info.handle),Math.round(x),Math.round(y),w,h).catch(function(){});}
     clearTimeout(S.layoutTimers.get(key));S.layoutTimers.set(key,setTimeout(async function(){const a=api();if(a&&a.neural_window_set_state){try{await a.neural_window_set_state(key,{position:[x/70,-y/70,3.5],scale:S.giant?1.28:1});}catch(_){}}},160));
   };
   head.addEventListener("pointerup",finish);head.addEventListener("pointercancel",finish);
@@ -530,7 +532,9 @@ function attachResize(info,el){
     if(grip.dataset.dragging!=="1")return;grip.dataset.dragging="0";
     const key="window:"+info.handle;const scale=Math.max(.20,Math.min(4,Number(el.dataset.scale)||1));
     const x=Number(el.dataset.x)||0,y=Number(el.dataset.y)||0;
-    const apiObj=api();if(apiObj&&apiObj.neural_window_set_state)apiObj.neural_window_set_state(key,{position:[x/70,-y/70,3.5],scale}).catch(function(){});
+    const apiObj=api();
+    if(apiObj&&apiObj.neural_window_set_state)apiObj.neural_window_set_state(key,{position:[x/70,-y/70,3.5],scale}).catch(function(){});
+    if(apiObj&&apiObj.spatial_window_move_resize&&info.embedded){const rect=el.getBoundingClientRect();apiObj.spatial_window_move_resize(Number(info.handle),Math.round(x),Math.round(y),Math.max(80,Math.round(rect.width)),Math.max(60,Math.round(rect.height))).catch(function(){});}
   };
   grip.addEventListener("pointermove",function(e){
     if(grip.dataset.dragging!=="1")return;
@@ -544,6 +548,7 @@ function attachResize(info,el){
 async function preview(info,el,index){
   if(index>2||S.quality==="minimal")return;
   const a=api();if(!a||!a.spatial_window_capture)return;
+  if(info.embedded)return;
   try{const cap=await a.spatial_window_capture(Number(info.handle),S.giant?1000:720);if(!cap||!cap.png_base64)return;const img=document.createElement("img");img.className="jn-window-preview";img.alt="";img.src="data:image/png;base64,"+cap.png_base64;const old=el.querySelector(".jn-window-empty,.jn-window-preview");if(old)old.replaceWith(img);}catch(_){}
 }
 function setSurfaceMode(mode){
