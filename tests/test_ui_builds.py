@@ -35,7 +35,7 @@ class UIBuildStoreTests(unittest.TestCase):
                 })
                 self.assertEqual(build.id, f"test-build-{index}")
             ids = {item.id for item in store.list()}
-            self.assertEqual(len(ids), 53)
+            self.assertEqual(len(ids), 54)
             self.assertEqual(store.active().id, DEFAULT_BUILD_ID)
             self.assertTrue((Path(tmp) / "test-build-49" / "manifest.json").is_file())
 
