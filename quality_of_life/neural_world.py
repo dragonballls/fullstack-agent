@@ -571,6 +571,7 @@ def install(desktop_module: Any) -> None:
             self._discovery = NeuralDiscovery(self._neural_world, host.controller.runtime)
             self._last_discovery = 0.0
             try:
+                host.controller.runtime.set_neural_world_service(self._neural_world)
                 host.controller.runtime.set_neural_event_sink(self._neural_world.events.publish)
             except Exception:
                 pass
