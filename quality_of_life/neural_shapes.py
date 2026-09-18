@@ -136,9 +136,6 @@ class ShapeRegistry:
         text = str(request or "").strip()
         if not text:
             return normalize_shape("droplet")
-        builtin = normalize_shape(text)
-        if builtin.family == "primitive":
-            return builtin
         with self._lock:
             custom = self._items.get(text.casefold())
-        return custom or builtin
+        return custom or normalize_shape(text)
