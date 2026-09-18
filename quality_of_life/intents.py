@@ -78,6 +78,7 @@ def parse_intent(text: str) -> Intent:
             rotation_speed = float(speed_match.group(2))
             rotation_unit = speed_match.group(3)
             rotation_axis = (speed_match.group(4) or "y").lower()
+        requested_shape = re.sub(r"^(?:the\s+)?shape\s+of\s+", "", requested_shape, flags=re.IGNORECASE).strip()
         if requested_shape.casefold().startswith("a "):
             requested_shape = requested_shape[2:].strip()
         elif requested_shape.casefold().startswith("an "):
