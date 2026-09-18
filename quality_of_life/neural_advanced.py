@@ -2065,17 +2065,32 @@ class NeuralAdvancedRuntime:
             return self._record_master(category, name, result, data)
 
         if category == "audio":
-            if "performance" in lower or "priorit" in lower:
-                result = self.audio.policy(game_active="game" in lower, performance_pressure=float(data.get("performance_pressure", 0.0)))
-            else:
-                kind = "ambient"
-                for token, value in (("search", "search"), ("workflow", "workflow"), ("handoff", "agent_handoff"), ("error", "error"), ("neuron", "neuron"), ("directional", "voice"), ("voice", "voice")):
-                    if token in lower:
-                        kind = value
-                        break
-                result = self.audio.emit(kind, position=data.get("position"), intensity=float(data.get("intensity", data.get("activity", 0.5))))
-            if isinstance(result, dict):
-                result["event"] = kind
+            if "performance mode" in lower:
+                mode = str(data.get("performance_mode", "low"))
+                result = self.audio.policy(
+                    performance_pressure=float(data.get("performance_pressure", 0.0)),
+                    performance_mode=mode,
+                )
+                result["policy"] = "performance"
+                return self._record_master(category, name, result, data)
+            if "game audio" in lower or "priorit" in lower:
+                result = self.audio.policy(
+                    game_active=True,
+                    performance_pressure=float(data.get("performance_pressure", 0.0)),
+                )
+                result["policy"] = "game-priority"
+                return self._record_master(category, name, result, data)
+            kind = "ambient"
+            for token, value in (("search", "search"), ("workflow", "workflow"), ("handoff", "agent_handoff"), ("error", "error"), ("neuron", "neuron"), ("directional", "voice"), ("voice", "voice")):
+                if token in lower:
+                    kind = value
+                    break
+            result = self.audio.emit(
+                kind,
+                position=data.get("position"),
+                intensity=float(data.get("intensity", data.get("activity", 0.5))),
+            )
+            result["event"] = kind
             return self._record_master(category, name, result, data)
 
         if category == "multi_user_shared":
