@@ -68,6 +68,10 @@ $headlessCi = ($env:GITHUB_ACTIONS -eq 'true') -and ($env:JARVIS_ALLOW_HEADLESS_
 $process = $null
 $window = $null
 try {
+    $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
+    if (Test-Path -LiteralPath $log) {
+        Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+    }
     $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru -WorkingDirectory (Resolve-Path '.')
     Write-Host ("Jarvis.exe started. PID={0}" -f $process.Id)
 
@@ -98,8 +102,9 @@ try {
         if ($process.HasExited) {
             throw "Jarvis.exe exited after native window-object creation with code $($process.ExitCode)"
         }
-        if ($contents -notmatch 'floating command bar window object created;') {
-            throw 'Frozen Jarvis.exe did not create the floating command bar window object'
+        $floatingMarker = 'floating command bar window object created; pid=' + $process.Id + ' '
+        if ($contents -notmatch [regex]::Escape($floatingMarker)) {
+            throw "Frozen Jarvis.exe did not create the floating command bar window object for PID $($process.Id)"
         }
         Write-Host 'Headless hosted-runner GUI smoke passed: frozen EXE validated the production native-window contract and created the floating command bar window.'
         return
