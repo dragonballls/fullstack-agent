@@ -24,8 +24,10 @@ class FakeUser32:
     def SetWindowPos(self, h, _after, x, y, w, height, _flags):
         self.rects[int(h)]={"x":int(x),"y":int(y),"width":int(w),"height":int(height)}; return 1
     def GetWindowRect(self, h, rect):
-        item=self.rects[int(h)]
-        rect.left=item["x"];rect.top=item["y"];rect.right=item["x"]+item["width"];rect.bottom=item["y"]+item["height"];return 1
+        import ctypes
+        item = self.rects[int(h)]
+        real = ctypes.cast(rect, ctypes.POINTER(type(__import__("quality_of_life.spatial_windows", fromlist=["ctypes"]).ctypes.wintypes.RECT)())).contents
+        real.left=item["x"]; real.top=item["y"]; real.right=item["x"]+item["width"]; real.bottom=item["y"]+item["height"]; return 1
 
 
 class SpatialEmbeddingTests(unittest.TestCase):
