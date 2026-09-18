@@ -2394,7 +2394,7 @@ class NeuralAdvancedRuntime:
         self.multi_user.profile("user-a")
         self.fullstack.xr_accessibility.device("xr:controller", kind="controller", connected=True)
         self.fullstack.remote.application("app:remote", machine_id="machine:remote")
-        self.simulation.create("sandbox:jarvis")
+        self.simulation.generate(neurons=256, windows=32, tasks=16, relationships=512)
         self.streaming.index("region:indexed", (0, 0, 0))
         for identity in expected:
             proof = MASTER_BEHAVIOR_PROOFS[identity]
