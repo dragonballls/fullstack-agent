@@ -174,7 +174,7 @@ const partProg=program(
 '#version 300 es\nprecision highp float;in float vLife;out vec4 outColor;void main(){vec2 u=gl_PointCoord*2.-1.;if(length(u)>1.)discard;outColor=vec4(.18,.69,1.,(1.-vLife)*.48);}'
 );
 
-const meshPos=gl.createBuffer(),meshNormal=gl.createBuffer(),meshIndex=gl.createBuffer(),centerBuf=gl.createBuffer(),scaleBuf=gl.createBuffer(),energyBuf=gl.createBuffer(),phaseBuf=gl.createBuffer(),selectedBuf=gl.createBuffer(),birthBuf=gl.createBuffer(),lineBuf=gl.createBuffer(),lineStrengthBuf=gl.createBuffer(),lineProgressBuf=gl.createBuffer(),particleBuf=gl.createBuffer(),particleLifeBuf=gl.createBuffer(),particleSizeBuf=gl.createBuffer();
+const meshPos=gl.createBuffer(),meshNormal=gl.createBuffer(),meshIndex=gl.createBuffer(),centerBuf=gl.createBuffer(),scaleBuf=gl.createBuffer(),energyBuf=gl.createBuffer(),phaseBuf=gl.createBuffer(),selectedBuf=gl.createBuffer(),shapeBuf=gl.createBuffer(),birthBuf=gl.createBuffer(),lineBuf=gl.createBuffer(),lineStrengthBuf=gl.createBuffer(),lineProgressBuf=gl.createBuffer(),particleBuf=gl.createBuffer(),particleLifeBuf=gl.createBuffer(),particleSizeBuf=gl.createBuffer();
 
 function buildDroplet(){
   const lat=7,lon=10,pos=[],nor=[],idx=[];
@@ -190,7 +190,7 @@ function buildDroplet(){
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);return idx.length;
 }
 const meshCount=buildDroplet();
-const earthPos=gl.createBuffer(),earthNormal=gl.createBuffer(),earthIndex=gl.createBuffer();
+const earthPos=gl.createBuffer(),earthNormal=gl.createBuffer(),earthIndex=gl.createBuffer(),earthCenterBuf=gl.createBuffer(),earthScaleBuf=gl.createBuffer(),earthEnergyBuf=gl.createBuffer(),earthPhaseBuf=gl.createBuffer(),earthSelectedBuf=gl.createBuffer(),earthShapeBuf=gl.createBuffer(),earthBirthBuf=gl.createBuffer();
 function buildEarthSphere(){
   const lat=20,lon=32,pos=[],nor=[],idx=[];
   for(let iy=0;iy<=lat;iy++){
@@ -230,6 +230,7 @@ function resize(){
 function render(now){
   requestAnimationFrame(render);
   if(document.hidden)return;
+  if(S.view==="earth"){resize();renderEarth(now);return;}
   const dt=now-S.lastFrame;S.lastFrame=now;S.frameMs=S.frameMs*.92+dt*.08;
   if(S.mode==="foreground"&&S.frameMs>28)S.quality="performance";
   if(S.mode==="foreground"&&S.frameMs<18&&S.nodes.length<800)S.quality="maximum";
@@ -282,12 +283,12 @@ function renderEarth(now){
       cs[i]=.10;ce[i]=1;ph[i]=i*.91;sel[i]=0;sh[i]=1;bi[i]=now-1700;
     });
     gl.enable(gl.BLEND);gl.depthMask(false);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-    upload(earthCenterBuf,cp);upload(earthScaleBuf,cs);upload(earthEnergyBuf,ce);upload(earthPhaseBuf,ph);upload(earthSelectedBuf,sel);upload(shapeBuf,sh);upload(earthBirthBuf,bi);
+    upload(earthCenterBuf,cp);upload(earthScaleBuf,cs);upload(earthEnergyBuf,ce);upload(earthPhaseBuf,ph);upload(earthSelectedBuf,sel);upload(earthShapeBuf,sh);upload(earthBirthBuf,bi);
     gl.useProgram(droplet);
     gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);
     gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);
     gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),now);
-    attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,earthCenterBuf,1);attr(droplet,"aScale",1,earthScaleBuf,1);attr(droplet,"aEnergy",1,earthEnergyBuf,1);attr(droplet,"aPhase",1,earthPhaseBuf,1);attr(droplet,"aSelected",1,earthSelectedBuf,1);attr(droplet,"aShape",1,shapeBuf,1);attr(droplet,"aBirth",1,earthBirthBuf,1);
+    attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,earthCenterBuf,1);attr(droplet,"aScale",1,earthScaleBuf,1);attr(droplet,"aEnergy",1,earthEnergyBuf,1);attr(droplet,"aPhase",1,earthPhaseBuf,1);attr(droplet,"aSelected",1,earthSelectedBuf,1);attr(droplet,"aShape",1,earthShapeBuf,1);attr(droplet,"aBirth",1,earthBirthBuf,1);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,locators.length);
   }
   S.yaw=oldYaw;S.pitch=oldPitch;S.distance=oldDistance;S.target=oldTarget;
