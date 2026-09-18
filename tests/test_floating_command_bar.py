@@ -3,6 +3,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
+from scripts.jarvis_desktop import FullstackJarvisHost
+
 
 class FloatingCommandBarContractTests(unittest.TestCase):
     @classmethod
