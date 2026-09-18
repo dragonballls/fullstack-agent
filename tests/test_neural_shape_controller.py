@@ -99,7 +99,7 @@ class ShapeIntentTests(unittest.TestCase):
 
         command = parse_intent("make this browser tab into the shape of a globe and give it a rotational speed 2 radians per second on y")
         self.assertEqual(command.kind, "neural_shape")
-        self.assertEqual(command.arguments["target"], "browser tab")
+        self.assertEqual(command.arguments["target"], "this browser tab")
         self.assertEqual(command.arguments["shape"], "globe")
         self.assertEqual(command.arguments["rotation_axis"], "y")
         self.assertEqual(command.arguments["rotation_unit"], "radians per second")
