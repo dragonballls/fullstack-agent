@@ -210,19 +210,43 @@ class AgentOrchestrator:
                 return "", False, ["Shape name is required"], False
             result = self.runtime.neural_shape_save(name, shape)
             return f"Saved shape {result['name']}.", True, [], False
+        if intent.kind == "neural_shape_revert_all":
+            result = self.runtime.neural_shape_revert_all()
+            if not result.get("ok", False):
+                return "", False, [f"Some shape changes could not be reverted: {result.get('failed', [])}"], False
+            return f"Reverted {result.get('reverted', 0)} shape change target(s) and restored the recorded original state.", True, [], False
+        if intent.kind == "neural_shape_revert":
+            target_query = str(intent.arguments.get("target", "")).strip()
+            try:
+                result = self.runtime.neural_shape_revert(target_query) if hasattr(self.runtime, "neural_shape_revert") else self.runtime.neural_shape_remove(target_query)
+            except Exception as exc:
+                return "", False, [str(exc)], False
+            return f"Restored the original state of {target_query}.", bool(result.get("reverted", False)), [], False
+        if intent.kind == "neural_shape_create":
+            shape = str(intent.arguments.get("shape", "droplet")).strip()
+            label = str(intent.arguments.get("name", "")).strip() or shape.title()
+            result = self.runtime.neural_shape_create(label, shape)
+            return f"Created {label} as {shape}.", bool(result.get("created", False)), [], False
         if intent.kind == "neural_shape":
             target_query = str(intent.arguments.get("target", "")).strip()
+            normalized_target = target_query.casefold()
             shape = str(intent.arguments.get("shape", "droplet")).strip()
-            matches = self.runtime.neural_entity_search(target_query, limit=5)
-            if not matches:
-                return "", False, [f"No neural entity found for: {target_query}"], False
-            first_label = str(matches[0].get("label", "")).strip().casefold()
-            normalized_target = target_query.strip().casefold()
-            if len(matches) > 1 and first_label != normalized_target:
-                return "", False, [f"Neural target is ambiguous: {target_query}"], False
-            target_id = str(matches[0]["id"])
-            changed = self.runtime.neural_entity_shape_set(target_id, shape)
-            return f"Changed {matches[0].get('label', target_id)} to {shape}.", True, [], False
+            # "this browser tab/window" is resolved through the same world entity registry
+            # as every other target; brain aliases intentionally address the whole neural mesh.
+            target_query = target_query.replace("this ", "", 1).replace("the ", "", 1).strip()
+            try:
+                result = self.runtime.neural_shape_apply(
+                    target_query,
+                    shape,
+                    rotation_speed=float(intent.arguments.get("rotation_speed", 0.0)),
+                    rotation_unit=intent.arguments.get("rotation_unit"),
+                    rotation_axis=str(intent.arguments.get("rotation_axis", "y")),
+                )
+            except Exception as exc:
+                return "", False, [str(exc)], False
+            if "scope" in result:
+                return f"Applied {shape} to the {result['scope']} ({result.get('changed', 0)} elements).", True, [], False
+            return f"Changed {target_query} to {shape} with rotational speed {result.get('angular_velocity', [0, 0, 0])}.", True, [], False
         if intent.kind == "browser_open":
             browser = str(intent.arguments["browser"])
             url = intent.arguments.get("url")
