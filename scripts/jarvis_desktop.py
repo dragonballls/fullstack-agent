@@ -8,6 +8,7 @@ brain. The obsolete 640x118 Tk chat bar is intentionally gone.
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import os
 from pathlib import Path
@@ -30,6 +31,9 @@ except ImportError:
 LOG_DIR = Path.home() / "AppData" / "Local" / "Jarvis" / "logs"
 LOG_FILE = LOG_DIR / "desktop.log"
 AUTO_UPDATE_INTERVAL = max(60, int(os.environ.get("JARVIS_AUTO_UPDATE_INTERVAL", "300")))
+FLOATING_HOTKEY_LABEL = "Ctrl+Alt+Shift+F12"
+FLOATING_HOTKEY_ID = 0x4A52
+FLOATING_POSITION_FILE = LOG_DIR.parent / "settings" / "floating_text_link.json"
 
 
 def _logger() -> logging.Logger:
