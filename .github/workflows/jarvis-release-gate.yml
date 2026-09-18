@@ -16,7 +16,7 @@ env:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   regression:
@@ -49,6 +49,7 @@ jobs:
 
   windows-exe:
     name: Native Windows Jarvis.exe
+    timeout-minutes: 20
     needs: regression
     runs-on: windows-latest
     permissions:
