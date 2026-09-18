@@ -52,7 +52,7 @@ class JarvisRuntime:
             return lambda: target.from_environment()
         if name == "account_manager":
             return lambda: target(account_access=self._tool("account_access"))
-        if name in {"computer", "screen", "browser", "clipboard", "windows"}:
+        if name in {"computer", "screen", "browser", "clipboard", "windows", "spatial_windows"}:
             return lambda: target(self.policy)
         if name == "browser_registry":
             return lambda: target()
@@ -185,6 +185,11 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.CLIPBOARD, "clipboard.write", lambda text: self._tool("clipboard").write(text)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.list", lambda: self._tool("windows").list_windows()))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.focus", lambda identifier: self._tool("windows").focus_window(identifier)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.geometry", lambda identifier: self._tool("spatial_windows").rect(identifier).as_dict()))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.move_resize", lambda identifier, x, y, width, height, confirmed=False: self._tool("spatial_windows").move_resize(identifier, x, y, width, height, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.show", lambda identifier, confirmed=False: self._tool("spatial_windows").set_visible(identifier, True, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.hide", lambda identifier, confirmed=False: self._tool("spatial_windows").set_visible(identifier, False, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.restore", lambda identifier, confirmed=False: self._tool("spatial_windows").restore(identifier, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.minimize", lambda identifier: self._tool("windows").minimize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.maximize", lambda identifier: self._tool("windows").maximize_window(identifier)))
         self.orchestrator.register(Action(Capability.WINDOW_CONTROL, "windows.close", lambda identifier: self._tool("windows").close_window(identifier)))
