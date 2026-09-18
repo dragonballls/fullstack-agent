@@ -195,6 +195,9 @@ class NeuralShapeController:
             "generated_by": "neural_shape_controller",
             "created_at": _now(),
         }
+        # Persist rollback metadata before creating the object so a partial world
+        # mutation can always be retried or reverted.
+        self._snapshot_once(object_id, generated=True)
         node = self.world.upsert(
             object_id,
             EntityKind.TEMPORARY,
@@ -210,7 +213,6 @@ class NeuralShapeController:
             shape=spec.as_dict(),
             metadata=meta,
         )
-        self._snapshot_once(object_id, generated=True)
         with self.world._lock:
             self.world.events.publish(
                 "entity.shape.generated",
@@ -240,6 +242,9 @@ class NeuralShapeController:
             raise ValueError("target id is required")
         spec = self.shape_description(shape)
         angular_velocity = self._normalize_motion(rotation_speed, rotation_axis)
+        with self.world._lock:
+            if target not in self.world._entities:
+                raise KeyError("unknown neural target")
         entry = self._snapshot_once(target)
         with self.world._lock:
             node = self.world._entities.get(target)
@@ -288,18 +293,27 @@ class NeuralShapeController:
     def _restore_entry(self, entry: ShapeHistoryEntry) -> bool:
         target = entry.target_id
         if entry.generated and entry.original_entity is None:
+            entity_restored = False
             try:
                 self.world.retire(target, remove=True)
+                entity_restored = True
+            except (KeyError, LookupError):
+                # The generated object may already be gone after a partial failure.
+                with self.world._lock:
+                    entity_restored = target not in self.world._entities
             except Exception:
                 return False
+            layout_restored = True
             if target.startswith("window:"):
                 try:
                     self.layout.remove(target)
                 except Exception:
-                    pass
-            return True
-        restored = False
-        if entry.original_entity is not None:
+                    layout_restored = False
+            return entity_restored and layout_restored
+
+        entity_applicable = entry.original_entity is not None
+        entity_restored = not entity_applicable
+        if entity_applicable:
             raw = entry.original_entity
             try:
                 self.world.upsert(
@@ -316,24 +330,27 @@ class NeuralShapeController:
                     shape=raw.get("shape", "droplet"),
                     metadata=raw.get("metadata") if isinstance(raw.get("metadata"), Mapping) else None,
                 )
-                restored = True
+                entity_restored = True
             except (KeyError, TypeError, ValueError, MemoryError):
-                pass
+                entity_restored = False
+
+        layout_applicable = entry.original_layout is not None or (target.startswith("window:") and not entry.layout_existed)
+        layout_restored = not layout_applicable
         if entry.original_layout is not None:
             raw_layout = dict(entry.original_layout)
             raw_layout.pop("key", None)
             try:
                 self.layout.upsert(target, **raw_layout)
-                restored = True
+                layout_restored = True
             except (TypeError, ValueError, OSError):
-                pass
+                layout_restored = False
         elif target.startswith("window:") and not entry.layout_existed:
             try:
                 self.layout.remove(target)
-                restored = True
+                layout_restored = True
             except (TypeError, ValueError, OSError):
-                pass
-        return restored
+                layout_restored = False
+        return entity_restored and layout_restored
 
     def revert(self, target_id: str) -> dict[str, object]:
         target = str(target_id).strip()
@@ -366,8 +383,9 @@ class NeuralShapeController:
             except Exception:
                 failed.append(entry.target_id)
         with self._lock:
-            for entry in entries:
-                self._history.pop(entry.target_id, None)
+            successful = {entry.target_id for entry in entries if entry.target_id not in failed}
+            for target_id in successful:
+                self._history.pop(target_id, None)
             self._save()
         return {"ok": not failed, "reverted": restored, "failed": failed, "remaining_history": len(self._history)}
 
