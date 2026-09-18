@@ -1573,6 +1573,10 @@ class FullStackNeuralExperience:
                     controls=dict(data.get("controls", {})),
                 )
 
+        if domain_name == "advanced_analytics":
+            if op == "network_cost":
+                return self.performance.record_window_cost({"network": float(data.get("value", data.get("cost", 0.0)))})
+
         if domain_name == "optimization_intelligence":
             if op == "learn":
                 return self.optimization.learn(str(data["name"]), dict(data.get("metrics", {})))
