@@ -275,9 +275,9 @@ class NeuralWorld:
                limit: int = 100) -> list[dict[str, object]]:
         needle = " ".join(str(query).casefold().split())
         if lifecycle:
-            lifecycle_value = str(lifecycle).casefold()
-        else:
-            lifecycle_value = None
+            lifecycle_value = str(lifecycle).casefold() if lifecycle else None
+        if not any((needle, kind, source, status, lifecycle_value, connected_to)):
+            raise ValueError("search query or filter must not be empty")
         with self._lock:
             connected_ids: set[str] | None = None
             if connected_to:
