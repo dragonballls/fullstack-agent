@@ -1707,7 +1707,8 @@ class NeuralAdvancedRuntime:
             return self._record_master(category, name, result, data)
 
         if category == "desktop_3d":
-            result = self.workspace.transition("3d" if "3d" in lower else "desktop", duration_ms=int(data.get("duration_ms", 650)), preserve_focus=True)
+            target_mode = "desktop" if ("to desktop" in lower or "desktop" in lower and "to 3d" not in lower) else "3d"
+            result = self.workspace.transition(target_mode, duration_ms=int(data.get("duration_ms", 650)), preserve_focus=True)
             return self._record_master(category, name, result, data)
 
         if category == "cross_application":
