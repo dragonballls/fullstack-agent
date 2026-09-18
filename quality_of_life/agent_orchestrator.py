@@ -217,11 +217,22 @@ class AgentOrchestrator:
             return f"Reverted {result.get('reverted', 0)} shape change target(s) and restored the recorded original state.", True, [], False
         if intent.kind == "neural_shape_revert":
             target_query = str(intent.arguments.get("target", "")).strip()
+            if target_query.casefold() in {"this", "it"} or target_query.casefold().startswith("this "):
+                target_query = getattr(self.runtime, "neural_current_selection", lambda: None)() or target_query.replace("this ", "", 1).strip()
             try:
                 result = self.runtime.neural_shape_revert(target_query) if hasattr(self.runtime, "neural_shape_revert") else self.runtime.neural_shape_remove(target_query)
             except Exception as exc:
                 return "", False, [str(exc)], False
             return f"Restored the original state of {target_query}.", bool(result.get("reverted", False)), [], False
+        if intent.kind == "neural_shape_remove":
+            target_query = getattr(self.runtime, "neural_current_selection", lambda: None)()
+            if not target_query:
+                return "", False, ["Select a 3D object first, then ask Jarvis to remove it."], False
+            try:
+                result = self.runtime.neural_shape_remove(target_query)
+            except Exception as exc:
+                return "", False, [str(exc)], False
+            return f"Removed the selected 3D object: {target_query}.", bool(result.get("reverted", False)), [], False
         if intent.kind == "neural_shape_create":
             shape = str(intent.arguments.get("shape", "droplet")).strip()
             label = str(intent.arguments.get("name", "")).strip() or shape.title()
