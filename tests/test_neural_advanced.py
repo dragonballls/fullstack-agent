@@ -176,7 +176,7 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         from quality_of_life.runtime import JarvisRuntime
         from quality_of_life.neural_world import NeuralWorld
 
-        runtime = JarvisRuntime(CapabilityPolicy())
+        runtime = JarvisRuntime(CapabilityPolicy(allowed=frozenset({Capability.SYSTEM_DIAGNOSTICS})))
         world = NeuralWorld()
         runtime.set_neural_world_service(world)
         result = runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.advanced.inspect")
