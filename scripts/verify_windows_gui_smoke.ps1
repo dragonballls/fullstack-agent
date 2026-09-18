@@ -85,7 +85,7 @@ try {
             }
             if (Test-Path -LiteralPath $log) {
                 $contents = Get-Content -LiteralPath $log -Raw
-                if ($contents -match 'native Jarvis window object created; entering GUI event loop') {
+                if ($contents -match 'headless frozen Jarvis native window contract validated;') {
                     $created = $true
                     break
                 }
@@ -93,12 +93,12 @@ try {
             Start-Sleep -Milliseconds 500
         }
         if (-not $created) {
-            throw 'Frozen Jarvis.exe did not reach native window-object creation within 45 seconds'
+            throw 'Frozen Jarvis.exe did not reach the headless native-window contract validation within 45 seconds'
         }
         if ($process.HasExited) {
             throw "Jarvis.exe exited after native window-object creation with code $($process.ExitCode)"
         }
-        Write-Host 'Headless hosted-runner GUI smoke passed: frozen EXE initialized pywebview native window creation and remained alive.'
+        Write-Host 'Headless hosted-runner GUI smoke passed: frozen EXE validated the production pywebview native-window contract and remained alive.'
         return
     }
 
