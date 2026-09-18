@@ -101,6 +101,15 @@ class NeuralCompletenessTests(unittest.TestCase):
         self.assertEqual(result["requested"], result["executed"])
         self.assertEqual(result["failures"], [])
 
+    def test_neural_world_bridge_exposes_completeness(self):
+        from quality_of_life.neural_world import NeuralWorld
+
+        world = NeuralWorld()
+        status = world.neural_advanced_command("completeness", "status")
+        self.assertEqual(status["status"], "100%_added")
+        self.assertEqual(status["missing"], [])
+        self.assertEqual(status["extra"], [])
+
     def test_all_bound_names_are_unique(self):
         engine = NeuralFeatureCompleteness()
         names = [item["name"] for item in engine.status()["features"]]
