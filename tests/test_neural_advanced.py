@@ -15,6 +15,9 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         names = {spec.name for spec in OPERATION_CATALOG}
         for required in ("neural.advanced.inspect", "neural.workspace.compose", "neural.cross_application.transfer", "neural.browser.research_wall", "neural.performance.sample", "neural.display.update", "neural.history.snapshot", "neural.planning.dry_run", "neural.reliability.reset", "neural.audio.event", "neural.multiuser.region", "neural.remote.region", "neural.streaming.region", "neural.simulation.run", "neural.accessibility.update"):
             self.assertIn(required, names)
+        self.assertIn("neural.master.status", names)
+        self.assertIn("neural.master.execute", names)
+        self.assertIn("neural.master.smoke", names)
 
     def test_feature_catalog_contains_requested_domains(self):
         expected = {
@@ -198,6 +201,9 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         runtime.set_neural_world_service(world)
         result = runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.advanced.inspect")
         self.assertIn("performance", result)
+        master = runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status")
+        self.assertEqual(master["status"], "100%_added")
+        self.assertEqual(master["missing"], [])
 
 
 if __name__ == "__main__":
