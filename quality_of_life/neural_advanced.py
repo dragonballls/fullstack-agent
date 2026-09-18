@@ -1418,10 +1418,9 @@ FEATURES = {
 }
 
 
-# The complete Build #2 master scope includes every existing advanced feature plus
-# the explicit unified shared-clipboard capability from the master specification.
+# Canonical Build #2 master scope: every unique feature is tracked by category + feature name.
+# The shared clipboard is already part of FEATURES and is not appended a second time.
 MASTER_SCOPE: dict[str, list[str]] = {key: list(values) for key, values in FEATURES.items()}
-MASTER_SCOPE["cross_application"].append("unified shared clipboard")
 
 
 @dataclass(frozen=True)
