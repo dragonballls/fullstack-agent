@@ -496,9 +496,15 @@ class NeuralWorldBridgeMixin:
             entity = self._neural_world._entities.get(str(entity_id))
             if entity is None:
                 raise KeyError("unknown neural entity")
-            normalized = normalize_shape(shape).as_dict()
+            normalized = self._shape_registry.resolve(shape).as_dict()
             entity.shape = normalized
             entity.updated_at = _now()
+            if entity.kind is EntityKind.WINDOW and entity.id.startswith("window:"):
+                handle = entity.id.split(":", 1)[1]
+                try:
+                    self._layout.upsert("window:" + handle, shape=normalized)
+                except (TypeError, ValueError, OSError):
+                    pass
             self._neural_world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
             return {"id": entity.id, "shape": normalized}
 
