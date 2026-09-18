@@ -736,6 +736,16 @@ class NeuralWorldBridgeMixin:
     def neural_advanced_command(self, domain: str, operation: str, payload: Mapping[str, object] | None = None) -> dict[str, object]:
         data = dict(payload or {})
         op = str(operation)
+        mutating_capabilities = {
+            "workspace": Capability.WINDOW_CONTROL,
+            "cross_application": Capability.FILE_WRITE,
+            "browser": Capability.BROWSER_CONTROL,
+            "game": Capability.APP_WRITE,
+            "display": Capability.SYSTEM_SETTINGS,
+        }
+        required = mutating_capabilities.get(str(domain))
+        if required is not None:
+            self.host.controller.runtime.policy.check(required)
         if domain == "workspace":
             return self._advanced.command_workspace(op, data)
         if domain == "cross_application":
