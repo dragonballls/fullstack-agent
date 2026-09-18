@@ -440,7 +440,7 @@ async function pollObservation(){
         if(e.kind==="task.progress"&&e.entity_id)S.followTask=e.entity_id;
         if(e.kind&&String(e.kind).startsWith("observation.")){lines.push(String(e.payload&&e.payload.message||e.kind).slice(0,120));}
       }
-      if(S.follow&&S.followTask){const taskNode=S.nodes.find(function(n){return n.id===S.followTask});if(taskNode){S.selected=taskNode.id;S.target=[...nodePosition(taskNode)];}}
+      if(S.follow&&S.followTask){const taskNode=S.nodes.find(function(n){return n.id===S.followTask});if(taskNode){setSelected(taskNode.id);S.target=[...nodePosition(taskNode)];}}
       box.textContent=(S.observation.focus||"auto").toUpperCase()+" · "+(lines.length?lines.slice(-6).join("  •  "):S.observation.reason||"OBSERVING");
       box.classList.add("visible");
     }else{
@@ -470,7 +470,7 @@ async function pollHand(){
     const y=Math.max(0,Math.min(1,Number(sample.y)||0))*canvas.clientHeight;
     if(Boolean(sample.pinch)&&!S.handPinching){
       const target=document.elementFromPoint(x,y);const surface=target&&target.closest?target.closest(".jn-spatial-window"):null;
-      if(surface){S.handWindow=surface;S.handX=x;S.handY=y;}else{const node=pick(x,y);if(node){S.handNode=node.id;S.selected=node.id;S.handX=x;S.handY=y;}}
+      if(surface){S.handWindow=surface;S.handX=x;S.handY=y;}else{const node=pick(x,y);if(node){S.handNode=node.id;setSelected(node.id);S.handX=x;S.handY=y;}}
       S.handPinching=true;
     }else if(Boolean(sample.pinch)&&S.handPinching&&S.handWindow){
       const dx=x-S.handX,dy=y-S.handY;await moveHandWindow(S.handWindow,dx,dy);S.handX=x;S.handY=y;
@@ -582,6 +582,7 @@ function renderNeuralConsolePlacement(force){
   }
 }
 
+function setSelected(id){S.selected=id;const a=api();if(a&&a.neural_selection_set&&id)a.neural_selection_set(String(id)).catch(function(){});}
 function screenDelta(dx,dy,depth){const c=camera(),f=canvas.clientHeight/(2*Math.tan(Math.PI/6));return add(mul3(c.right,dx*depth/f),mul3(c.up,-dy*depth/f))}
 function pick(x,y){
   let best=null,bestD=Infinity;
@@ -589,7 +590,7 @@ function pick(x,y){
   return bestD<75?best:null;
 }
 function focus(n){
-  S.selected=n.id;S.target=[...nodePosition(n)];if(S.follow){S.yaw+=.0008;S.pitch+=.0004;}S.distance=Math.max(5,Math.min(90,11/Math.max(.5,n.scale||1)));
+  setSelected(n.id);S.target=[...nodePosition(n)];if(S.follow){S.yaw+=.0008;S.pitch+=.0004;}S.distance=Math.max(5,Math.min(90,11/Math.max(.5,n.scale||1)));
   ui.querySelector("#jn-name").textContent=n.label;ui.querySelector("#jn-meta").textContent=n.kind+" · "+n.status+" · "+n.source+" · "+n.lifecycle;
   ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="FOCUS · "+n.label;
 }
@@ -861,7 +862,7 @@ window.jarvisNeuralCommandSurface={
 canvas.addEventListener("pointerdown",function(e){
   if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
   const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;
-  if(n){S.dragNode=n.id;S.selected=n.id;canvas.setPointerCapture(e.pointerId);return;}
+  if(n){S.dragNode=n.id;setSelected(n.id);canvas.setPointerCapture(e.pointerId);return;}
   S.orbit=true;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener("pointermove",function(e){
