@@ -102,7 +102,7 @@ const gl=canvas.getContext("webgl2",{antialias:false,alpha:true,powerPreference:
 if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAILABLE";return;}
 
 const S={
-  nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",
+  nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
@@ -375,7 +375,12 @@ async function pollObservation(){
     if(S.observation&&S.observation.enabled){
       const events=await a.neural_events(S.observationSequence,40);
       let lines=[];
-      for(const e of Array.isArray(events)?events:[]){S.observationSequence=Math.max(S.observationSequence,Number(e.sequence)||0);if(e.kind&&String(e.kind).startsWith("observation.")){lines.push(String(e.payload&&e.payload.message||e.kind).slice(0,120));}}
+      for(const e of Array.isArray(events)?events:[]){
+        S.observationSequence=Math.max(S.observationSequence,Number(e.sequence)||0);
+        if(e.kind==="task.progress"&&e.entity_id)S.followTask=e.entity_id;
+        if(e.kind&&String(e.kind).startsWith("observation.")){lines.push(String(e.payload&&e.payload.message||e.kind).slice(0,120));}
+      }
+      if(S.follow&&S.followTask){const taskNode=S.nodes.find(function(n){return n.id===S.followTask});if(taskNode){S.selected=taskNode.id;S.target=[...nodePosition(taskNode)];}}
       box.textContent=(S.observation.focus||"auto").toUpperCase()+" · "+(lines.length?lines.slice(-6).join("  •  "):S.observation.reason||"OBSERVING");
       box.classList.add("visible");
     }else{
@@ -658,7 +663,7 @@ ui.querySelector("#jn-life").addEventListener("change",function(){search(ui.quer
 ui.querySelector("#jn-connected").addEventListener("input",function(){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(ui.querySelector("#jn-search").value)},260)});
 ui.querySelector("#jn-source").addEventListener("input",function(){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(function(){search(ui.querySelector("#jn-search").value)},260)});
 ui.querySelector("#jn-age").addEventListener("change",function(){search(ui.querySelector("#jn-search").value)});
-ui.querySelector("#jn-follow").addEventListener("click",function(){S.follow=!S.follow;ui.querySelector("#jn-follow").textContent=S.follow?"FOLLOWING":"FOLLOW";});
+ui.querySelector("#jn-follow").addEventListener("click",function(){S.follow=!S.follow;if(!S.follow)S.followTask=null;ui.querySelector("#jn-follow").textContent=S.follow?"FOLLOWING":"FOLLOW";});
 ui.querySelector("#jn-map").addEventListener("click",function(){S.minimap=!S.minimap;ui.querySelector("#jn-map").textContent=S.minimap?"MAP ON":"MAP";renderMinimap();});
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
