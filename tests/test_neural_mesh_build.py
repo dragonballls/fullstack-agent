@@ -23,7 +23,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
 
     def test_build_2_uses_persistent_camera_facing_command_surface(self):
         from quality_of_life.neural_mesh import NEURAL_MESH_BUILTIN
-        self.assertEqual(NEURAL_MESH_BUILTIN["version"], "0.4.0")
+        self.assertEqual(NEURAL_MESH_BUILTIN["version"], "0.5.0")
         self.assertTrue(NEURAL_MESH_BUILTIN["protected"])
         markup = NEURAL_MESH_BUILTIN["markup"]
         css = NEURAL_MESH_BUILTIN["css"]
