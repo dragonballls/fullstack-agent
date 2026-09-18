@@ -200,6 +200,34 @@ class NeuralAdvancedRuntimeTests(unittest.TestCase):
         self.assertEqual(bridge["status"], "100%_added")
         self.assertEqual(bridge["missing"], [])
 
+    def test_master_execution_requires_resolved_capability(self):
+        from quality_of_life.permissions import Capability, CapabilityDenied, CapabilityPolicy
+        from quality_of_life.runtime import JarvisRuntime
+
+        runtime = JarvisRuntime(CapabilityPolicy(allowed=frozenset({Capability.SYSTEM_DIAGNOSTICS})))
+        runtime.set_neural_world_service(NeuralWorld())
+        with self.assertRaises(CapabilityDenied):
+            runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", "Window grouping")
+        self.assertEqual(runtime.policy.allowed, frozenset({Capability.SYSTEM_DIAGNOSTICS}))
+
+    def test_master_execution_uses_confirmation_for_mutating_capability(self):
+        from quality_of_life.permissions import Capability, CapabilityPolicy
+        from quality_of_life.runtime import JarvisRuntime
+
+        seen = []
+        def confirm(capability, operation):
+            seen.append((capability, operation))
+            return True
+
+        runtime = JarvisRuntime(
+            CapabilityPolicy(allowed=frozenset({Capability.SYSTEM_DIAGNOSTICS, Capability.WINDOW_CONTROL})),
+            confirmation=confirm,
+        )
+        runtime.set_neural_world_service(NeuralWorld())
+        result = runtime.dispatch(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", "Window grouping")
+        self.assertTrue(result["implemented"])
+        self.assertTrue(any(capability is Capability.WINDOW_CONTROL for capability, _ in seen))
+
     def test_advanced_runtime_can_be_invoked_through_guarded_runtime_dispatch(self):
         from quality_of_life.permissions import Capability, CapabilityPolicy
         from quality_of_life.runtime import JarvisRuntime
