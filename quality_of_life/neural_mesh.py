@@ -556,9 +556,11 @@ function renderNeuralConsolePlacement(force){
   else if(anchorScreen){x=anchorScreen[0];y=anchorScreen[1];depth=anchorScreen[2]||16;}
   else if(coreScreen){x=coreScreen[0];y=coreScreen[1]+115;depth=coreScreen[2]||16;}
   const margin=14,top=76,bottom=16;
-  const effectiveTop=Math.min(top,Math.max(margin,height-bottom-64));
+  const minConsoleHeight=S.consoleCollapsed?46:96;
+  const effectiveTop=Math.min(top,Math.max(margin,height-bottom-minConsoleHeight));
   const availableHeight=Math.max(46,height-effectiveTop-bottom);
   const w=el.offsetWidth||520;
+  el.style.minHeight=Math.min(minConsoleHeight,availableHeight)+"px";
   el.style.maxHeight=Math.round(availableHeight)+"px";
   const body=ui.querySelector("#jn-console-body");
   if(body){body.style.maxHeight=Math.round(Math.max(34,availableHeight-(S.consoleCollapsed?46:54)))+"px";body.style.overflowY="auto";}
