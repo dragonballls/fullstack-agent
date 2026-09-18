@@ -67,7 +67,7 @@ def globe_payload(runtime: Any) -> dict[str, object]:
                     continue
                 label = str(item.get("label", item.get("name", kind.title())))[:120]
                 locators.append(GlobeLocator(
-                    f"{kind}:{index}:{label.casefold().replace(" ", "-")[:50]}",
+                    f"{kind}:{index}:{label.casefold().replace(' ', '-')[:50]}",
                     label, point[0], point[1], kind, True,
                     item.get("accuracy_m"), str(item.get("source", kind))[:80],
                 ))
