@@ -14,5 +14,5 @@ def publish_observation(runtime: Any, stage: str, message: str, **details: objec
         return
     try:
         publisher(stage, message, **details)
-    except (RuntimeError, TypeError, ValueError, OSError) as exc:
+    except Exception as exc:
         LOGGER.warning("neural observation publish failed (%s)", type(exc).__name__)
