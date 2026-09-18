@@ -295,9 +295,14 @@ class NeuralFeatureCompleteness:
             }
             return self.executor.command(domain, op, defaults[op] | data)
         if domain in {"accessibility", "multi_monitor"}:
-            defaults = {"id": str(data.get("id", "display-1")), "state": dict(data.get("state", {}))}
             if domain == "accessibility":
                 return self.executor.command(domain, "update", data)
+            defaults = {"id": str(data.get("id", "display-1")), "state": dict(data.get("state", {}))}
+            if op == "placement":
+                defaults.update({"display_id": str(data.get("display_id", defaults["id"])), "logical": data.get("logical", (0, 0)), "target_display": data.get("target_display")})
+                return self.executor.command(domain, "placement", defaults)
+            if op == "save_layout":
+                return self.executor.command(domain, "save_layout", defaults)
             return self.executor.command(domain, "update", defaults)
         if domain == "remote_computing":
             if op == "application":
@@ -312,7 +317,8 @@ class NeuralFeatureCompleteness:
                 return self.executor.command(domain, "device", {"id": str(data.get("id", "xr:controller")), "kind": str(data.get("kind", "controller")), "connected": bool(data.get("connected", True)), "capabilities": dict(data.get("capabilities", {}))})
             if op == "haptic":
                 return self.executor.command(domain, "haptic", {"id": str(data.get("id", "xr:controller")), "intensity": float(data.get("intensity", 0.3))})
-            return self.executor.command(domain, "settings", {binding.name.replace("-", "_"): True} | data)
+            key = binding.name.strip().casefold().replace("-", "_").replace(" ", "_")
+            return self.executor.command(domain, "settings", {key: True} | data)
         if domain in {"simulation_world", "multi_user_shared"}:
             if domain == "simulation_world":
                 if op == "create":
