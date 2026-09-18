@@ -67,6 +67,62 @@ class JarvisRuntime:
             world.events.publish("entity.shape.changed", entity_id=entity.id, payload={"shape": normalized})
             return {"id": entity.id, "shape": normalized}
 
+    def neural_task_started(self, title: str) -> str | None:
+        world = self._neural_world_service
+        if world is None:
+            return None
+        import uuid
+        from .neural_world import EntityKind, LifecycleState
+        task_id = "task:" + uuid.uuid4().hex
+        node = world.upsert(
+            task_id, EntityKind.TASK, str(title)[:300], source="jarvis.orchestrator",
+            status="queued", lifecycle=LifecycleState.NEWBORN, energy=1.0, scale=1.05,
+            persistent=False, parent_id="jarvis.core",
+            metadata={"started_by": "jarvis", "observable": True},
+        )
+        try:
+            world.relate("jarvis.core", task_id, "executing", 0.9)
+        except KeyError:
+            pass
+        return task_id
+
+    def neural_task_update(self, task_id: str | None, *, status: str, step: str, progress: int | None = None) -> None:
+        if not task_id or self._neural_world_service is None:
+            return
+        world = self._neural_world_service
+        from .neural_world import LifecycleState
+        lifecycle = LifecycleState.ACTIVE if status in {"queued", "running"} else LifecycleState.WAITING if status == "waiting" else LifecycleState.FAILED if status == "failed" else LifecycleState.RETIRED if status in {"cancelled", "succeeded"} else LifecycleState.ACTIVE
+        with world._lock:
+            entity = world._entities.get(task_id)
+            if entity is None:
+                return
+            entity.status = str(step)[:120]
+            entity.lifecycle = lifecycle
+            entity.energy = max(0.0, min(1.0, (progress if progress is not None else 60) / 100.0))
+            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        world.events.publish("task.progress", entity_id=task_id, payload={"status": status, "step": str(step)[:240], "progress": progress})
+
+    def neural_task_finished(self, task_id: str | None, *, success: bool, message: str = "") -> None:
+        if not task_id or self._neural_world_service is None:
+            return
+        world = self._neural_world_service
+        from .neural_world import LifecycleState
+        with world._lock:
+            entity = world._entities.get(task_id)
+            if entity is None:
+                return
+            entity.lifecycle = LifecycleState.MATURE if success else LifecycleState.FAILED
+            entity.status = "succeeded" if success else "failed"
+            entity.energy = 0.18 if success else 0.0
+            entity.visible = success
+            entity.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+        world.events.publish("task.finished", entity_id=task_id, payload={"success": bool(success), "message": str(message)[:500]})
+        if not success:
+            try:
+                world.retire(task_id, remove=False)
+            except Exception:
+                pass
+
     def set_neural_event_sink(self, sink: Callable[..., Any] | None) -> None:
         self._neural_event_sink = sink
 
