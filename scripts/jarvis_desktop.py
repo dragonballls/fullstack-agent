@@ -942,7 +942,7 @@ class FullstackJarvisHost:
             try:
                 self._window.events.before_show += self._on_window_before_show
                 self._window.events.loaded += self._on_window_loaded
-            self._window.events.closing += self._on_main_window_closing
+                self._window.events.closing += self._on_main_window_closing
             except Exception:
                 LOGGER.exception("could not attach Jarvis text input loaded callback")
             self._create_floating_window(webview)
