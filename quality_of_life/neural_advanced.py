@@ -1770,6 +1770,14 @@ class NeuralAdvancedRuntime:
                 result = self.workspace.tether(ids[0], ids[1], rest_length=float(data.get("rest_length", 120.0)))
             elif "detach" in lower or "reattach" in lower:
                 result = self.workspace.detach(ids[0]) if "detach" in lower else self.workspace.attach(ids[0], display_id=data.get("display_id"))
+            elif "curved displays" in lower:
+                surface = self.workspace.upsert(ids[0], ids[0], curvature=float(data.get("curvature", 0.25)))
+                result = {"surface": surface.as_dict(), "curvature": surface.curvature, "curved": surface.curvature != 0.0}
+            elif "orientation persistence" in lower:
+                result = {"saved": self.workspace.save_layout("orientation-persistence"), "orientation_persistent": True}
+            elif "hybrid compositor" in lower:
+                snapshot = self.workspace.snapshot()
+                result = {"compositor": snapshot["compositor"], "hybrid": snapshot["compositor"] == "hybrid", "surface_count": len(snapshot["surfaces"])}
             elif "monitor-wall" in lower or "monitor wall" in lower:
                 result = self.workspace.monitor_wall(str(data.get("display_id", "display-1")), ids, width=float(data.get("width", 1920)), height=float(data.get("height", 1080)))
                 result = {"surfaces": result, "navigation": self.workspace.navigate_wall(str(data.get("display_id", "display-1")), dx=float(data.get("dx", 0.0)), dy=float(data.get("dy", 0.0)))}
@@ -2135,6 +2143,9 @@ class NeuralAdvancedRuntime:
             )
             if "performance" in lower:
                 result["performance"] = self.fullstack.history.performance_analytics()
+            if "timeline" in lower:
+                result["timeline"] = self.fullstack.history.timeline()
+                result["brain_evolution"] = True
             if "interface" in lower:
                 result["interface"] = {"mode": "time-machine", "controls": ["timeline", "compare", "replay", "restore", "performance"]}
             return self._record_master(category, name, result, data)
@@ -2356,6 +2367,8 @@ class NeuralAdvancedRuntime:
                 passed = isinstance(value, dict) and value.get("kind") == "satellite"
             elif "filament" in lower:
                 passed = isinstance(value, dict) and bool(value.get("filaments"))
+            elif "reorganization" in lower:
+                passed = isinstance(value, dict) and value.get("reorganized") is True
             else:
                 passed = isinstance(value, dict) and ("ripples" in value or "waves" in value or "organism" in value or "fluid_environment" in value)
 
@@ -2369,7 +2382,7 @@ class NeuralAdvancedRuntime:
             elif "hybrid compositor" in lower:
                 passed = isinstance(value, dict) and value.get("compositor") == "hybrid"
             elif "orientation persistence" in lower:
-                passed = isinstance(value, dict) and bool(value.get("surfaces"))
+                passed = isinstance(value, dict) and value.get("orientation_persistent") is True
             elif "detach" in lower or "reattach" in lower:
                 passed = isinstance(value, dict) and value.get("state") in {"detached", "attached"}
             else:
