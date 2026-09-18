@@ -19,6 +19,8 @@ import tempfile
 import threading
 from typing import Any, Mapping
 
+from .neural_mesh import NEURAL_MESH_BUILTIN
+
 
 _BUILD_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _FORBIDDEN_MARKUP = re.compile(
@@ -113,6 +115,7 @@ _BUILTIN_BUILDS = (
         markup='<div id="jarvis-ui-build-status-hud">JARVIS · STATUS HUD</div>',
         protected=True,
     ),
+    UIBuild(**NEURAL_MESH_BUILTIN),
 )
 
 

@@ -17,9 +17,11 @@ install_desktop_resilience()
 import scripts.jarvis_desktop as _desktop  # noqa: E402
 from quality_of_life.workspace_ui import install as install_workspace_ui  # noqa: E402
 from quality_of_life.ui_builds import install as install_ui_builds  # noqa: E402
+from quality_of_life.neural_world import install as install_neural_world  # noqa: E402
 
 install_workspace_ui(_desktop)
 install_ui_builds(_desktop)
+install_neural_world(_desktop)
 main = _desktop.main
 
 
