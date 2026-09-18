@@ -11,6 +11,7 @@ from .api_tools import ApiToolAdapter
 from .capabilities import operation
 from .computer_use import ComputerUseAgent, RouterComputerUsePlanner, ScreenObserver
 from .intents import parse_intent
+from .neural_observation_events import publish_observation
 from .orchestration import OrchestrationPlan, RequestProfile, build_plan
 from .permissions import Capability
 from .planner import PlanError, plan_request
@@ -97,6 +98,9 @@ class AgentOrchestrator:
                     return False
         return False
 
+    def _observe(self, stage: str, message: str, **details: object) -> None:
+        publish_observation(self.runtime, stage, message, **details)
+
     @staticmethod
     def _messages(prompt: str) -> list[dict[str, str]]:
         return [{"role": "user", "content": prompt}]
@@ -172,6 +176,24 @@ class AgentOrchestrator:
             detail = "; ".join(result.errors[:3]) or "workflow did not verify successfully"
             return f'Workflow "{workflow.name}" did not complete successfully: {detail}', False, list(result.errors), False
         intent = parse_intent(text)
+        if intent.kind == "neural_observe_start":
+            focus = str(intent.arguments.get("focus", "auto") or "auto")
+            state = self.runtime.neural_observation_start(focus, str(intent.arguments.get("reason", text)))
+            return f"Observation mode enabled: {state['focus']}.", True, [], False
+        if intent.kind == "neural_observe_stop":
+            state = self.runtime.neural_observation_stop()
+            return "Observation mode disabled.", True, [], False
+        if intent.kind == "neural_shape":
+            target_query = str(intent.arguments.get("target", "")).strip()
+            shape = str(intent.arguments.get("shape", "droplet")).strip()
+            matches = self.runtime.neural_entity_search(target_query, limit=5)
+            if not matches:
+                return "", False, [f"No neural entity found for: {target_query}"], False
+            if len(matches) > 1 and matches[0].get("label") != target_query:
+                return "", False, [f"Neural target is ambiguous: {target_query}"], False
+            target_id = str(matches[0]["id"])
+            changed = self.runtime.neural_entity_shape_set(target_id, shape)
+            return f"Changed {matches[0].get('label', target_id)} to {shape}.", True, [], False
         if intent.kind == "browser_open":
             browser = str(intent.arguments["browser"])
             url = intent.arguments.get("url")
@@ -338,10 +360,13 @@ class AgentOrchestrator:
 
     def execute(self, text: str, confirmed: bool = False) -> OrchestrationResult:
         started = time.monotonic()
+        self._observe("request.started", "Request received by Jarvis", profile="planning")
         plan = build_plan(text)
+        self._observe("plan.created", "Execution plan selected", tasks=len(plan.parallel_tasks), profile=plan.primary.profile.value)
         errors: list[str] = []
         providers: list[str] = []
         deterministic_context, deterministic_verified, deterministic_errors, needs_confirmation = self._deterministic_context(text, confirmed)
+        self._observe("deterministic.complete", "Guarded deterministic stage completed", verified=deterministic_verified, confirmation=needs_confirmation)
         errors.extend(deterministic_errors)
         if not deterministic_context and not needs_confirmation and self._looks_like_computer_goal(text) and not plan.parallel_tasks:
             computer_context, computer_verified, computer_confirmation, computer_errors, computer_provider = self._computer_goal_context(text, confirmed)
@@ -359,13 +384,17 @@ class AgentOrchestrator:
             errors.extend(typed_errors)
         parallel_completed = 0
         if plan.primary.profile is RequestProfile.CODING and any(word in text.casefold() for word in ("implement", "fix", "modify", "code")):
+            self._observe("coding.started", "Repository coding stage started")
             coding_context, coding_verified = self._coding_context(text, confirmed)
+            self._observe("coding.completed", "Repository coding stage completed", verified=coding_verified)
             deterministic_context = "\n\n".join(part for part in (deterministic_context, coding_context) if part)
             deterministic_verified = coding_verified
             if not confirmed:
                 needs_confirmation = True
         if plan.parallel_tasks:
+            self._observe("specialists.started", "Specialist checks started", count=len(plan.parallel_tasks))
             specialist_results = self.router.complete_many(self._specialist_requests(plan, deterministic_context), max_parallel=self.max_parallel)
+            self._observe("specialists.completed", "Specialist checks completed", completed=sum(1 for result in specialist_results if result.ok and result.text))
             parallel_completed = sum(1 for result in specialist_results if result.ok and result.text)
             for result in specialist_results:
                 if result.target_name:
@@ -384,6 +413,7 @@ class AgentOrchestrator:
         verified = bool(synthesis_text.strip()) and (deterministic_verified or not deterministic_context)
         if needs_confirmation:
             verified = False
+        self._observe("request.completed", "Request execution completed", verified=verified, confirmation=needs_confirmation, errors=len(errors))
         return OrchestrationResult(synthesis_text, plan.primary.profile.value, verified, needs_confirmation, parallel_completed, tuple(dict.fromkeys(providers)), int((time.monotonic() - started) * 1000), tuple(errors))
 
     def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:
