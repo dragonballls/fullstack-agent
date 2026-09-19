@@ -773,7 +773,7 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 <div class="field"><label>ELEVENLABS API KEY</label><input id="elevenKey" type="password" autocomplete="new-password" placeholder="Paste your ElevenLabs API key once"></div>
 <div class="row">
 <div class="field"><label>VOICE ID (OPTIONAL)</label><input id="voiceId" autocomplete="off" placeholder="Leave blank for configured/default voice"></div>
-<div class="field"><label>MODEL</label><select id="voiceModel"><option value="eleven_flash_v2_5">Flash v2.5 · conversational</option><option value="eleven_v3">v3 · expressive</option></select></div>
+<div class="field"><label>MODEL</label><select id="voiceModel"><option value="eleven_v3_conversational">v3 Conversational · expressive JARVIS mode</option><option value="eleven_flash_v2_5">Flash v2.5 · low latency</option><option value="eleven_v3">v3 · maximum expressiveness</option></select></div>
 </div>
 <div class="actions"><button id="voiceSave" class="primary" type="button">SAVE & TEST VOICE</button><button id="voiceTest" type="button">TEST VOICE</button><button id="voiceLoad" type="button">LOAD VOICES</button></div>
 <div class="sub" id="voiceMessage">The key is stored in the OS credential store and is never shown back here.</div>
