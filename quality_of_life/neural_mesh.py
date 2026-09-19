@@ -8,7 +8,7 @@ NEURAL_MESH_BUILTIN = {
     "id": "neural-mesh",
     "name": "Neural JARVIS",
     "version": "0.7.0",
-    "description": "Blue fully 3D JARVIS world with cinematic spherical holographic-core geometry, high-fidelity water-droplet neurons, proximity-aware importance, screen-space LOD, aggressive frustum/distance culling, lightweight far-field neurons, a 48000-point deep neural field, SPH-style near-field fluid motion, lifecycle pulses, curved energy filaments, spatial windows, and persistent command surfaces.",
+    "description": "Blue fully 3D JARVIS world with cinematic spherical holographic-core geometry, high-fidelity water-droplet neurons, proximity-aware importance, screen-space LOD, aggressive frustum/distance culling, lightweight far-field neurons, a 64000-point deep neural field, SPH-style near-field fluid motion, lifecycle pulses, curved energy filaments, spatial windows, and persistent command surfaces.",
     "protected": True,
     "css": r"""
 #jarvis-workspace-shell{display:none!important}
