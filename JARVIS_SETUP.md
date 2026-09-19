@@ -50,6 +50,14 @@ At startup Jarvis brings up the embedded Fullstack visualizer on loopback port `
 
 The visualizer is started before heavier Jarvis initialization so the presentation surface can become available even when core/cloud initialization takes longer on first launch.
 
+## Self-coding safety
+
+Jarvis treats autonomous coding as a reversible preview workflow rather than an automatic main-branch publisher. A coding request starts a dedicated `agent/self-code/...` preview branch and creates a local checkpoint tag at the exact pre-change commit. Every coding pass must pass the configured verification suite before it is committed.
+
+Passing tests means the change is technically verified; it does not mean the user will necessarily prefer the resulting UI or behavior. The verified preview therefore remains unpromoted until an explicit approval action is issued. Jarvis exposes `self_coding.status`, `self_coding.approve`, and `self_coding.undo` actions. Saying to undo the current change restores the original branch for an unapproved preview. After an approved publication, undo creates a tested Git revert commit rather than rewriting history.
+
+The default runtime setting is `JARVIS_SELF_CODING_PUBLISH_MAIN=0`. Remote pushing is also explicit. Checkpoint metadata is stored outside the repository under the platform's local application-state directory, so it does not dirty the working tree or become part of source control.
+
 ## Self-update
 
 The executable checks the verified rolling GitHub `latest` release periodically. An update is considered available only when the release commit differs from the embedded build commit. Jarvis downloads only the `Jarvis.exe` release asset from GitHub, verifies the release-provided SHA-256 digest, then uses a hidden handoff process to replace the running executable and restart it.
