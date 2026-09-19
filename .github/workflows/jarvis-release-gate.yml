@@ -42,7 +42,7 @@ jobs:
       - name: Verify installed dependency consistency
         run: python -m pip check
       - name: Compile every Python module
-        run: python -m compileall quality_of_life self_coding windows_maintenance scripts tests readiness.py
+        run: python -m compileall quality_of_life self_coding windows_maintenance scripts tests third_party/free_astra readiness.py
       - name: Run complete unittest suite
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Run Windows-maintenance unit tests
@@ -123,12 +123,13 @@ jobs:
             '--add-data', 'build_vendor\ai-visualizer\source;ai-visualizer/source',
             '--add-data', 'build_vendor\barehands\source;barehands/source',
             '--add-data', 'build_vendor\ai-memory-vault\source;ai-memory-vault/source',
+            '--add-data', 'third_party\free_astra;free_astra',
             '--add-binary', 'build_vendor\omniroute_runtime\node.exe;omniroute_runtime',
             '--add-data', 'build_vendor\omniroute_runtime\node_modules;omniroute_runtime/node_modules',
             '--add-data', 'build_vendor\omniroute_runtime\runtime-manifest.txt;omniroute_runtime',
             '--collect-submodules', 'quality_of_life', '--collect-submodules', 'self_coding',
             '--collect-submodules', 'windows_maintenance', '--collect-submodules', 'backtalk',
-            '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-submodules', 'webrtcvad',
+            '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-all', 'zstandard', '--collect-submodules', 'webrtcvad',
             '--hidden-import', 'sounddevice', '--hidden-import', 'soundfile', '--hidden-import', 'pynput'
           )
           foreach ($dll in Get-Content -LiteralPath 'build_runtime_dlls.txt') { $args += @('--add-binary', ("{0};." -f $dll)) }
@@ -165,6 +166,10 @@ jobs:
         run: |
           python -c "from quality_of_life.elevenlabs_voice import ElevenLabsMouth; from unittest.mock import Mock, patch; import base64; m=ElevenLabsMouth(client=Mock()); m.client.synthesize.return_value=b'fake-mp3'; p=patch('quality_of_life.elevenlabs_voice.has_api_key', return_value=True); p.start(); r=m.test_speech(); p.stop(); assert r['ok'] and r['spoken']; packets=m.take_audio(); assert base64.b64decode(packets[0]['data'])==b'fake-mp3'; print('ElevenLabs offline voice plumbing OK')"
 
+      - name: Verify embedded Prism bridge plumbing
+        shell: pwsh
+        run: |
+          python -c "from quality_of_life.prism_gateway import PrismGateway; p=PrismGateway(); assert p._vendor_path().is_file(), 'Embedded free-astra source is missing'; assert p.base_url == 'http://127.0.0.1:8319/v1'; assert p.status()['inference'] == 'remote'; print('Embedded Prism bridge plumbing OK')"
       - name: Verify PyInstaller toolchain version
         shell: pwsh
         run: |
