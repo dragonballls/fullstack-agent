@@ -54,9 +54,11 @@ class ElevenLabsVoiceTests(unittest.TestCase):
         mouth = ElevenLabsMouth(client=Mock())
         mouth.client.synthesize.return_value = b"fake-mp3"
         with patch("quality_of_life.elevenlabs_voice.has_api_key", return_value=True):
-            with patch.object(mouth, "_load_settings", create=True):
-                mouth.say("Hello Jarvis")
-                worker = next(iter(mouth._workers))
+            mouth.say("Hello Jarvis")
+            deadline = __import__("time").monotonic() + 2
+            while not mouth._workers and __import__("time").monotonic() < deadline:
+                __import__("time").sleep(0.01)
+            for worker in list(mouth._workers):
                 worker.join(timeout=2)
         packets = mouth.take_audio()
         self.assertEqual(len(packets), 1)
