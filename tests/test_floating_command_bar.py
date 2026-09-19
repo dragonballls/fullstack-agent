@@ -73,6 +73,24 @@ class FloatingCommandBarContractTests(unittest.TestCase):
         floating.destroy.assert_called_once_with()
         self.assertIsNone(host._floating_window)
 
+    def test_main_text_surface_is_resizable_and_keeps_response_transcript(self):
+        for token in (
+            'resize:both',
+            'min-width:320px',
+            'min-height:170px',
+            '#jarvis-text-history',
+            'appendOutput',
+            'setBuildTheme',
+            'jarvis.textSurface.geometry',
+            'jarvis.textSurface.collapsed',
+            'SHIFT+ENTER — NEW LINE',
+        ):
+            self.assertIn(token, self.desktop)
+
+    def test_shared_text_surface_is_movable_and_build_aware(self):
+        for token in ('#jarvis-text-header', 'startDrag', 'persistGeometry', 'setTheme', 'data-theme'):
+            self.assertIn(token, self.desktop)
+
     def test_release_smoke_requires_floating_window_creation(self):
         self.assertIn("floating command bar window object created;", self.smoke)
         self.assertIn("did not create the floating command bar window object", self.smoke)
