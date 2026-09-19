@@ -1,6 +1,6 @@
 """Provision and operate the pinned OmniRoute runtime shipped with Jarvis.
 
-The release build embeds a portable Node.js 24 runtime plus OmniRoute 3.8.51.
+The release build embeds a portable Node.js 24 runtime plus OmniRoute 3.8.50.
 Jarvis extracts those resources into the normal PyInstaller temporary directory
 and runs OmniRoute headlessly, while provider credentials remain inside
 OmniRoute's own encrypted/local credential store. Development installs may use
@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 
 
-OMNIROUTE_VERSION = "3.8.51"
+OMNIROUTE_VERSION = "3.8.50"
 NODE_VERSION = "24.21.0"
 OMNIROUTE_PACKAGE = f"omniroute@{OMNIROUTE_VERSION}"
 DEFAULT_PORT = 20128
