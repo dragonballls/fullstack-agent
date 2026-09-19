@@ -398,7 +398,7 @@ class AgentOrchestrator:
             if not confirmed:
                 factory().update(activity.id, status=ActivityStatus.WAITING, step="Waiting for confirmation")
                 return "A repository-changing coding request requires confirmation before self-coding can run.", False
-            factory().update(activity.id, status=ActivityStatus.RUNNING, step="Starting self-coding")
+            factory().update(activity.id, status=ActivityStatus.RUNNING, step="Creating self-coding checkpoint")
         elif not confirmed:
             return "A repository-changing coding request requires confirmation before self-coding can run.", False
 
@@ -413,16 +413,21 @@ class AgentOrchestrator:
                     error=str(exc),
                 )
             raise
-        branch = str(result)
+        checkpoint = str(result)
         if activity is not None:
             factory().update(
                 activity.id,
-                status=ActivityStatus.SUCCEEDED if branch else ActivityStatus.FAILED,
-                progress=100 if branch else 0,
-                step="Complete" if branch else "Self-coding failed",
-                error=None if branch else "self-coding returned no verified result",
+                status=ActivityStatus.SUCCEEDED if checkpoint else ActivityStatus.FAILED,
+                progress=100 if checkpoint else 0,
+                step="Checkpoint ready for explicit approval" if checkpoint else "Self-coding failed",
+                error=None if checkpoint else "self-coding returned no verified checkpoint",
             )
-        return f"Self-coding completed on verified branch: {branch}", bool(branch)
+        return (
+            f"Self-coding preview verified as checkpoint: {checkpoint}. "
+            "Main promotion requires an explicit approval action."
+            if checkpoint
+            else "Self-coding produced no verified checkpoint."
+        ), bool(checkpoint)
 
     @staticmethod
     def _synthesis_prompt(plan: OrchestrationPlan, results: Iterable[ProviderResult], deterministic_context: str = "") -> str:
