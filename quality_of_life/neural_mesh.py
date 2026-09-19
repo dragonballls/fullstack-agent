@@ -657,7 +657,7 @@ function setSelected(id){S.selected=id;const n=S.nodes.find(function(x){return x
 function screenDelta(dx,dy,depth){const c=camera(),f=canvas.clientHeight/(2*Math.tan(Math.PI/6));return add(mul3(c.right,dx*depth/f),mul3(c.up,-dy*depth/f))}
 function pick(x,y){
   let best=null,bestD=Infinity;
-  for(const n of activeNodes()){const p=worldToScreen(nodePosition(n),camera());if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bestD){bestD=d;best=n;}}
+  for(const n of activeNodes()){if(n.metadata&&n.metadata.visual_only)continue;const p=worldToScreen(nodePosition(n),camera());if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bestD){bestD=d;best=n;}}
   return bestD<75?best:null;
 }
 function focus(n){
