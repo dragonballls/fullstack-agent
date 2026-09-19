@@ -800,7 +800,7 @@ provider.addEventListener("change",()=>{custom.style.display=provider.value==="c
     }
   }catch(_e){}
 }
-key.addEventListener("input",()=>{window.clearTimeout(key._detectTimer);key._detectTimer=window.setTimeout(detectProvider,220);});
+key.addEventListener("blur",detectProvider);
 function render(data){
   if(!data){runtime.textContent="OmniRoute status unavailable.";return;}
   const version=data.version||"unknown", source=data.source||"unknown", ready=data.ready?"ONLINE":"STARTING";
