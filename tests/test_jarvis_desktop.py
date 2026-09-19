@@ -15,6 +15,18 @@ class JarvisDesktopTests(unittest.TestCase):
         self.assertIsNotNone(runtime.policy)
         self.assertIn("computer", runtime.available_tools())
 
+    def test_webview2_autoplay_policy_is_set_before_window_creation(self):
+        with patch.object(jarvis_desktop.sys, "platform", "win32"), patch.dict(
+            jarvis_desktop.os.environ,
+            {"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS": "--disable-gpu --autoplay-policy=user-gesture-required"},
+            clear=False,
+        ):
+            FullstackJarvisHost._configure_webview2_autoplay()
+            configured = jarvis_desktop.os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"]
+        self.assertIn("--disable-gpu", configured)
+        self.assertIn("--autoplay-policy=no-user-gesture-required", configured)
+        self.assertNotIn("--autoplay-policy=user-gesture-required", configured)
+
     def test_execute_request_forwards_confirmation(self):
         runtime = Mock()
         runtime._assistant_orchestrator.return_value.execute.return_value = "result"
