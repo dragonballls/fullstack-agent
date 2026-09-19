@@ -22,7 +22,9 @@ class OmniRouteProvisionerTests(unittest.TestCase):
             (root / "node_modules" / "omniroute" / "bin").mkdir(parents=True)
             (root / "node.exe").write_bytes(b"node")
             (root / "node_modules" / "omniroute" / "bin" / "omniroute.mjs").write_text("console.log('ok')", encoding="utf-8")
-            with patch("quality_of_life.omniroute_setup._packaged_runtime_root", return_value=root):
+            with patch("quality_of_life.omniroute_setup._packaged_runtime_root", return_value=root), patch(
+                "quality_of_life.omniroute_setup._is_windows", return_value=True
+            ):
                 command = provisioner._packaged_command()
             self.assertEqual(command, (str(root / "node.exe"), str(root / "node_modules" / "omniroute" / "bin" / "omniroute.mjs")))
         finally:
