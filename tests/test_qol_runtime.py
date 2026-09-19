@@ -56,7 +56,7 @@ class JarvisRuntimeTests(unittest.TestCase):
         self.assertEqual(places[0].name, "Tokyo")
 
     def test_runtime_defaults_cloud_router_to_omniroute(self):
-        old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED")}
+        old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED", "JARVIS_PRISM_ENABLED")}
         try:
             for name in old:
                 os.environ.pop(name, None)
@@ -67,6 +67,23 @@ class JarvisRuntimeTests(unittest.TestCase):
             self.assertEqual(router.targets[0].base_url, "http://127.0.0.1:20128/v1")
             self.assertEqual(router.targets[0].model, "auto")
             self.assertEqual(router.targets[0].api_key_env, "OMNIROUTE_API_KEY")
+        
+    def test_runtime_adds_prism_target_when_explicitly_enabled(self):
+        old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED", "JARVIS_PRISM_ENABLED")}
+        try:
+            for name in old:
+                os.environ.pop(name, None)
+            os.environ["JARVIS_PRISM_ENABLED"] = "1"
+            runtime = JarvisRuntime(CapabilityPolicy())
+            router = runtime._tool("cloud_router")
+            self.assertEqual([target.name for target in router.targets], ["prism-astra", "omniroute"])
+            self.assertEqual(router.targets[0].base_url, "http://127.0.0.1:8319/v1")
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
         finally:
             for name, value in old.items():
                 if value is None:
