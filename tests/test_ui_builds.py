@@ -89,7 +89,7 @@ class UIBuildStoreTests(unittest.TestCase):
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             (build_dir / "script.js").write_text("old-neural-mesh", encoding="utf-8")
             second = UIBuildStore(tmp)
-            self.assertEqual(second.get("neural-mesh").version, "0.5.0")
+            self.assertEqual(second.get("neural-mesh").version, "0.6.0")
             self.assertNotEqual((build_dir / "script.js").read_text(encoding="utf-8"), "old-neural-mesh")
 
     def test_protected_builds_cannot_be_overwritten_or_deleted(self):
@@ -151,6 +151,21 @@ class UIBuildStoreTests(unittest.TestCase):
                 timeout=20,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+
+    def test_active_build_updates_the_shared_command_surface(self):
+        from quality_of_life.ui_builds import UIBuildStore
+
+        with TemporaryDirectory() as tmp:
+            store = UIBuildStore(tmp)
+            store.save({"id": "blueglass", "name": "Blue Glass", "version": "2.0.0"})
+            store.activate("blueglass")
+            self.assertEqual(store.active().id, "blueglass")
+
+        desktop = Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8")
+        manager = Path("quality_of_life/ui_builds.py").read_text(encoding="utf-8")
+        self.assertIn("setBuildTheme", desktop)
+        self.assertIn("sharedSurface.setBuildTheme", manager)
+        self.assertIn("jarvis:uibuildchanged", manager)
 
     def test_manager_script_exposes_catalog_save_switch_and_rollback(self):
         script = build_manager_script()
