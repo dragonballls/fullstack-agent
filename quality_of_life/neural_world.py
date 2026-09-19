@@ -231,6 +231,7 @@ class NeuralWorld:
                 scale=1.35,
                 position=position,
             )
+            self.relate(core.id, node.id, "subsystem", 0.95)
         node = self.upsert(
             "jarvis.neural-command",
             EntityKind.SUBSYSTEM,
