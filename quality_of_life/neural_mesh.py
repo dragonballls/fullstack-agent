@@ -627,8 +627,8 @@ function renderMinimap(){
 }
 function animateSurfaceTransforms(){ui.querySelectorAll(".jn-spatial-window").forEach(function(el){applySurfaceTransform(el);});}
 function rootStatus(text){ui.querySelector("#jn-perf").textContent=text}
-function worldToScreen(p){
-  const c=camera(),rel=sub(p,c.eye),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];if(depth<=.1)return null;
+function worldToScreen(p,cOverride){
+  const c=cOverride||camera(),rel=sub(p,c.eye),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];if(depth<=.1)return null;
   const focal=canvas.clientHeight/(2*Math.tan(Math.PI/6));
   return[canvas.clientWidth/2+(rel[0]*c.right[0]+rel[1]*c.right[1]+rel[2]*c.right[2])*focal/depth,canvas.clientHeight/2-(rel[0]*c.up[0]+rel[1]*c.up[1]+rel[2]*c.up[2])*focal/depth,depth];
 }
