@@ -20,6 +20,7 @@ import threading
 from typing import Any, Mapping
 
 from .neural_mesh import NEURAL_MESH_BUILTIN
+from .quality_floor import DEFAULT_QUALITY_FLOOR, UI_QUALITY_LADDER
 
 
 _BUILD_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
@@ -34,6 +35,8 @@ _MAX_VERSION_LENGTH = 40
 _MAX_DESCRIPTION_LENGTH = 2000
 DEFAULT_BUILD_ID = "workspace-default"
 MAX_ROLLBACK_HISTORY = 20
+UI_QUALITY_FLOOR_LEVEL = int(DEFAULT_QUALITY_FLOOR["ui_minimum_level"])
+UI_MAX_BUILD_BYTES = int(DEFAULT_QUALITY_FLOOR["performance"]["max_ui_build_bytes"])
 
 
 def default_store_root() -> Path:
@@ -55,6 +58,7 @@ class UIBuild:
     markup: str = ""
     script: str = ""
     protected: bool = False
+    quality_level: int = UI_QUALITY_FLOOR_LEVEL
     created_at: str = ""
     updated_at: str = ""
 
@@ -65,6 +69,7 @@ class UIBuild:
             "version": self.version,
             "description": self.description,
             "protected": self.protected,
+            "quality_level": self.quality_level,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -182,6 +187,15 @@ class UIBuildStore:
         css = cls._validate_text(payload.get("css", ""), "css", _MAX_ASSET_BYTES)
         markup = cls._validate_text(payload.get("markup", ""), "markup", _MAX_ASSET_BYTES)
         script = cls._validate_text(payload.get("script", ""), "script", _MAX_ASSET_BYTES)
+        try:
+            quality_level = int(payload.get("quality_level", UI_QUALITY_FLOOR_LEVEL))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("quality_level must be an integer") from exc
+        if quality_level not in UI_QUALITY_LADDER:
+            raise ValueError(f"quality_level must be between {min(UI_QUALITY_LADDER)} and {max(UI_QUALITY_LADDER)}")
+        total_asset_bytes = sum(len(value.encode("utf-8")) for value in (css, markup, script))
+        if total_asset_bytes > UI_MAX_BUILD_BYTES:
+            raise ValueError(f"UI build assets exceed {UI_MAX_BUILD_BYTES} bytes")
         if _FORBIDDEN_MARKUP.search(markup):
             raise ValueError("UI build markup may not contain scripts, embedded frames/objects, inline event handlers, or javascript URLs")
         return UIBuild(
@@ -193,6 +207,7 @@ class UIBuildStore:
             markup=markup,
             script=script,
             protected=protected,
+            quality_level=quality_level,
         )
 
     @staticmethod
@@ -317,6 +332,11 @@ class UIBuildStore:
                 existing = None
             if existing is not None and existing.protected:
                 raise ValueError(f"protected UI build cannot be replaced: {candidate.id}")
+            if existing is not None and candidate.quality_level < existing.quality_level:
+                raise ValueError(
+                    f"UI quality downgrade blocked for {candidate.id}: "
+                    f"Q{candidate.quality_level} < existing Q{existing.quality_level}"
+                )
             stamp = self._now()
             created_at = existing.created_at if existing is not None and existing.created_at else stamp
             build = UIBuild(**{**candidate.payload(), "created_at": created_at, "updated_at": stamp})
@@ -339,6 +359,12 @@ class UIBuildStore:
             state = self._state()
             current = str(state.get("active", DEFAULT_BUILD_ID))
             history = [str(item) for item in state.get("history", [])]
+            current_build = self.active()
+            if target.quality_level < current_build.quality_level:
+                raise ValueError(
+                    f"UI quality downgrade blocked: active Q{current_build.quality_level} -> "
+                    f"Q{target.quality_level}. Use rollback for safety recovery."
+                )
             if target.id != current:
                 history.append(current)
                 self._write_state(target.id, history)
@@ -448,7 +474,7 @@ def build_manager_script() -> str:
   panel.id = "jarvis-ui-build-panel";
   panel.innerHTML = `
     <div class="juib-head">
-      <div><div class="juib-title">UI BUILD GALLERY</div><div class="juib-sub">Unlimited local builds · instant switch · rollback</div></div>
+      <div><div class="juib-title">UI BUILD GALLERY</div><div class="juib-sub">Q4 floor · only equal/higher quality · rollback recovery</div></div>
       <div class="juib-actions"><button class="juib-btn" id="juib-ai">AI KEYS</button><button class="juib-btn" id="juib-new">NEW</button><button class="juib-btn" id="juib-rollback">ROLLBACK</button><button class="juib-btn" id="juib-close">CLOSE</button></div>
     </div>
     <div id="jarvis-ui-build-list"></div>
@@ -534,7 +560,7 @@ def build_manager_script() -> str:
         '<div class="juib-row' + (item.active ? ' active' : '') + '">' +
         '<div><b>' + esc(item.name) + (item.active ? ' · ACTIVE' : '') + '</b>' +
         '<small>' + esc(item.description) + '</small>' +
-        '<em>' + esc(item.id) + ' · v' + esc(item.version) + (item.protected ? ' · BUILT-IN' : '') + '</em></div>' +
+        '<em>' + esc(item.id) + ' · v' + esc(item.version) + ' · Q' + esc(item.quality_level ?? 4) + (item.protected ? ' · BUILT-IN' : '') + '</em></div>' +
         '<div><button class="juib-btn juib-activate" data-id="' + esc(item.id) + '">' + (item.active ? 'ACTIVE' : 'USE') + '</button></div></div>'
       )).join("") || '<div class="juib-row"><small>No valid UI builds.</small></div>';
       list.querySelectorAll(".juib-activate").forEach(button => {
@@ -581,6 +607,7 @@ def build_manager_script() -> str:
   });
   document.getElementById("juib-new").addEventListener("click", () => {
     editor.classList.toggle("active");
+    document.getElementById("juib-editor-quality").value = "4";
     if (editor.classList.contains("active")) document.getElementById("juib-editor-id").focus();
   });
   document.getElementById("juib-rollback").addEventListener("click", async () => {
@@ -598,6 +625,7 @@ def build_manager_script() -> str:
         id: document.getElementById("juib-editor-id").value,
         name: document.getElementById("juib-editor-name").value,
         version: document.getElementById("juib-editor-version").value,
+        quality_level: Number(document.getElementById("juib-editor-quality").value || 4),
         description: document.getElementById("juib-editor-description").value,
         css: document.getElementById("juib-editor-css").value,
         markup: document.getElementById("juib-editor-markup").value,
