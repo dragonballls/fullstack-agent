@@ -278,6 +278,9 @@ class OmniRouteProvisioner:
                 continue
         return False
 
+    def probe_only(self) -> bool:
+        return self._probe()
+
     def ensure_running(self, *, wait_seconds: float = 15.0) -> bool:
         if self._probe():
             return True
@@ -361,8 +364,8 @@ class OmniRouteProvisioner:
             raise RuntimeError("OmniRoute rejected the provider credential or is not initialized yet")
         return {"ok": True, "provider": normalized, "configured": True}
 
-    def list_providers(self) -> list[dict[str, object]]:
-        command = self.command_argv()
+    def list_providers(self, *, install_if_missing: bool = True) -> list[dict[str, object]]:
+        command = self.command_argv(install_if_missing=install_if_missing)
         result = subprocess.run(
             [*command, "--non-interactive", "providers", "list", "--json"],
             capture_output=True,
