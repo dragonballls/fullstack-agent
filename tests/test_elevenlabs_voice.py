@@ -65,6 +65,23 @@ class ElevenLabsVoiceTests(unittest.TestCase):
         self.assertEqual(base64.b64decode(packets[0]["data"]), b"fake-mp3")
         self.assertNotIn("fake", repr(packets))
 
+    def test_speech_test_generates_real_audio_packet(self):
+        mouth = ElevenLabsMouth(client=Mock())
+        mouth.client.synthesize.return_value = b"test-mp3"
+        with patch("quality_of_life.elevenlabs_voice.has_api_key", return_value=True):
+            result = mouth.test_speech()
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["spoken"])
+        packets = mouth.take_audio()
+        self.assertEqual(base64.b64decode(packets[0]["data"]), b"test-mp3")
+
+    def test_status_is_credential_free(self):
+        mouth = ElevenLabsMouth(client=Mock())
+        with patch("quality_of_life.elevenlabs_voice.has_api_key", return_value=True):
+            status = mouth.status()
+        self.assertNotIn("api_key", repr(status))
+        self.assertNotIn("secret", repr(status).lower())
+
     def test_stale_generation_is_dropped_after_shut_up(self):
         mouth = ElevenLabsMouth(client=Mock())
         started = Mock()
