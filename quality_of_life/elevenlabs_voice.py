@@ -25,7 +25,8 @@ from typing import Any
 SERVICE_NAME = "Jarvis"
 ACCOUNT_NAME = "ElevenLabs"
 API_BASE = "https://api.elevenlabs.io/v1"
-DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # ElevenLabs public example voice: George
+DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # compatibility fallback; first-time setup prefers a current voice
+DEFAULT_PREFERRED_VOICE_NAME = "Eldrin"
 DEFAULT_MODEL_ID = "eleven_flash_v2_5"
 EXPRESSIVE_MODEL_ID = "eleven_v3"
 DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
@@ -262,7 +263,17 @@ class ElevenLabsMouth:
 
     def configure(self, api_key: str, *, voice_id: str | None = None, model_id: str | None = None) -> dict[str, object]:
         save_api_key(api_key)
-        selected_voice = str(voice_id or self.voice_id or DEFAULT_VOICE_ID).strip()[:256]
+        explicit_voice = str(voice_id or "").strip()
+        selected_voice = explicit_voice or self.voice_id or DEFAULT_VOICE_ID
+        if not explicit_voice and selected_voice == DEFAULT_VOICE_ID:
+            try:
+                for voice in self.client.list_voices():
+                    if str(voice.get("name", "")).strip().casefold() == DEFAULT_PREFERRED_VOICE_NAME.casefold():
+                        selected_voice = str(voice.get("id", "")).strip() or selected_voice
+                        break
+            except Exception:
+                pass
+        selected_voice = str(selected_voice).strip()[:256]
         selected_model = str(model_id or self.model_id or DEFAULT_MODEL_ID).strip()
         if selected_model not in {DEFAULT_MODEL_ID, EXPRESSIVE_MODEL_ID}:
             raise ValueError("unsupported ElevenLabs model")
