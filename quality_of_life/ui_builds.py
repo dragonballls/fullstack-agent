@@ -449,7 +449,7 @@ def build_manager_script() -> str:
   panel.innerHTML = `
     <div class="juib-head">
       <div><div class="juib-title">UI BUILD GALLERY</div><div class="juib-sub">Unlimited local builds · instant switch · rollback</div></div>
-      <div class="juib-actions"><button class="juib-btn" id="juib-new">NEW</button><button class="juib-btn" id="juib-rollback">ROLLBACK</button><button class="juib-btn" id="juib-close">CLOSE</button></div>
+      <div class="juib-actions"><button class="juib-btn" id="juib-ai">AI KEYS</button><button class="juib-btn" id="juib-new">NEW</button><button class="juib-btn" id="juib-rollback">ROLLBACK</button><button class="juib-btn" id="juib-close">CLOSE</button></div>
     </div>
     <div id="jarvis-ui-build-list"></div>
     <div id="jarvis-ui-build-editor">
@@ -506,6 +506,22 @@ def build_manager_script() -> str:
         throw error;
       }
     }
+
+    const sharedSurface = window.jarvisTextInput;
+    if (sharedSurface && sharedSurface.setBuildTheme) {
+      sharedSurface.setBuildTheme(
+        String(payload && payload.id || "default"),
+        String(payload && payload.name || "JARVIS"),
+        String(payload && payload.version || "")
+      );
+    }
+    window.dispatchEvent(new CustomEvent("jarvis:uibuildchanged", {
+      detail: {
+        id: String(payload && payload.id || ""),
+        name: String(payload && payload.name || ""),
+        version: String(payload && payload.version || "")
+      }
+    }));
   }
 
   function closeEditor() { editor.classList.remove("active"); }
@@ -558,6 +574,11 @@ def build_manager_script() -> str:
     }
   });
   document.getElementById("juib-close").addEventListener("click", () => panel.classList.remove("active"));
+  document.getElementById("juib-ai").addEventListener("click", async () => {
+    if (!api() || !api().open_omniroute_settings) return;
+    try { await api().open_omniroute_settings(); }
+    catch (error) { window.alert("Could not open AI provider settings: " + String(error && error.message || error)); }
+  });
   document.getElementById("juib-new").addEventListener("click", () => {
     editor.classList.toggle("active");
     if (editor.classList.contains("active")) document.getElementById("juib-editor-id").focus();

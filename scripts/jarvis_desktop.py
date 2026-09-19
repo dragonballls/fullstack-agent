@@ -16,9 +16,12 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections import deque
 from typing import Any
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
+from quality_of_life.omniroute_setup import OmniRouteProvisioner
+from quality_of_life.elevenlabs_voice import ElevenLabsMouth
 from quality_of_life.runtime import JarvisRuntime
 from quality_of_life.self_update import SelfUpdateError, build_windows_handoff_script, fetch_latest_release, is_update_available, stage_update
 
@@ -129,11 +132,27 @@ class VisualizerAdapter:
 
 
 class VoiceAdapter:
-    """Lazy bridge to the embedded upstream backtalk ears/mouth."""
+    """Bridge Backtalk ears into Jarvis while using ElevenLabs as the sole TTS engine."""
 
     def __init__(self, controller: JarvisDesktopController) -> None:
         self.controller = controller
         self.bridge: Any | None = None
+        self.elevenlabs = ElevenLabsMouth()
+        self._transcript_lock = threading.RLock()
+        self._transcript_queue: deque[str] = deque(maxlen=100)
+
+    def _record_transcript(self, text: str) -> None:
+        message = str(text or "").strip()
+        if not message:
+            return
+        with self._transcript_lock:
+            self._transcript_queue.append(message[:12000])
+
+    def drain_transcript(self) -> list[str]:
+        with self._transcript_lock:
+            items = list(self._transcript_queue)
+            self._transcript_queue.clear()
+        return items
 
     @staticmethod
     def _truthy(name: str) -> bool:
@@ -147,7 +166,10 @@ class VoiceAdapter:
         from backtalk.ears import Ears
         from backtalk.mouth import Mouth
         from backtalk.ptt import PTTListener
-        LOGGER.info("embedded Backtalk smoke validation passed: %s", vendor)
+        from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth
+        if not callable(getattr(ElevenLabsClient, "synthesize", None)):
+            raise RuntimeError("ElevenLabs synthesis client is incomplete")
+        LOGGER.info("embedded Backtalk + ElevenLabs voice modules validated: %s / %s", vendor, ElevenLabsMouth.__name__)
 
     def start(self) -> None:
         if self._truthy("JARVIS_SMOKE") and self._truthy("JARVIS_SMOKE_VOICE"):
@@ -157,13 +179,19 @@ class VoiceAdapter:
             LOGGER.info("voice disabled by configuration")
             return
         from scripts.jarvis_voice_bridge import JarvisVoiceBridge
-        self.bridge = JarvisVoiceBridge(self.controller)
+        self.bridge = JarvisVoiceBridge(
+            self.controller,
+            mouth=self.elevenlabs,
+            on_output=self._record_transcript,
+        )
         self.bridge.start()
 
     def stop(self) -> None:
         if self.bridge is not None:
             self.bridge.stop()
             self.bridge = None
+        else:
+            self.elevenlabs.shutdown()
 
 
 class HandsAdapter:
@@ -369,6 +397,54 @@ class JarvisWebApi:
     def text_link_state(self) -> dict[str, Any]:
         return self.host.text_link_state()
 
+    def voice_transcript(self) -> dict[str, Any]:
+        voice = getattr(self.host, "voice", None)
+        drain = getattr(voice, "drain_transcript", None)
+        if not callable(drain):
+            return {"ok": True, "messages": []}
+        try:
+            return {"ok": True, "messages": [str(item)[:12000] for item in drain()]}
+        except Exception:
+            return {"ok": True, "messages": []}
+
+    def voice_audio(self) -> dict[str, Any]:
+        try:
+            return self.host.voice_audio()
+        except Exception:
+            return {"ok": True, "items": []}
+
+    def elevenlabs_status(self) -> dict[str, Any]:
+        return self.host.elevenlabs_status()
+
+    def elevenlabs_configure(self, api_key: str, voice_id: str = "", model_id: str = "") -> dict[str, Any]:
+        return self.host.configure_elevenlabs(api_key, voice_id, model_id)
+
+    def elevenlabs_test(self) -> dict[str, Any]:
+        return self.host.test_elevenlabs()
+
+    def elevenlabs_voices(self) -> dict[str, Any]:
+        return self.host.elevenlabs_voices()
+
+    def omniroute_detect_provider(self, api_key: str) -> dict[str, Any]:
+        from quality_of_life.omniroute_setup import detect_provider_from_key
+        provider = detect_provider_from_key(api_key)
+        return {"ok": True, "provider": provider, "detected": bool(provider)}
+
+    def open_omniroute_settings(self) -> dict[str, Any]:
+        return self.host.open_omniroute_settings()
+
+    def omniroute_status(self) -> dict[str, Any]:
+        return self.host.omniroute_status()
+
+    def omniroute_configure_provider(self, provider: str, api_key: str) -> dict[str, Any]:
+        return self.host.configure_omniroute_provider(provider, api_key)
+
+    def omniroute_test_provider(self, provider: str) -> dict[str, Any]:
+        return self.host.test_omniroute_provider(provider)
+
+    def open_omniroute_dashboard(self) -> dict[str, Any]:
+        return self.host.open_omniroute_dashboard()
+
     def submit_text(self, text: str, confirmed: bool = False) -> dict[str, Any]:
         normalized = str(text or "").strip()
         if not normalized:
@@ -396,132 +472,44 @@ TEXT_INPUT_SCRIPT = r'''
   const style = document.createElement("style");
   style.id = "jarvis-text-input-style";
   style.textContent = `
-    #jarvis-text-shell {
-      position: fixed;
-      z-index: 2147483647;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: min(320px, calc(100vw - 36px));
-      padding: 10px;
-      border: 1px solid rgba(61,220,132,.20);
-      border-radius: 14px;
-      background: rgba(2,7,5,.46);
-      box-shadow: 0 0 24px rgba(61,220,132,.08), inset 0 0 18px rgba(61,220,132,.03);
-      backdrop-filter: blur(8px);
-      opacity: .42;
-      transition: width .22s ease, opacity .22s ease, border-color .22s ease, box-shadow .22s ease;
-      pointer-events: auto;
-      font-family: var(--mono, Consolas, monospace);
-      color: #e8f0f2;
-    }
-    #jarvis-text-shell:hover,
-    #jarvis-text-shell.jarvis-active {
-      width: min(640px, calc(100vw - 36px));
-      opacity: 1;
-      border-color: rgba(61,220,132,.56);
-      box-shadow: 0 0 34px rgba(61,220,132,.18), inset 0 0 22px rgba(35,133,205,.05);
-    }
-    #jarvis-text-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 3px 7px;
-      font-size: 9px;
-      letter-spacing: .28em;
-      color: #9edbff;
-      user-select: none;
-    }
-    #jarvis-text-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #4dc7ff;
-      box-shadow: 0 0 10px rgba(61,220,132,.55);
-      flex: 0 0 auto;
-    }
-    #jarvis-text-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    #jarvis-text-input {
-      min-width: 0;
-      flex: 1;
-      border: 1px solid rgba(143,232,184,.22);
-      outline: none;
-      border-radius: 9px;
-      padding: 12px 13px;
-      color: #e8f0f2;
-      background: rgba(0,0,0,.28);
-      font: inherit;
-      font-size: 13px;
-      letter-spacing: .04em;
-      cursor: text;
-      caret-color: #7edcff;
-    }
-    #jarvis-text-input::placeholder { color: #6d8580; }
-    #jarvis-text-input:focus { border-color: rgba(143,232,184,.58); box-shadow: 0 0 18px rgba(61,220,132,.10); }
-    #jarvis-text-send {
-      flex: 0 0 auto;
-      width: 42px;
-      height: 42px;
-      border: 1px solid rgba(91,190,255,.28);
-      border-radius: 9px;
-      color: #b9e9ff;
-      background: rgba(61,220,132,.06);
-      cursor: pointer;
-      font: inherit;
-      font-size: 16px;
-    }
-    #jarvis-text-send:hover { border-color: rgba(143,232,184,.68); background: rgba(41,151,224,.14); }
-    #jarvis-text-float {
-      flex: 0 0 auto;
-      width: 32px;
-      height: 42px;
-      border: 1px solid rgba(143,232,184,.17);
-      border-radius: 9px;
-      color: #7ea698;
-      background: rgba(143,232,184,.025);
-      cursor: pointer;
-      font: inherit;
-      font-size: 14px;
-    }
-    #jarvis-text-float:hover { border-color: rgba(143,232,184,.58); color: #d8ffe8; background: rgba(61,220,132,.08); }
-    #jarvis-text-float:disabled { opacity: .4; cursor: default; }
-    #jarvis-text-status {
-      margin: 7px 3px 0;
-      min-height: 14px;
-      max-height: 44px;
-      overflow: hidden;
-      font-size: 9px;
-      line-height: 1.45;
-      letter-spacing: .10em;
-      color: #839b94;
-      white-space: pre-wrap;
-    }
-    #jarvis-text-status.jarvis-error { color: #ff8fa8; }
-    #jarvis-text-hint {
-      margin: 7px 3px 0;
-      font-size: 8px;
-      letter-spacing: .17em;
-      color: #536b83;
-      user-select: none;
-    }
+    #jarvis-text-shell{position:fixed;z-index:2147483647;left:24px;top:24px;width:min(760px,calc(100vw - 48px));height:min(420px,calc(100vh - 48px));min-width:320px;min-height:170px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;padding:12px;border:1px solid var(--jarvis-text-accent,rgba(91,190,255,.34));border-radius:16px;background:radial-gradient(circle at 15% 5%,rgba(78,196,255,.10),transparent 35%),linear-gradient(145deg,rgba(2,14,28,.94),rgba(1,6,13,.92));box-shadow:0 24px 78px rgba(0,0,0,.52),0 0 46px var(--jarvis-text-glow,rgba(35,150,238,.20)),inset 0 0 34px rgba(56,179,247,.045);backdrop-filter:blur(15px);overflow:hidden;resize:both;pointer-events:auto;color:#e8f5fb;font-family:var(--mono,Consolas,monospace);opacity:.96}
+    #jarvis-text-shell:hover,#jarvis-text-shell.jarvis-active{opacity:1;box-shadow:0 28px 96px rgba(0,0,0,.58),0 0 58px var(--jarvis-text-glow,rgba(35,150,238,.28)),inset 0 0 36px rgba(56,179,247,.06)}
+    #jarvis-text-header{height:28px;display:flex;align-items:center;gap:9px;cursor:move;user-select:none}
+    #jarvis-text-dot{width:8px;height:8px;border-radius:50%;background:#83ddff;box-shadow:0 0 14px rgba(131,221,255,.86);flex:0 0 auto}
+    #jarvis-text-label{font-size:9px;letter-spacing:.28em;color:var(--jarvis-text-label-color,#c6efff);white-space:nowrap}
+    #jarvis-text-build{font-size:7px;letter-spacing:.11em;color:#5c86a2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #jarvis-text-actions{margin-left:auto;display:flex;gap:5px}
+    .jarvis-text-btn{width:28px;height:24px;border:1px solid rgba(111,199,242,.18);border-radius:7px;background:rgba(4,18,32,.60);color:#86c9eb;cursor:pointer;font:9px var(--mono,Consolas,monospace)}
+    .jarvis-text-btn:hover{border-color:rgba(152,231,255,.65);color:#ecfbff}
+    #jarvis-text-history{height:calc(100% - 100px);min-height:48px;overflow:auto;padding:7px 3px 5px;display:flex;flex-direction:column;gap:7px;scrollbar-width:thin;scroll-behavior:smooth}
+    .jarvis-text-message{max-width:94%;padding:8px 10px;border:1px solid rgba(111,199,242,.10);border-radius:9px;background:rgba(255,255,255,.018);font-size:10px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#84aec7}
+    .jarvis-text-message.user{align-self:flex-end;border-color:rgba(85,194,255,.21);background:rgba(25,117,176,.09);color:#cbf0ff}
+    .jarvis-text-message.jarvis{align-self:flex-start;border-color:rgba(100,211,255,.15);color:#e0f6ff;background:rgba(20,96,144,.055)}
+    .jarvis-text-message.error{align-self:flex-start;border-color:rgba(255,120,145,.22);color:#ff9dad;background:rgba(150,35,55,.06)}
+    #jarvis-text-row{display:flex;gap:8px;align-items:flex-end;padding-top:7px}
+    #jarvis-text-input{min-width:0;min-height:42px;max-height:130px;flex:1;resize:none;overflow:auto;border:1px solid rgba(111,199,242,.20);outline:none;border-radius:10px;padding:11px 12px;box-sizing:border-box;color:#e9f7fd;background:rgba(0,0,0,.28);font:11px/1.4 var(--mono,Consolas,monospace);caret-color:#8be2ff}
+    #jarvis-text-input:focus{border-color:rgba(151,230,255,.66);box-shadow:0 0 20px rgba(50,165,239,.12)}
+    #jarvis-text-input::placeholder{color:#60809a}
+    #jarvis-text-float,#jarvis-text-send{flex:0 0 auto;width:42px;height:42px;border:1px solid rgba(111,199,242,.21);border-radius:10px;background:rgba(5,24,39,.64);color:#c7edff;cursor:pointer;font:15px var(--mono,Consolas,monospace)}
+    #jarvis-text-float:hover,#jarvis-text-send:hover{border-color:rgba(151,230,255,.68);background:rgba(27,124,184,.15)}
+    #jarvis-text-status{height:16px;margin-top:5px;font-size:8px;line-height:1.4;letter-spacing:.10em;color:#668ba5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #jarvis-text-status.jarvis-error{color:#ff8fa8}
+    #jarvis-text-hint{font-size:7px;letter-spacing:.12em;color:#466a82;user-select:none}
+    #jarvis-text-shell.history-collapsed{height:48px!important;min-height:48px!important;resize:none}
+    #jarvis-text-shell.history-collapsed #jarvis-text-history,#jarvis-text-shell.history-collapsed #jarvis-text-row,#jarvis-text-shell.history-collapsed #jarvis-text-status,#jarvis-text-shell.history-collapsed #jarvis-text-hint{display:none}
+    #jarvis-text-shell[data-theme="neural"]{--jarvis-text-accent:rgba(76,199,255,.46);--jarvis-text-glow:rgba(39,151,239,.26);--jarvis-text-label-color:#d0f3ff}
+    #jarvis-text-shell[data-theme="classic"]{--jarvis-text-accent:rgba(123,218,177,.40);--jarvis-text-glow:rgba(44,177,127,.18);--jarvis-text-label-color:#d4f5e4}
   `;
   document.head.appendChild(style);
 
   const shell = document.createElement("div");
   shell.id = "jarvis-text-shell";
   shell.innerHTML = `
-    <div id="jarvis-text-label"><span id="jarvis-text-dot"></span>JARVIS TEXT LINK</div>
-    <div id="jarvis-text-row">
-      <input id="jarvis-text-input" type="text" autocomplete="off" spellcheck="false" placeholder="Hover here and type to talk to Jarvis..." aria-label="Talk to Jarvis by text" disabled />
-      <button id="jarvis-text-float" type="button" aria-label="Detach Jarvis text link into a floating desktop window" title="Detach the neural command surface into a movable desktop window" disabled>↗</button>
-      <button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button>
-    </div>
+    <div id="jarvis-text-header"><span id="jarvis-text-dot"></span><span id="jarvis-text-label">JARVIS COMMAND</span><span id="jarvis-text-build"></span><span id="jarvis-text-actions"><button class="jarvis-text-btn" id="jarvis-text-settings" type="button" title="Open AI provider settings">⚙</button><button class="jarvis-text-btn" id="jarvis-text-min" type="button" title="Collapse command transcript">—</button><button class="jarvis-text-btn" id="jarvis-text-float" type="button" title="Detach command surface">↗</button></span></div>
+    <div id="jarvis-text-history" aria-live="polite"><div class="jarvis-text-message jarvis">Command surface online. Jarvis responses will remain visible here.</div></div>
+    <div id="jarvis-text-row"><textarea id="jarvis-text-input" rows="1" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…" aria-label="Talk to Jarvis by text" disabled></textarea><button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div>
     <div id="jarvis-text-status"></div>
-    <div id="jarvis-text-hint">ENTER — SEND &nbsp;&nbsp; ESC — CLEAR</div>
+    <div id="jarvis-text-hint">ENTER — SEND · SHIFT+ENTER — NEW LINE · DRAG HEADER — MOVE · RESIZE CORNER — ANY SIZE</div>
   `;
   document.body.appendChild(shell);
 
@@ -529,104 +517,184 @@ TEXT_INPUT_SCRIPT = r'''
   const floatButton = shell.querySelector("#jarvis-text-float");
   const send = shell.querySelector("#jarvis-text-send");
   const status = shell.querySelector("#jarvis-text-status");
+  const history = shell.querySelector("#jarvis-text-history");
+  const buildLabel = shell.querySelector("#jarvis-text-build");
+  const minButton = shell.querySelector("#jarvis-text-min");
+  const settingsButton = shell.querySelector("#jarvis-text-settings");
+  const header = shell.querySelector("#jarvis-text-header");
   let apiReady = false;
+  let historyCollapsed = false;
+  let dragState = null;
 
-  function setActive(active) {
-    if (active) shell.classList.add("jarvis-active");
-    else if (document.activeElement !== input) shell.classList.remove("jarvis-active");
+  function persistGeometry(){
+    if(historyCollapsed)return;
+    try{
+      const rect=shell.getBoundingClientRect();
+      localStorage.setItem("jarvis.textSurface.geometry",JSON.stringify({x:Math.round(rect.left),y:Math.round(rect.top),width:Math.round(rect.width),height:Math.round(rect.height)}));
+    }catch(_){}
   }
+  function restoreGeometry(){
+    try{
+      const g=JSON.parse(localStorage.getItem("jarvis.textSurface.geometry")||"null");
+      if(g&&Number.isFinite(g.x)&&Number.isFinite(g.y)&&Number.isFinite(g.width)&&Number.isFinite(g.height)){
+        shell.style.width=Math.max(320,Math.min(window.innerWidth-16,g.width))+"px";
+        shell.style.height=Math.max(170,Math.min(window.innerHeight-16,g.height))+"px";
+        shell.style.left=Math.max(8,Math.min(window.innerWidth-shell.offsetWidth-8,g.x))+"px";
+        shell.style.top=Math.max(8,Math.min(window.innerHeight-shell.offsetHeight-8,g.y))+"px";
+        return;
+      }
+    }catch(_){}
+    shell.style.left=Math.max(8,Math.round((window.innerWidth-shell.offsetWidth)/2))+"px";
+    shell.style.top=Math.max(8,Math.round((window.innerHeight-shell.offsetHeight)/2))+"px";
+  }
+  let lastTranscriptKey = "";
+  let lastTranscriptAt = 0;
+  function addMessage(kind,text){
+    const value=String(text||"").slice(0,12000);
+    if(!value)return;
+    const key=(kind||"jarvis")+"|"+value;
+    const now=Date.now();
+    if(key===lastTranscriptKey && now-lastTranscriptAt<1400)return;
+    lastTranscriptKey=key;lastTranscriptAt=now;
+    const row=document.createElement("div");
+    row.className="jarvis-text-message "+(kind==="user"?"user":kind==="error"?"error":"jarvis");
+    row.textContent=value;
+    history.appendChild(row);
+    while(history.children.length>100)history.removeChild(history.firstChild);
+    if(!historyCollapsed)history.scrollTop=history.scrollHeight;
+  }
+  function setTheme(id,name,version){
+    const key=String(id||"").toLowerCase().includes("neural")?"neural":"classic";
+    shell.dataset.theme=key;
+    buildLabel.textContent=(name||id||"JARVIS")+" · v"+String(version||"");
+  }
+  function setCollapsed(collapsed){
+    historyCollapsed=!!collapsed;
+    shell.classList.toggle("history-collapsed",historyCollapsed);
+    minButton.textContent=historyCollapsed?"+":"—";
+    if(!historyCollapsed)window.setTimeout(()=>history.scrollTop=history.scrollHeight,0);
+    try{localStorage.setItem("jarvis.textSurface.collapsed",historyCollapsed?"1":"0");}catch(_){}
+  }
+  function startDrag(event){
+    if(event.button!==undefined&&event.button!==0)return;
+    dragState={x:event.clientX,y:event.clientY,left:parseFloat(shell.style.left)||0,top:parseFloat(shell.style.top)||0};
+    try{header.setPointerCapture(event.pointerId);}catch(_){}
+  }
+  function moveDrag(event){
+    if(!dragState)return;
+    const dx=event.clientX-dragState.x,dy=event.clientY-dragState.y;
+    shell.style.left=Math.max(8,Math.min(window.innerWidth-shell.offsetWidth-8,dragState.left+dx))+"px";
+    shell.style.top=Math.max(8,Math.min(window.innerHeight-shell.offsetHeight-8,dragState.top+dy))+"px";
+  }
+  function stopDrag(){if(dragState){dragState=null;persistGeometry();}}
 
-  async function submit(confirmed) {
-    const text = input.value.trim();
-    if (!text || !apiReady) return;
+  async function submit(confirmed){
+    const textValue=input.value.trim();
+    if(!textValue||!apiReady)return;
     setActive(true);
-    input.disabled = true;
-    send.disabled = true;
-    status.classList.remove("jarvis-error");
-    status.textContent = "PROCESSING...";
-    try {
-      let result = await window.pywebview.api.submit_text(text, !!confirmed);
-      if (result && result.needs_confirmation && !confirmed) {
-        status.textContent = result.text || "Confirmation required.";
-        const accepted = window.confirm(result.text || "Jarvis requires confirmation for this action.");
-        if (accepted) {
-          result = await window.pywebview.api.submit_text(text, true);
-        } else {
-          status.textContent = "CANCELLED";
-          result = null;
+    addMessage("user",textValue);
+    input.disabled=true;send.disabled=true;
+    status.classList.remove("jarvis-error");status.textContent="PROCESSING · JARVIS LINK ACTIVE";
+    try{
+      let result=await window.pywebview.api.submit_text(textValue,!!confirmed);
+      if(result&&result.needs_confirmation&&!confirmed){
+        addMessage("jarvis",result.text||"Confirmation required.");
+        status.textContent="AWAITING CONFIRMATION";
+        const accepted=window.confirm(result.text||"Jarvis requires confirmation for this action.");
+        if(accepted)result=await window.pywebview.api.submit_text(textValue,true);
+        else{addMessage("jarvis","Command cancelled.");status.textContent="CANCELLED";result=null;}
+      }
+      if(result){
+        if(result.ok){
+          const response=result.text||"DONE";
+          addMessage("jarvis",response);
+          status.textContent="RESPONSE RECEIVED · "+response.replace(/\s+/g," ").slice(0,90);
+          input.value="";
+        }else{
+          const error=result.error||"Jarvis request failed.";
+          addMessage("error",error);status.classList.add("jarvis-error");status.textContent=error.slice(0,180);
         }
       }
-      if (result) {
-        if (result.ok) {
-          status.textContent = result.text || "DONE";
-          input.value = "";
-        } else {
-          status.classList.add("jarvis-error");
-          status.textContent = result.error || "Jarvis request failed.";
-        }
-      }
-    } catch (error) {
-      status.classList.add("jarvis-error");
-      status.textContent = "TEXT LINK ERROR: " + String(error);
-    } finally {
-      input.disabled = false;
-      send.disabled = false;
-      input.focus();
+    }catch(error){
+      const message="TEXT LINK ERROR: "+String(error);
+      addMessage("error",message);status.classList.add("jarvis-error");status.textContent=message.slice(0,180);
+    }finally{
+      input.disabled=false;send.disabled=false;input.focus();persistGeometry();
     }
   }
 
-  shell.addEventListener("mouseenter", function () { setActive(true); });
-  shell.addEventListener("mouseleave", function () { setActive(false); });
-  shell.addEventListener("focusin", function () { setActive(true); });
-  shell.addEventListener("focusout", function () { setTimeout(function () { setActive(false); }, 0); });
-  input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      submit(false);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      input.value = "";
-      status.textContent = "";
-      input.blur();
-    }
-  });
-  send.addEventListener("click", function () { submit(false); });
-  floatButton.addEventListener("click", async function () {
-    if (!apiReady || !window.pywebview.api.toggle_text_link) return;
-    try {
-      await window.pywebview.api.toggle_text_link(true);
-      shell.style.display = "none";
-    } catch (error) {
-      status.classList.add("jarvis-error");
-      status.textContent = "FLOAT LINK ERROR: " + String(error);
-    }
-  });
-
-  function markReady() {
-    apiReady = !!(window.pywebview && window.pywebview.api);
-    input.disabled = !apiReady;
-    floatButton.disabled = !apiReady;
-    send.disabled = !apiReady;
-    if (apiReady) {
-      status.textContent = "READY — TEXT LINK ONLINE";
-    }
+  function setActive(active){
+    if(active)shell.classList.add("jarvis-active");
+    else if(document.activeElement!==input)shell.classList.remove("jarvis-active");
   }
 
-  window.addEventListener("pywebviewready", markReady, { once: true });
-  if (window.pywebview && window.pywebview.api) markReady();
+  shell.addEventListener("mouseenter",()=>setActive(true));
+  shell.addEventListener("mouseleave",()=>setActive(false));
+  shell.addEventListener("focusin",()=>setActive(true));
+  shell.addEventListener("focusout",()=>window.setTimeout(()=>setActive(false),0));
+  input.addEventListener("keydown",event=>{
+    if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();submit(false);}
+    else if(event.key==="Escape"){event.preventDefault();input.value="";status.textContent="";input.blur();}
+  });
+  send.addEventListener("click",()=>submit(false));
+  minButton.addEventListener("click",()=>setCollapsed(!historyCollapsed));
+  settingsButton.addEventListener("click",async()=>{
+    if(!apiReady||!window.pywebview.api.open_omniroute_settings)return;
+    try{await window.pywebview.api.open_omniroute_settings();}
+    catch(error){const message="AI PROVIDER SETTINGS ERROR: "+String(error);addMessage("error",message);status.classList.add("jarvis-error");status.textContent=message.slice(0,180);}
+  });
+  header.addEventListener("pointerdown",startDrag);
+  header.addEventListener("pointermove",moveDrag);
+  header.addEventListener("pointerup",stopDrag);
+  header.addEventListener("pointercancel",stopDrag);
+  shell.addEventListener("mouseup",persistGeometry);
+  floatButton.addEventListener("click",async()=>{
+    if(!apiReady||!window.pywebview.api.toggle_text_link)return;
+    try{await window.pywebview.api.toggle_text_link(true);shell.style.display="none";}
+    catch(error){const message="FLOAT LINK ERROR: "+String(error);addMessage("error",message);status.classList.add("jarvis-error");status.textContent=message;}
+  });
+  window.addEventListener("resize",()=>{
+    const rect=shell.getBoundingClientRect();
+    shell.style.left=Math.max(8,Math.min(window.innerWidth-rect.width-8,rect.left))+"px";
+    shell.style.top=Math.max(8,Math.min(window.innerHeight-rect.height-8,rect.top))+"px";
+    persistGeometry();
+  });
 
-  window.jarvisTextInput = {
-    setVisible: function (visible) {
-      shell.style.display = visible ? "" : "none";
-      if (!visible) setActive(false);
-    },
-    focus: function () {
-      if (apiReady) input.focus();
+  function markReady(){
+    apiReady=!!(window.pywebview&&window.pywebview.api);
+    input.disabled=!apiReady;floatButton.disabled=!apiReady;send.disabled=!apiReady;
+    if(apiReady)status.textContent="READY — TEXT LINK ONLINE";
+  }
+  restoreGeometry();
+  try{historyCollapsed=localStorage.getItem("jarvis.textSurface.collapsed")==="1";}catch(_){}
+  setCollapsed(historyCollapsed);
+  setTheme("default","JARVIS","unified");
+
+  window.addEventListener("pywebviewready",markReady);
+  const readyPoll=window.setInterval(function(){
+    if(window.pywebview&&window.pywebview.api){
+      markReady();
+      window.clearInterval(readyPoll);
     }
+  },250);
+  if(window.pywebview&&window.pywebview.api)markReady();
+
+  async function pollVoiceTranscript(){
+    if(!apiReady||!window.pywebview.api.voice_transcript)return;
+    try{const result=await window.pywebview.api.voice_transcript();if(result&&Array.isArray(result.messages))result.messages.forEach(function(message){addMessage("jarvis",message);});}catch(_){}
+  }
+  setInterval(pollVoiceTranscript,700);
+  pollVoiceTranscript();
+
+  window.jarvisTextInput={
+    setVisible:function(visible){shell.style.display=visible?"":"none";if(!visible)setActive(false);},
+    focus:function(){if(apiReady)input.focus();},
+    setBuildTheme:function(id,name,version){setTheme(id,name,version);},
+    appendOutput:function(text){addMessage("jarvis",text);},
+    geometry:function(){const rect=shell.getBoundingClientRect();return{x:rect.left,y:rect.top,width:rect.width,height:rect.height};}
   };
 })();
 '''
-
 
 
 
@@ -639,9 +707,190 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020914;color:#e6f7ff;font-family:Consolas,"SFMono-Regular",monospace}#frame{width:100%;height:100%;padding:10px;border:1px solid rgba(79,188,255,.28);border-radius:16px;background:linear-gradient(145deg,rgba(5,17,12,.98),rgba(2,7,5,.96));box-shadow:0 12px 36px rgba(0,0,0,.5),inset 0 0 24px rgba(35,133,205,.05)}#bar{display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:move;user-select:none}.pywebview-drag-region{cursor:move}.dot{width:7px;height:7px;border-radius:50%;background:#4dc7ff;box-shadow:0 0 11px rgba(77,199,255,.78)}#title{flex:1;font-size:9px;letter-spacing:.22em;color:#9edbff}#hotkey{font-size:7px;letter-spacing:.09em;color:#5d7891}#close{width:24px;height:22px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:transparent;color:#789087;cursor:pointer;font:inherit}#close:hover{border-color:rgba(255,140,152,.38);color:#ff9aa5}#row{display:flex;gap:8px;align-items:center}#input{min-width:0;flex:1;height:42px;border:1px solid rgba(91,190,255,.28);border-radius:9px;outline:none;padding:0 13px;background:rgba(0,0,0,.28);color:#e8f0f2;font:inherit;font-size:13px;letter-spacing:.03em;caret-color:#7edcff}#input:focus{border-color:rgba(91,190,255,.72);box-shadow:0 0 18px rgba(41,151,224,.14)}#input::placeholder{color:#627d95}#send{width:44px;height:42px;border:1px solid rgba(91,190,255,.30);border-radius:9px;background:rgba(61,220,132,.07);color:#b9e9ff;cursor:pointer;font:inherit;font-size:17px}#send:hover{background:rgba(61,220,132,.15);border-color:rgba(143,232,184,.7)}#status{margin-top:7px;min-height:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#799bb7;font-size:8px;letter-spacing:.09em}#status.error{color:#ff8fa8}</style>
 </head>
 <body><div id="frame"><div id="bar" class="pywebview-drag-region"><span class="dot"></span><span id="title">JARVIS NEURAL FLOATING LINK</span><span id="hotkey">CTRL+ALT+SHIFT+F12</span><button id="close" type="button" aria-label="Return Jarvis text link to the main app">×</button></div><div id="row"><input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis from anywhere on your desktop…" disabled><button id="send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div><div id="status">CONNECTING…</div></div>
-<script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn,{once:true});if(window.pywebview&&window.pywebview.api)readyFn()})();</script>
+<script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn);const readyPoll=window.setInterval(function(){if(window.pywebview&&window.pywebview.api){readyFn();window.clearInterval(readyPoll)}} ,250);if(window.pywebview&&window.pywebview.api)readyFn()})();  const jarvisVoicePlayer=(function(){
+    let current=null,lastSequence=0,pending=[],polling=false;
+    function stopCurrent(){if(current){try{current.pause();current.currentTime=0;}catch(_e){}current=null;}}
+    function playNext(){
+      if(current||!pending.length)return;
+      const packet=pending.shift();
+      if(!packet||!packet.data){playNext();return;}
+      const audio=new Audio("data:"+(packet.mime||"audio/mpeg")+";base64,"+packet.data);
+      current=audio;
+      audio.onended=()=>{current=null;playNext();};
+      audio.onerror=()=>{current=null;playNext();};
+      audio.play().catch(()=>{pending.unshift(packet);current=null;});
+    }
+    function enqueue(items){
+      if(!Array.isArray(items))return;
+      for(const item of items){
+        const seq=Number(item&&item.sequence||0);
+        if(!seq||seq<lastSequence)continue;
+        if(seq>lastSequence){lastSequence=seq;pending=[];stopCurrent();}
+        if(seq===lastSequence&&item&&item.data)pending.push(item);
+      }
+      playNext();
+    }
+    async function poll(){
+      if(polling||!(window.pywebview&&window.pywebview.api))return;
+      polling=true;
+      try{const result=await window.pywebview.api.voice_audio();enqueue(result&&result.items);}
+      catch(_e){}finally{polling=false;}
+    }
+    let audioContext=null;
+    function resume(){
+      try{
+        if(window.AudioContext||window.webkitAudioContext){
+          const Ctor=window.AudioContext||window.webkitAudioContext;
+          audioContext=audioContext||new Ctor();
+          if(audioContext.state==="suspended")audioContext.resume().catch(()=>{});
+        }
+      }catch(_e){}
+      playNext();
+    }
+    document.addEventListener("pointerdown",resume,{passive:true});
+    window.jarvisVoicePlayer={enqueue,poll,resume};
+    window.setInterval(poll,180);
+    poll();
+    return window.jarvisVoicePlayer;
+  })();
+</script>
 </body></html>'''
 
+OMNIROUTE_SETTINGS_HTML = r'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis AI Providers</title>
+<style>.voice-choice{height:30px;margin:3px 0;padding:0 10px;width:100%;text-align:left}.voice-choice{font-size:8px}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#020914;color:#dff5ff;font-family:Consolas,"SFMono-Regular",monospace}
+body{padding:18px}.panel{height:100%;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(91,190,255,.25);border-radius:18px;padding:18px;background:radial-gradient(circle at 15% 5%,rgba(78,196,255,.10),transparent 35%),linear-gradient(145deg,rgba(3,17,30,.98),rgba(1,7,13,.98));box-shadow:0 20px 70px rgba(0,0,0,.52),inset 0 0 38px rgba(56,179,247,.04)}
+h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px;line-height:1.6;color:#67879d}.status{padding:9px;border:1px solid rgba(111,199,242,.14);border-radius:10px;background:rgba(255,255,255,.018);font-size:9px;line-height:1.5}.row{display:flex;gap:8px}.field{display:flex;flex-direction:column;gap:5px;flex:1}.field label{font-size:8px;letter-spacing:.12em;color:#7698ad}select,input{width:100%;height:38px;border:1px solid rgba(111,199,242,.20);border-radius:8px;background:rgba(0,0,0,.25);color:#e8f7ff;outline:none;padding:0 10px;font:10px Consolas,"SFMono-Regular",monospace}input:focus,select:focus{border-color:rgba(151,230,255,.66);box-shadow:0 0 18px rgba(50,165,239,.12)}button{height:36px;border:1px solid rgba(111,199,242,.21);border-radius:8px;background:rgba(5,24,39,.64);color:#c7edff;cursor:pointer;font:9px Consolas,"SFMono-Regular",monospace;padding:0 13px}button:hover{border-color:rgba(151,230,255,.68);background:rgba(27,124,184,.15)}.primary{background:rgba(33,131,180,.14);border-color:rgba(106,211,255,.30)}.providers{display:flex;flex-direction:column;gap:6px;min-height:70px;overflow:auto}.provider{display:flex;justify-content:space-between;gap:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(111,199,242,.09);font-size:9px}.muted{color:#628299}.ok{color:#9ceac0}.bad{color:#ff9cab}.actions{display:flex;gap:7px;flex-wrap:wrap}
+</style>
+</head>
+<body><div class="panel">
+<h1>JARVIS · AI PROVIDERS</h1>
+<div class="sub">OmniRoute is built into the Jarvis release. Paste an API key and Jarvis safely auto-detects recognizable provider formats; ambiguous keys require an explicit provider selection.</div>
+<div class="status" id="runtime">Checking OmniRoute runtime…</div>
+<div><div class="field"><label>PROVIDER</label><select id="provider"><option value="auto" selected>Auto-detect from API key</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Google AI</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="xai">xAI</option><option value="mistral">Mistral</option><option value="cerebras">Cerebras</option><option value="together">Together</option><option value="fireworks">Fireworks</option><option value="custom">Custom provider ID…</option></select></div></div>
+<div class="field" id="customWrap" style="display:none"><label>CUSTOM PROVIDER ID</label><input id="customProvider" autocomplete="off" placeholder="provider-id"></div>
+<div class="field"><label>API KEY</label><input id="key" type="password" autocomplete="new-password" placeholder="Paste provider API key"></div>
+<div class="actions"><button id="connect" class="primary" type="button">CONNECT & TEST</button><button id="refresh" type="button">REFRESH</button><button id="dashboard" type="button">OPEN DASHBOARD</button></div>
+<div class="sub" id="message">Provider secrets are sent directly to OmniRoute over a local process boundary.</div>
+<div><div class="sub" style="margin-bottom:6px">CONFIGURED PROVIDERS</div><div class="providers" id="providers"><div class="muted">No provider status yet.</div></div></div>
+<div style="border-top:1px solid rgba(111,199,242,.10);padding-top:12px">
+<div class="sub" style="margin-bottom:6px">VOICE ENGINE · ELEVENLABS</div>
+<div class="status" id="voiceRuntime">Checking ElevenLabs voice engine…</div>
+<div class="field"><label>ELEVENLABS API KEY</label><input id="elevenKey" type="password" autocomplete="new-password" placeholder="Paste your ElevenLabs API key once"></div>
+<div class="row">
+<div class="field"><label>VOICE ID (OPTIONAL)</label><input id="voiceId" autocomplete="off" placeholder="Leave blank for configured/default voice"></div>
+<div class="field"><label>MODEL</label><select id="voiceModel"><option value="eleven_v3_conversational">v3 Conversational · expressive JARVIS mode</option><option value="eleven_flash_v2_5">Flash v2.5 · low latency</option><option value="eleven_v3">v3 · maximum expressiveness</option></select></div>
+</div>
+<div class="actions"><button id="voiceSave" class="primary" type="button">SAVE & TEST VOICE</button><button id="voiceTest" type="button">TEST VOICE</button><button id="voiceLoad" type="button">LOAD VOICES</button></div>
+<div class="sub" id="voiceMessage">The key is stored in the OS credential store and is never shown back here.</div>
+<div class="providers" id="voiceList"><div class="muted">Available ElevenLabs voices appear here after connection.</div></div>
+</div>
+</div>
+<script>
+(function(){
+"use strict";
+const provider=document.getElementById("provider"), custom=document.getElementById("customWrap"), customInput=document.getElementById("customProvider"), key=document.getElementById("key"), connect=document.getElementById("connect"), refresh=document.getElementById("refresh"), dashboard=document.getElementById("dashboard"), runtime=document.getElementById("runtime"), message=document.getElementById("message"), providers=document.getElementById("providers");
+const elevenKey=document.getElementById("elevenKey"), voiceId=document.getElementById("voiceId"), voiceModel=document.getElementById("voiceModel"), voiceSave=document.getElementById("voiceSave"), voiceTest=document.getElementById("voiceTest"), voiceLoad=document.getElementById("voiceLoad"), voiceRuntime=document.getElementById("voiceRuntime"), voiceMessage=document.getElementById("voiceMessage"), voiceList=document.getElementById("voiceList");
+provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});async function detectProvider(){
+  if(provider.value!=="auto")return;
+  const secret=key.value;
+  if(!secret||!window.pywebview||!window.pywebview.api)return;
+  try{
+    const result=await window.pywebview.api.omniroute_detect_provider(secret);
+    if(result&&result.provider){
+      provider.value=result.provider;
+      message.textContent="Detected provider: "+result.provider+". Click CONNECT & TEST.";
+    }else{
+      provider.value="auto";
+      message.textContent="Provider format is ambiguous; choose the provider explicitly.";
+    }
+  }catch(_e){}
+}
+key.addEventListener("blur",detectProvider);
+function render(data){
+  if(!data){runtime.textContent="OmniRoute status unavailable.";return;}
+  const version=data.version||"unknown", source=data.source||"unknown", ready=data.ready?"ONLINE":"STARTING";
+  runtime.textContent="OMNIROUTE "+ready+" · v"+version+" · "+source+" · "+(data.base_url||"");
+  const items=Array.isArray(data.providers)?data.providers:[];
+  providers.innerHTML=items.length?items.map(item=>'<div class="provider"><span>'+String(item.name).replace(/[<>&]/g,"")+'</span><span class="'+(String(item.status||"").toLowerCase().includes("fail")?"bad":"ok")+'">'+String(item.status||"configured").replace(/[<>&]/g,"")+'</span></div>').join(""):'<div class="muted">No providers configured yet.</div>';
+}
+async function load(){
+  try{const data=await window.pywebview.api.omniroute_status();render(data);}
+  catch(e){runtime.textContent="STATUS ERROR";message.textContent=String(e);}
+}
+connect.addEventListener("click",async()=>{
+  const secret=key.value;
+  if(!secret){message.textContent="Enter an API key first.";return;}
+  let selected=provider.value==="custom"?customInput.value.trim():provider.value;
+  if(provider.value==="auto"){
+    const detected=await window.pywebview.api.omniroute_detect_provider(secret);
+    selected=detected&&detected.provider?detected.provider:"auto";
+    if(selected==="auto"){message.textContent="Choose the provider for this key; its format is ambiguous.";return;}
+    provider.value=selected;
+  }
+  if(!selected){message.textContent="Select a provider and enter its API key.";return;}
+  connect.disabled=true;message.textContent="Connecting provider through OmniRoute…";
+  try{
+    const result=await window.pywebview.api.omniroute_configure_provider(selected,secret);
+    key.value="";
+    if(result&&result.tested===false){message.textContent="Credential saved; provider test could not complete."}
+    else message.textContent=result&&result.message?result.message:"Provider connected and tested.";
+    await load();
+  }catch(e){key.value="";message.textContent="Provider setup failed without exposing the credential.";runtime.className="status bad";}
+  finally{connect.disabled=false;}
+});
+refresh.addEventListener("click",load);
+dashboard.addEventListener("click",async()=>{try{await window.pywebview.api.open_omniroute_dashboard();}catch(e){message.textContent="Dashboard could not be opened.";}});
+async function loadVoice(){
+  try{
+    const data=await window.pywebview.api.elevenlabs_status();
+    voiceRuntime.textContent=(data.configured?"ELEVENLABS READY":"ELEVENLABS KEY NEEDED")+" · "+(data.model_id||"");
+    if(!voiceId.value&&data.voice_id)voiceId.value=data.voice_id;
+    if(data.model_id)voiceModel.value=data.model_id;
+    voiceMessage.textContent=data.last_error||"ElevenLabs voice path is ready.";
+  }catch(_e){voiceRuntime.textContent="ELEVENLABS STATUS ERROR";}
+}
+async function saveVoice(){
+  const secret=elevenKey.value;
+  if(!secret){voiceMessage.textContent="Paste your ElevenLabs API key.";return;}
+  voiceSave.disabled=true;voiceMessage.textContent="Saving securely and testing…";
+  try{
+    const result=await window.pywebview.api.elevenlabs_configure(secret,voiceId.value.trim(),voiceModel.value);
+    elevenKey.value="";
+    voiceMessage.textContent=result&&result.message?result.message:"ElevenLabs connected.";
+    await loadVoice();
+  }catch(_e){elevenKey.value="";voiceMessage.textContent="Voice setup failed without exposing the credential.";}
+  finally{voiceSave.disabled=false;}
+}
+async function testVoice(){
+  voiceTest.disabled=true;voiceMessage.textContent="Testing ElevenLabs…";
+  try{
+    const result=await window.pywebview.api.elevenlabs_test();
+    voiceMessage.textContent=result&&result.message?result.message:"Voice test complete.";
+  }catch(_e){voiceMessage.textContent="Voice test failed.";}
+  finally{voiceTest.disabled=false;}
+}
+async function loadVoices(){
+  voiceLoad.disabled=true;voiceMessage.textContent="Loading available voices…";
+  try{
+    const result=await window.pywebview.api.elevenlabs_voices();
+    const items=Array.isArray(result&&result.voices)?result.voices:[];
+    voiceList.innerHTML=items.length?items.slice(0,80).map(v=>'<button type="button" class="voice-choice" data-id="'+String(v.id).replace(/["<>&]/g,"")+'">'+String(v.name).replace(/[<>&]/g,"")+'</button>').join(""):'<div class="muted">No voices returned.</div>';
+    voiceList.querySelectorAll(".voice-choice").forEach(btn=>btn.addEventListener("click",()=>{voiceId.value=btn.dataset.id||"";voiceMessage.textContent="Voice selected. Save & Test Voice to apply it.";}));
+  }catch(_e){voiceMessage.textContent="Voice list could not be loaded.";}
+  finally{voiceLoad.disabled=false;}
+}
+
+function ready(){if(window.pywebview&&window.pywebview.api){load();loadVoice();}}
+window.addEventListener("pywebviewready",ready);
+const poll=window.setInterval(()=>{if(window.pywebview&&window.pywebview.api){window.clearInterval(poll);load();}},250);
+})();
+</script>
+</body></html>'''
 
 class FullstackJarvisHost:
     """Lifecycle supervisor for the complete Jarvis Fullstack presentation."""
@@ -656,16 +905,136 @@ class FullstackJarvisHost:
         self._window: Any | None = None
         self._floating_window: Any | None = None
         self._floating_visible = False
+        self._omniroute_settings_window: Any | None = None
+        self.omniroute = OmniRouteProvisioner()
         self._floating_lock = threading.RLock()
         self._shutting_down = False
         self._web_api = JarvisWebApi(self)
         self._update_stop = threading.Event()
         self.updater = AutoUpdateController(self._update_stop, self._exit_for_update)
         self.floating_hotkey = FloatingTextHotkey(self._toggle_text_link_from_hotkey)
+        self._omniroute_warmup_thread: threading.Thread | None = None
 
     @property
     def web_api(self) -> JarvisWebApi:
         return self._web_api
+
+    def omniroute_status(self) -> dict[str, Any]:
+        status = self.omniroute.status().as_dict()
+        try:
+            status["ready"] = bool(self.omniroute.probe_only())
+        except Exception:
+            status["ready"] = False
+        try:
+            status["providers"] = self.omniroute.list_providers(install_if_missing=False)
+        except Exception:
+            status["providers"] = []
+        return status
+
+    def configure_omniroute_provider(self, provider: str, api_key: str) -> dict[str, Any]:
+        if not self.omniroute.ensure_running(wait_seconds=15):
+            raise RuntimeError("OmniRoute did not become ready; provider credential was not submitted")
+        result = self.omniroute.configure_provider(provider, api_key)
+        test = self.omniroute.test_provider(provider)
+        result["tested"] = bool(test.get("ok"))
+        result["message"] = "Provider connected and tested" if result["tested"] else "Credential saved but provider test failed"
+        return result
+
+    def test_omniroute_provider(self, provider: str) -> dict[str, Any]:
+        if not self.omniroute.ensure_running(wait_seconds=15):
+            raise RuntimeError("OmniRoute did not become ready")
+        return self.omniroute.test_provider(provider)
+
+    def voice_audio(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        take_audio = getattr(voice, "take_audio", None)
+        if not callable(take_audio):
+            return {"ok": True, "items": []}
+        try:
+            return {"ok": True, "items": take_audio()}
+        except Exception:
+            return {"ok": True, "items": []}
+
+    def elevenlabs_status(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        status = getattr(voice, "status", None)
+        return status() if callable(status) else {"ok": True, "provider": "ElevenLabs", "configured": False}
+
+    def configure_elevenlabs(self, api_key: str, voice_id: str = "", model_id: str = "") -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        configure = getattr(voice, "configure", None)
+        if not callable(configure):
+            raise RuntimeError("ElevenLabs voice engine is unavailable")
+        result = configure(api_key, voice_id=voice_id or None, model_id=model_id or None)
+        test = self.test_elevenlabs()
+        result["tested"] = bool(test.get("ok"))
+        result["message"] = "ElevenLabs voice connected and speech-tested" if result["tested"] else "ElevenLabs key saved; speech test failed"
+        return result
+
+    def test_elevenlabs(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        test = getattr(voice, "test_speech", None)
+        return test() if callable(test) else {"ok": False, "tested": False, "message": "ElevenLabs voice engine is unavailable"}
+
+    def elevenlabs_voices(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        client = getattr(voice, "client", None)
+        list_voices = getattr(client, "list_voices", None)
+        if not callable(list_voices):
+            return {"ok": False, "voices": []}
+        try:
+            return {"ok": True, "voices": list_voices()}
+        except Exception:
+            return {"ok": False, "voices": []}
+
+    def open_omniroute_dashboard(self) -> dict[str, Any]:
+        import webbrowser
+        webbrowser.open("http://127.0.0.1:20128")
+        return {"ok": True}
+
+    def _warm_omniroute(self) -> None:
+        try:
+            if self.omniroute.ensure_running(wait_seconds=30):
+                LOGGER.info("embedded OmniRoute warm-up passed")
+            else:
+                LOGGER.warning("embedded OmniRoute warm-up did not complete before timeout")
+        except Exception:
+            LOGGER.exception("embedded OmniRoute warm-up failed; routing remains retryable")
+
+    def open_omniroute_settings(self) -> dict[str, Any]:
+        try:
+            import webview
+            with self._floating_lock:
+                if self._omniroute_settings_window is not None:
+                    try:
+                        self._omniroute_settings_window.restore()
+                        self._omniroute_settings_window.show()
+                    except Exception:
+                        pass
+                    return {"ok": True}
+                self._omniroute_settings_window = webview.create_window(
+                    "Jarvis AI Providers",
+                    html=OMNIROUTE_SETTINGS_HTML,
+                    js_api=self._web_api,
+                    width=560,
+                    height=640,
+                    resizable=True,
+                    frameless=False,
+                    easy_drag=True,
+                    on_top=False,
+                )
+                try:
+                    self._omniroute_settings_window.events.closed += self._on_omniroute_settings_closed
+                except Exception:
+                    LOGGER.debug("OmniRoute settings window does not expose a closed event")
+            return {"ok": True}
+        except Exception as exc:
+            LOGGER.exception("OmniRoute settings window could not open")
+            raise RuntimeError("AI provider settings could not be opened") from exc
+
+    def _on_omniroute_settings_closed(self, *_args: Any, **_kwargs: Any) -> None:
+        with self._floating_lock:
+            self._omniroute_settings_window = None
 
     @staticmethod
     def _exit_for_update() -> None:
@@ -676,6 +1045,14 @@ class FullstackJarvisHost:
         if self.started:
             return
         self.visualizer.start()
+        warm_setting = os.environ.get("JARVIS_OMNIROUTE_WARMUP", "").strip().lower()
+        smoke = os.environ.get("JARVIS_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        warm_enabled = bool(getattr(sys, "frozen", False)) and warm_setting not in {"0", "false", "no", "off"} and (
+            warm_setting in {"1", "true", "yes", "on"} or not smoke
+        )
+        if warm_enabled:
+            self._omniroute_warmup_thread = threading.Thread(target=self._warm_omniroute, name="jarvis-omniroute-warmup", daemon=True)
+            self._omniroute_warmup_thread.start()
         try:
             self.voice.start()
         except Exception:
@@ -697,6 +1074,13 @@ class FullstackJarvisHost:
         self._shutting_down = True
         self.floating_hotkey.stop()
         with self._floating_lock:
+            if self._omniroute_settings_window is not None:
+                try:
+                    self._omniroute_settings_window.destroy()
+                except Exception:
+                    LOGGER.exception("OmniRoute settings window failed to close cleanly")
+                self._omniroute_settings_window = None
+        with self._floating_lock:
             self._save_floating_position()
             if self._floating_window is not None:
                 try:
@@ -705,6 +1089,9 @@ class FullstackJarvisHost:
                     LOGGER.exception("floating command bar failed to close cleanly")
                 self._floating_window = None
         self.updater.stop()
+        if self._omniroute_warmup_thread is not None and self._omniroute_warmup_thread.is_alive() and threading.current_thread() is not self._omniroute_warmup_thread:
+            self._omniroute_warmup_thread.join(timeout=2)
+        self._omniroute_warmup_thread = None
         try:
             save = getattr(self._web_api, "neural_world_save", None)
             if callable(save):
@@ -902,6 +1289,16 @@ class FullstackJarvisHost:
             LOGGER.exception("centered Jarvis text input overlay failed to inject")
 
     @staticmethod
+    def _configure_webview2_autoplay() -> None:
+        """Allow the hidden floating text surface to play queued voice audio without a DOM gesture."""
+        if sys.platform != "win32":
+            return
+        existing = os.environ.get("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "").strip()
+        parts = [item for item in existing.split() if not item.startswith("--autoplay-policy=")]
+        parts.append("--autoplay-policy=no-user-gesture-required")
+        os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = " ".join(parts)
+
+    @staticmethod
     def _native_window_kwargs(url: str, fullscreen: bool) -> dict[str, Any]:
         """Return the exact native pywebview window contract used by production."""
         return {
@@ -917,6 +1314,7 @@ class FullstackJarvisHost:
     def run_window(self) -> None:
         """Create the native visualizer window on the foreground thread."""
         headless_smoke = os.environ.get("JARVIS_UI_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        self._configure_webview2_autoplay()
         try:
             import webview
         except ImportError as exc:

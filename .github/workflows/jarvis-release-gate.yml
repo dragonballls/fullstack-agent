@@ -2,7 +2,7 @@ name: Jarvis full release gate
 
 on:
   push:
-    branches: [main, migration/jarvis-canonical-2026-09-16]
+    branches: [main, migration/jarvis-canonical-2026-09-16, feat/build2-neural-realism]
     tags: ['v*.*.*']
   pull_request:
     branches: [main]
@@ -64,6 +64,9 @@ jobs:
       - name: Fetch pinned Fullstack Agent components
         shell: pwsh
         run: python scripts/fetch-fullstack-components.py build_vendor
+      - name: Prepare pinned embedded OmniRoute runtime
+        shell: pwsh
+        run: python scripts/prepare_omniroute_runtime.py build_vendor/omniroute_runtime
       - name: Install runtime and fullstack voice dependencies
         shell: pwsh
         run: |
@@ -101,7 +104,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = "$PWD\build_vendor\backtalk\source;$env:PYTHONPATH"
-          python -c "from backtalk.ears import Ears; from backtalk.mouth import Mouth; from backtalk.ptt import PTTListener; print('Fullstack voice imports OK')"
+          python -c "from backtalk.ears import Ears; from backtalk.mouth import Mouth; from backtalk.ptt import PTTListener; from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth; print('Fullstack Backtalk + ElevenLabs voice imports OK')"
           if (-not (Test-Path -LiteralPath 'build_vendor\backtalk\source')) { throw 'Backtalk source directory is missing' }
       - name: Build single-file Jarvis.exe
         shell: pwsh
@@ -113,6 +116,9 @@ jobs:
             '--add-data', 'build_vendor\ai-visualizer\source;ai-visualizer/source',
             '--add-data', 'build_vendor\barehands\source;barehands/source',
             '--add-data', 'build_vendor\ai-memory-vault\source;ai-memory-vault/source',
+            '--add-binary', 'build_vendor\omniroute_runtime\node.exe;omniroute_runtime',
+            '--add-data', 'build_vendor\omniroute_runtime\node_modules;omniroute_runtime/node_modules',
+            '--add-data', 'build_vendor\omniroute_runtime\runtime-manifest.txt;omniroute_runtime',
             '--collect-submodules', 'quality_of_life', '--collect-submodules', 'self_coding',
             '--collect-submodules', 'windows_maintenance', '--collect-submodules', 'backtalk',
             '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-submodules', 'webrtcvad',
@@ -124,6 +130,31 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path -LiteralPath 'dist/Jarvis.exe')) { throw 'Jarvis.exe was not produced' }
           if ((Get-Item -LiteralPath 'dist/Jarvis.exe').Length -lt 5000000) { throw 'Jarvis.exe is unexpectedly small' }
+      - name: Verify embedded OmniRoute package
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -LiteralPath 'build_vendor/omniroute_runtime/runtime-manifest.txt' -Raw
+          if ($manifest -notmatch 'node=24\.21\.0') { throw 'Embedded Node runtime version mismatch' }
+          if ($manifest -notmatch 'omniroute=3\.8\.51') { throw 'Embedded OmniRoute version mismatch' }
+          if ($manifest -notmatch 'commit=271ec25f12e4d59bc4c406f26d33666798299d25') { throw 'Embedded OmniRoute source revision mismatch' }
+          if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node.exe')) { throw 'Embedded node.exe is missing' }
+          if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs')) { throw 'Embedded OmniRoute CLI is missing' }
+          & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute CLI did not start' }
+          $env:DATA_DIR = Join-Path $env:RUNNER_TEMP 'jarvis-omniroute-credential-smoke'
+          if (Test-Path -LiteralPath $env:DATA_DIR) { Remove-Item -LiteralPath $env:DATA_DIR -Recurse -Force }
+          $dummy = 'ci-redacted-credential-12345678'
+          $dummy | & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --non-interactive providers add openai --credential-stdin *> (Join-Path $env:RUNNER_TEMP 'omniroute-add.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute credential-stdin provider add failed' }
+          $listed = & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --non-interactive providers list --json
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute provider listing failed' }
+          if ($listed -match [regex]::Escape($dummy)) { throw 'Embedded OmniRoute provider listing exposed the credential' }
+
+      - name: Smoke-test ElevenLabs voice plumbing without a live key
+        shell: pwsh
+        run: |
+          python -c "from quality_of_life.elevenlabs_voice import ElevenLabsMouth; from unittest.mock import Mock, patch; import base64; m=ElevenLabsMouth(client=Mock()); m.client.synthesize.return_value=b'fake-mp3'; p=patch('quality_of_life.elevenlabs_voice.has_api_key', return_value=True); p.start(); r=m.test_speech(); p.stop(); assert r['ok'] and r['spoken']; packets=m.take_audio(); assert base64.b64decode(packets[0]['data'])==b'fake-mp3'; print('ElevenLabs offline voice plumbing OK')"
+
       - name: Verify PyInstaller toolchain version
         shell: pwsh
         run: |
@@ -136,6 +167,7 @@ jobs:
           $env:JARVIS_SMOKE = '1'
           $env:JARVIS_SMOKE_VOICE = '1'
           $env:JARVIS_SMOKE_WEBVIEW = '1'
+          $env:JARVIS_OMNIROUTE_WARMUP = '1'
           $process = $null
           $ready = $false
           try {
@@ -150,6 +182,14 @@ jobs:
               Start-Sleep -Milliseconds 500
             }
             if (-not $ready) { throw 'Embedded Fullstack visualizer did not become ready within 90 seconds' }
+            $omniDeadline = (Get-Date).AddSeconds(60)
+            $omniReady = $false
+            while ((Get-Date) -lt $omniDeadline) {
+              $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
+              if ($tcp) { $omniReady = $true; break }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $omniReady) { throw 'Embedded OmniRoute did not become ready before Jarvis.exe was stopped' }
           }
           catch {
             Write-Host '=== Jarvis process diagnostics ==='
@@ -160,6 +200,21 @@ jobs:
             throw
           }
           finally { if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } }
+      - name: Smoke-test embedded OmniRoute gateway
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $deadline = (Get-Date).AddSeconds(60)
+          $ready = $false
+          while ((Get-Date) -lt $deadline) {
+            $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
+            if ($tcp) { $ready = $true; break }
+            Start-Sleep -Milliseconds 500
+          }
+          if (-not $ready) { throw 'Embedded OmniRoute did not open port 20128 during packaged smoke test' }
+          & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
+
       - name: Smoke-test the packaged native Jarvis host
         shell: pwsh
         env:

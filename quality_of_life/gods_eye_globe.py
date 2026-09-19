@@ -83,8 +83,34 @@ def globe_payload(runtime: Any) -> dict[str, object]:
             label, point[0], point[1], "saved", True,
             raw.get("accuracy_m"), str(raw.get("source", ""))[:80],
         ))
+    provider_status: list[dict[str, object]] = []
+    try:
+        eye = runtime._tool("gods_eye")
+        for kind in ("device", "phone", "family"):
+            provider_status.append(eye.provider_registry.status(kind).as_dict())
+    except Exception:
+        provider_status = []
+    current_authorized = bool(current.get("permitted", False) and _point(current) is not None)
+    live_provider_count = sum(
+        1 for item in provider_status
+        if bool(item.get("available")) and bool(item.get("authorized")) and bool(item.get("live"))
+    )
+    if current_authorized:
+        sensor_state = "current-live"
+    elif live_provider_count:
+        sensor_state = "authorized-feeds-live"
+    elif current or provider_status:
+        sensor_state = "feeds-unavailable-or-unauthorized"
+    else:
+        sensor_state = "sensor-status-unavailable"
     return {
-        "schema_version": 1,
-        "authorized_current": bool(current.get("permitted", False) and _point(current) is not None),
+        "schema_version": 3,
+        "authorized_current": current_authorized,
+        "current": current,
+        "sensor_state": sensor_state,
+        "current_source": str(current.get("source", ""))[:80],
+        "current_accuracy_m": current.get("accuracy_m"),
+        "provider_status": provider_status,
+        "locator_count": len(locators),
         "locators": [item.as_dict() for item in locators],
     }

@@ -1,6 +1,6 @@
 # Jarvis voice
 
-Jarvis uses the embedded Backtalk voice I/O layer as its desktop speech interface. Backtalk handles microphone capture, speech recognition, push-to-talk/listening behavior, and speech output; the Jarvis runtime remains the only planner and tool-execution brain.
+Jarvis uses the embedded Backtalk input layer as its desktop voice interface. Backtalk handles microphone capture, speech recognition, and push-to-talk/listening behavior; ElevenLabs handles speech output, and the Jarvis runtime remains the only planner and tool-execution brain.
 
 ## Brain and routing
 
@@ -40,13 +40,19 @@ An open-microphone mode is available through the supported Backtalk configuratio
 
 ## Speech output and shutdown
 
-Kokoro is embedded as a local speech-output option. **ElevenLabs** is supported as an optional externally configured speech-output provider. When configured remotely, its credential is referenced through the supported secret/credential mechanism; `ELEVENLABS_API_KEY` must not be stored in tracked source, local diagnostic logs, or generated application reports. Never store or save an API key in the voice configuration itself.
+**ElevenLabs is the Jarvis speech-output engine.** Backtalk remains the microphone/speech-input and push-to-talk layer; it is no longer used as the desktop speech mouth. The Jarvis voice bridge injects the ElevenLabs mouth directly, so there is one outbound speech path and one deduplication boundary.
 
-Both Kokoro and ElevenLabs are output engines only; neither becomes an agent planner or tool executor, and neither changes the OmniRoute-only brain boundary.
+The combined AI Provider / Voice Settings surface is available from the shared UI layer used by every UI build. Paste the ElevenLabs API key once, choose the configured/default voice, and use **SAVE & TEST VOICE**. The secret is stored through the Windows credential store via `keyring`; the JSON voice settings contain only non-secret voice/model identifiers.
+
+The default model is **Eleven v3 Conversational**, selected for expressive realtime conversation. Flash v2.5 remains available when lower latency is preferred. The voice selector can load the voices available to the configured ElevenLabs account. Jarvis's response model is separately guided toward a calm, precise, discreetly formal dialogue style before speech synthesis.
+
+The WebView is the audio sink: Jarvis passes only short-lived, browser-playable audio packets to the native UI, so normal speech playback requires no MPV/ffmpeg console and does not open a visible PowerShell window.
+
+ElevenLabs is an output engine only. It never becomes the agent planner or tool executor and never changes the OmniRoute-only brain boundary.
 
 Before the voice listener begins live microphone work, Jarvis performs a speech-recognition preflight against the actual embedded Backtalk `warm()` path. A preflight failure disables only voice input and retries later; the Fullstack visualizer and text link remain available. This keeps ordinary STT/model/device initialization failures out of the desktop application's startup path.
 
-The embedded Backtalk mouth worker receives an explicit shutdown sentinel during Jarvis exit and is joined before the desktop host finishes cleanup. Its audio output stream is also closed on the normal exit path. This is intended to eliminate resource races that can leave PyInstaller's `_MEI...` extraction directory locked at process shutdown.
+The ElevenLabs audio workers are stopped and joined during Jarvis exit. The WebView audio queue is cleared as part of voice shutdown. This keeps the single speech-output path from racing desktop shutdown.
 
 ## Real speech test
 

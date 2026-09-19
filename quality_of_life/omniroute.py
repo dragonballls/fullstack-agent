@@ -17,6 +17,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .omniroute_setup import OmniRouteProvisioner
+
 
 def is_loopback_hostname(hostname: str | None) -> bool:
     """Return whether a hostname is localhost or a syntactic loopback address."""
@@ -75,12 +77,21 @@ class OmniRouteConnection:
         return configured.split()
 
     def _start(self) -> bool:
-        command = self._command()
-        executable = shutil.which(command[0])
-        if executable is None:
-            return False
-        command[0] = executable
-        env = os.environ.copy()
+        configured_command = os.environ.get("JARVIS_OMNIROUTE_COMMAND", "").strip()
+        provisioner = OmniRouteProvisioner(self.base_url)
+        if configured_command:
+            command = self._command()
+            executable = shutil.which(command[0])
+            if executable is None and not os.path.isfile(command[0]):
+                return False
+            if executable and len(command) == 1:
+                command[0] = executable
+        else:
+            try:
+                command = provisioner.command_argv(for_start=True)
+            except RuntimeError:
+                return False
+        env = provisioner.environment()
         parsed = urllib.parse.urlparse(self.base_url)
         env["PORT"] = str(parsed.port or 20128)
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)

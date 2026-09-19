@@ -45,6 +45,42 @@ class JarvisVoiceBridgeTests(TestCase):
         mouth.say.assert_called_once_with("done")
         self.assertIsNotNone(result)
 
+
+    def test_output_callback_receives_spoken_text(self):
+        controller = Mock()
+        controller.execute_request.return_value = Mock(needs_confirmation=False, text="done")
+        mouth = Mock()
+        transcript = []
+        bridge = JarvisVoiceBridge(
+            controller=controller,
+            ears=Mock(),
+            mouth=mouth,
+            ptt=Mock(),
+            on_output=transcript.append,
+        )
+
+        bridge.handle_transcript("hello")
+
+        self.assertEqual(transcript, ["done"])
+        mouth.say.assert_called_once_with("done")
+
+    def test_identical_output_is_not_spoken_twice_immediately(self):
+        callback = Mock()
+        mouth = Mock()
+        bridge = JarvisVoiceBridge(
+            controller=Mock(),
+            ears=Mock(),
+            mouth=mouth,
+            ptt=Mock(),
+            on_output=callback,
+        )
+
+        bridge._speak("same response")
+        bridge._speak("same response")
+
+        callback.assert_called_once_with("same response")
+        mouth.say.assert_called_once_with("same response")
+
     def test_voice_output_failure_does_not_escape_speech_boundary(self):
         controller = Mock()
         mouth = Mock()

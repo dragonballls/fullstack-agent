@@ -7,17 +7,57 @@ bridge. It is rendered as an additive UI build and does not replace Jarvis core.
 NEURAL_MESH_BUILTIN = {
     "id": "neural-mesh",
     "name": "Neural JARVIS",
-    "version": "0.5.0",
-    "description": "Blue fully 3D JARVIS world with instanced liquid-cell neurons, lifecycle pulses, fluid grab/return, spatial windows, search, zoom, performance culling, and a camera-facing persistent neural command surface with universal procedural object shaping, reversible transforms, and persistent rotation motion.",
+    "version": "0.7.0",
+    "description": "Blue fully 3D JARVIS world with cinematic spherical holographic-core geometry, high-fidelity water-droplet neurons, proximity-aware importance, screen-space LOD, aggressive frustum/distance culling, lightweight far-field neurons, a 64000-point deep neural field, SPH-style near-field fluid motion, lifecycle pulses, curved energy filaments, spatial windows, and persistent command surfaces.",
     "protected": True,
     "css": r"""
-#jarvis-text-shell,#jarvis-workspace-shell{display:none!important}
+#jarvis-workspace-shell{display:none!important}
+#jn-neural-console,#jn-console-tether{display:none!important}
 #jarvis-ui-build-layer.neural-mesh-root{position:fixed;inset:0;z-index:2147481000;pointer-events:none;color:#dff6ff;font-family:Inter,Segoe UI,system-ui,sans-serif;overflow:hidden;background:#000}
-#jarvis-neural-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto;cursor:grab;background:radial-gradient(circle at 50% 46%,rgba(29,150,255,.075),transparent 43%),linear-gradient(180deg,#010813,#000207)}
+#jarvis-neural-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto;cursor:grab;background:radial-gradient(circle at 50% 46%,rgba(29,150,255,.075),transparent 43%),radial-gradient(circle at 50% 52%,rgba(11,63,109,.055),transparent 57%),linear-gradient(180deg,#010813,#000207)}
+#jn-core-structure{position:absolute;left:0;top:0;width:188px;height:188px;transform:translate3d(-9999px,-9999px,0);transform-style:preserve-3d;pointer-events:none;z-index:22;opacity:.98;filter:drop-shadow(0 0 22px rgba(46,176,255,.18))}
+.jn-core-orb{position:absolute;inset:47px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(208,248,255,.95),rgba(72,200,255,.45) 19%,rgba(13,89,163,.32) 42%,rgba(6,25,52,.08) 66%,transparent 72%);box-shadow:0 0 24px rgba(62,194,255,.72),0 0 66px rgba(15,121,221,.38),inset 0 0 24px rgba(168,240,255,.32);animation:jn-core-breathe 3.8s ease-in-out infinite}
+.jn-core-ring{position:absolute;left:19px;top:19px;width:150px;height:150px;border:1px solid rgba(92,211,255,.34);border-radius:50%;box-shadow:0 0 20px rgba(55,180,255,.1),inset 0 0 22px rgba(47,159,244,.06);transform:rotateX(67deg);animation:jn-core-spin 14s linear infinite}
+.jn-core-ring.r2{left:8px;top:36px;width:172px;height:116px;transform:rotateY(63deg) rotateZ(16deg);animation-duration:19s;animation-direction:reverse}
+.jn-core-ring.r3{left:34px;top:7px;width:120px;height:173px;transform:rotateY(72deg) rotateZ(-24deg);animation-duration:23s}
+.jn-core-node{position:absolute;left:88px;top:88px;width:12px;height:12px;transform:translate(-50%,-50%);border-radius:50%;background:#dffbff;box-shadow:0 0 18px #9de8ff,0 0 44px rgba(60,190,255,.82)}
+.jn-core-cross{position:absolute;left:50%;top:50%;width:180px;height:1px;transform:translate(-50%,-50%) rotate(27deg);background:linear-gradient(90deg,transparent,rgba(116,221,255,.5),transparent);box-shadow:0 0 12px rgba(74,198,255,.32)}
+.jn-core-cross.c2{transform:translate(-50%,-50%) rotate(-27deg);opacity:.55}
+@keyframes jn-core-spin{to{transform:rotateX(67deg) rotateZ(360deg)}}
+@keyframes jn-core-breathe{0%,100%{transform:scale(.94);opacity:.86}50%{transform:scale(1.06);opacity:1}}
+.jn-core-sweep,.jn-core-data-orbit,.jn-core-module-ring{position:absolute;left:50%;top:50%;width:92%;height:92%;border:1px dashed rgba(104,220,255,.20);border-radius:50%;transform:translate(-50%,-50%) rotateX(72deg);box-shadow:0 0 16px rgba(59,188,255,.08);pointer-events:none}
+.jn-core-sweep{border-style:solid;border-top-color:rgba(194,247,255,.74);border-right-color:transparent;border-bottom-color:transparent;border-left-color:transparent;animation:jn-core-sweep 6.6s linear infinite}
+.jn-core-data-orbit{width:112%;height:58%;transform:translate(-50%,-50%) rotateY(64deg) rotateZ(17deg);animation:jn-core-data-orbit 10s linear infinite reverse;border-style:solid;border-color:rgba(78,198,255,.18)}
+.jn-core-module-ring{width:74%;height:74%;transform:translate(-50%,-50%) rotateY(28deg) rotateZ(-31deg);border-style:dotted;animation:jn-core-module-ring 16s linear infinite}
+.jn-core-module-ring::before{content:"";position:absolute;left:8%;top:50%;width:84%;height:1px;background:linear-gradient(90deg,transparent,rgba(121,226,255,.42),transparent);box-shadow:0 -24px 0 rgba(73,195,255,.12),0 24px 0 rgba(73,195,255,.10)}
+.jn-core-module-ring::after{content:"";position:absolute;inset:12% 4%;border-radius:50%;background:repeating-conic-gradient(from 8deg,rgba(126,225,255,.34) 0deg 1.2deg,transparent 1.2deg 13deg);mask:radial-gradient(circle,transparent 0 64%,#000 66% 71%,transparent 73%);-webkit-mask:radial-gradient(circle,transparent 0 64%,#000 66% 71%,transparent 73%);opacity:.48}
+.jn-core-heart{position:absolute;left:50%;top:50%;width:52px;height:48px;transform:translate(-50%,-45%) rotate(-45deg);border-radius:50% 50% 45% 45%;background:radial-gradient(circle at 38% 32%,rgba(239,253,255,.98),rgba(105,218,255,.78) 24%,rgba(26,124,208,.36) 54%,transparent 72%);box-shadow:0 0 22px rgba(111,224,255,.86),0 0 58px rgba(29,142,235,.44),inset 8px 8px 18px rgba(206,250,255,.22);z-index:2}
+.jn-core-heart::before,.jn-core-heart::after{content:"";position:absolute;width:26px;height:26px;border-radius:50%;background:inherit;box-shadow:inherit}
+.jn-core-heart::before{left:0;top:-13px}.jn-core-heart::after{right:-13px;top:0}
+@keyframes jn-core-sweep{to{transform:translate(-50%,-50%) rotateX(72deg) rotateZ(360deg)}}
+@keyframes jn-core-data-orbit{to{transform:translate(-50%,-50%) rotateY(64deg) rotateZ(-343deg)}}
+@keyframes jn-core-module-ring{to{transform:translate(-50%,-50%) rotateY(28deg) rotateZ(329deg)}}
 #jarvis-neural-canvas.dragging{cursor:grabbing}
 #jn-hud{position:absolute;left:24px;top:20px;pointer-events:none;text-shadow:0 0 18px rgba(56,174,255,.45)}
 #jn-title{font-size:16px;letter-spacing:.34em;color:#b8e9ff}
 #jn-status{margin-top:5px;font-size:9px;letter-spacing:.15em;color:#58a8d7;text-transform:uppercase}
+#jn-earth-sensor{position:absolute;left:24px;top:108px;width:min(340px,calc(100vw - 48px));padding:11px;border:1px solid rgba(84,188,255,.20);border-radius:12px;background:linear-gradient(145deg,rgba(2,15,28,.72),rgba(1,7,15,.58));box-shadow:0 16px 48px rgba(0,0,0,.32),inset 0 0 26px rgba(41,160,239,.035);backdrop-filter:blur(10px);pointer-events:none}
+.jn-earth-sensor-title{font-size:8px;letter-spacing:.18em;color:#b9ebff}
+#jn-earth-readout{margin-top:6px;font-size:8px;line-height:1.45;color:#6faed0}
+#jn-earth-feeds{margin-top:7px;display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.jn-earth-feed{padding:5px 6px;border:1px solid rgba(111,199,242,.11);border-radius:7px;font-size:7px;line-height:1.25;color:#5e8da8;text-transform:uppercase}
+.jn-earth-feed.live{border-color:rgba(91,224,172,.24);color:#7bdcb9}
+.jn-earth-feed.auth{border-color:rgba(108,195,255,.22);color:#7fcfff}
+#jn-earth-marker-layer{position:absolute;inset:0;pointer-events:none;z-index:24}
+.jn-earth-marker{position:absolute;left:0;top:0;transform:translate(-50%,-50%);min-width:18px;height:18px;border:1px solid rgba(114,222,255,.7);border-radius:50%;box-shadow:0 0 0 1px rgba(71,181,255,.12),0 0 18px rgba(57,184,255,.48);background:rgba(3,30,53,.22)}
+.jn-earth-marker::before{content:"";position:absolute;inset:3px;border-radius:50%;background:radial-gradient(circle,#dffbff 0 18%,#5fcfff 19% 46%,transparent 47%);box-shadow:0 0 12px rgba(120,226,255,.82)}
+.jn-earth-marker::after{content:"";position:absolute;inset:-6px;border:1px solid rgba(103,210,255,.24);border-radius:50%;animation:jn-earth-pulse 1.7s ease-out infinite}
+.jn-earth-marker.current{border-color:rgba(216,250,255,.96);box-shadow:0 0 0 1px rgba(156,233,255,.28),0 0 24px rgba(100,210,255,.78)}
+.jn-earth-marker.family::before{background:radial-gradient(circle,#efffff 0 18%,#7fcfff 19% 44%,transparent 45%)}
+.jn-earth-marker.saved{border-style:dashed}
+.jn-earth-marker.selected{box-shadow:0 0 0 3px rgba(105,216,255,.18),0 0 30px rgba(105,216,255,.78)}
+@keyframes jn-earth-pulse{0%{transform:scale(.58);opacity:.9}100%{transform:scale(1.75);opacity:0}}
+
 #jn-focus{position:absolute;left:24px;top:86px;max-width:420px;font-size:10px;color:#78b9dc;pointer-events:none}
 #jn-search{position:absolute;right:24px;top:20px;width:min(340px,36vw);box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:12px;padding:11px 13px;outline:none;color:#dff6ff;background:rgba(2,12,24,.72);box-shadow:0 0 28px rgba(20,130,220,.1);backdrop-filter:blur(10px)}
 #jn-kind,#jn-life{position:absolute;top:63px;width:145px;box-sizing:border-box;padding:7px 8px;border:1px solid rgba(91,190,255,.18);border-radius:9px;color:#88cfff;background:rgba(2,12,24,.68);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.1em;pointer-events:auto;text-transform:uppercase}
@@ -89,9 +129,12 @@ NEURAL_MESH_BUILTIN = {
     "markup": r"""
 <div class="neural-mesh-root">
   <canvas id="jarvis-neural-canvas"></canvas>
+  <div id="jn-core-structure" aria-hidden="true"><span class="jn-core-ring"></span><span class="jn-core-ring r2"></span><span class="jn-core-ring r3"></span><span class="jn-core-sweep"></span><span class="jn-core-data-orbit"></span><span class="jn-core-module-ring"></span><span class="jn-core-heart"></span><span class="jn-core-cross"></span><span class="jn-core-cross c2"></span><span class="jn-core-orb"></span><span class="jn-core-node"></span></div>
   <div id="jn-surfaces"></div>
   <div id="jn-hud"><div id="jn-title">JARVIS</div><div id="jn-status">NEURAL MESH · 3D WORLD · ONLINE</div></div>
   <div id="jn-focus"></div>
+  <div id="jn-earth-sensor" aria-live="polite"><div class="jn-earth-sensor-title">GOD'S EYE SENSOR</div><div id="jn-earth-readout">INITIALIZING PLANETARY FEED</div><div id="jn-earth-feeds"></div></div>
+  <div id="jn-earth-marker-layer"></div>
   <input id="jn-search" autocomplete="off" spellcheck="false" placeholder="Search the neural world…" />
   <input id="jn-connected" autocomplete="off" spellcheck="false" placeholder="Connected to…" />
   <input id="jn-source" autocomplete="off" spellcheck="false" placeholder="Source…" />
@@ -145,14 +188,14 @@ const gl=canvas.getContext("webgl2",{antialias:false,alpha:true,powerPreference:
 if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAILABLE";return;}
 
 const S={
-  nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
-  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
-  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
+  nodes:[],links:[],windows:[],nodeMap:new Map(),selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
+  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),pulses:new Map(),particles:[],ambientNodes:[],microPositions:null,microCount:64000,pointCount:0,lastPointBuild:0,pointBuildMs:140,microBuffersReady:false,lodDetail:new Map(),lodStats:{near:0,far:0,culled:0,field:0},activeNodeIds:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthFollow:false,earthSun:[-.55,.68,.75],
+  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,handDragLastTime:0,handDragLastDelta:[0,0,0],
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),consoleCollapsed:false,consoleSubmitting:false,lastConsoleLayout:0,consoleLayoutMs:50,
-  surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200,advanced:{physics:{}}
+  surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200,advanced:{physics:{}},renderTime:0
 };
 
 function compile(type,src){
@@ -198,35 +241,64 @@ function attr(p,name,size,buf,div){
 }
 
 const droplet=program(
-'#version 300 es\nprecision highp float;\nlayout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;layout(location=2)in vec3 aCenter;layout(location=3)in float aScale;layout(location=4)in float aEnergy;layout(location=5)in float aPhase;layout(location=6)in float aSelected;layout(location=7)in float aShape;layout(location=8)in float aBirth;layout(location=9)in vec3 aRot;layout(location=10)in vec3 aAngular;\nuniform mat4 uMvp;uniform mat4 uView;uniform float uTime;out vec3 vNormal;out vec3 vView;out vec3 vLocal;out float vEnergy;out float vPhase;out float vSelected;\nvoid main(){float life=clamp((uTime-aBirth)/760.0,0.0,1.0);float grow=life*life*(3.0-2.0*life);float wob=1.0+.028*sin(uTime*.0035+aPhase+aPos.y*4.0);vec3 local=aPos*wob; if(aShape<1.5){local=vec3(local.x,local.y*1.05,local.z);} else if(aShape<2.5){local=normalize(aPos)*(.84+.16*abs(aPos.y));} else if(aShape<3.5){local*=vec3(.88,1.38,.88);} else if(aShape<4.5){local*=vec3(.72,1.45,.72);} else if(aShape<5.5){local.xz*=1.0+.30*sin(8.0*atan(local.z,local.x));} else if(aShape<6.5){local.y*=.34;local.xz*=1.20;} else if(aShape<7.5){local.xz*=1.0+.55*pow(max(0.,sin(5.0*atan(local.z,local.x))),6.0);} else if(aShape<8.5){float ang=atan(local.z,local.x);local.xz*=.82+.22*cos(2.*ang);local.y*=1.18;} else if(aShape<9.5){local*=1.25;local.y*=.8;} else if(aShape<10.5){float h=1.0+0.7*cos(atan(local.z,local.x));local.x*=h;local.z*=h;local.y*=1.08;} else if(aShape<11.5){float ang=atan(local.z,local.x);local.xz*=.78+0.34*(.5+.5*sin(10.*ang));} else if(aShape<12.5){float ang=atan(local.z,local.x);float t=0.5+.5*sin(4.*ang);local.xz*=.68+.46*t;local.y+=.18*sin(ang*4.); } else if(aShape<13.5){local.y=sign(local.y)*pow(abs(local.y),.7);local.xz*=1.0-0.35*abs(local.y);} else if(aShape<14.5){local.y+=.30*sin(7.*atan(local.z,local.x));local.xz*=.94;} else if(aShape<15.5){float ang=atan(local.z,local.x);local.xz*=.78;local.y+=.28*sin(ang*5.);local.x+=.11*sin(local.y*6.); } else if(aShape<16.5){local*=.62;local.x+=.46*sin(local.y*5.);local.z+=.46*cos(local.y*5.);} else if(aShape<18.5){local*=.72;local.x+=.55*sign(local.x);} else {float seed=aShape-18.;float lobes=2.+mod(seed,7.);float twist=(mod(seed*1.7,6.)-3.)*.22;float ang=atan(local.z,local.x);float radial=1.+.23*sin(lobes*ang+seed*.31+local.y*twist*8.);local.xz*=radial;local.y*=(.65+.38*abs(sin(seed*.37)));local.y+=.18*sin(ang*(lobes+.5)+seed)*(.7+.3*abs(local.y));local.x+=.10*sin(local.y*6.+seed);} vec3 rot=aRot+aAngular*uTime*.001; float cx=cos(rot.x),sx=sin(rot.x),cy=cos(rot.y),sy=sin(rot.y),cz=cos(rot.z),sz=sin(rot.z); mat3 rx=mat3(1.,0.,0.,0.,cx,-sx,0.,sx,cx); mat3 ry=mat3(cy,0.,sy,0.,1.,0.,-sy,0.,cy); mat3 rz=mat3(cz,-sz,0.,sz,cz,0.,0.,0.,1.); local=rz*ry*rx*local; local.y+=.035*sin(uTime*.0025+aPhase*1.7);vec3 world=aCenter+local*(aScale*mix(.08,1.0,grow));world+=vec3(sin(uTime*.0002+aPhase)*.06,cos(uTime*.00017+aPhase*1.4)*.05,sin(uTime*.00018+aPhase*.8)*.06)*min(1.0,aScale);vec4 vp=uView*vec4(world,1.0);gl_Position=uMvp*vec4(world,1.0);vNormal=normalize(mat3(uView)*aNormal);vView=normalize(-vp.xyz);vLocal=local;vEnergy=aEnergy;vPhase=aPhase;vSelected=aSelected;}',
-'#version 300 es\nprecision highp float;in vec3 vNormal;in vec3 vView;in vec3 vLocal;in float vEnergy;in float vPhase;in float vSelected;out vec4 outColor;\nvoid main(){vec3 n=normalize(vNormal),light=normalize(vec3(-.35,.62,.74));float diff=max(0.,dot(n,light));float fres=pow(1.-max(0.,dot(n,normalize(vView))),2.);float ring=.5+.5*sin(14.*atan(vLocal.z,vLocal.x)+vPhase+vLocal.y*5.);float e=clamp(vEnergy,0.,1.);vec3 blue=vec3(.05,.31,.73),cyan=vec3(.24,.78,1.),white=vec3(.82,.97,1.);vec3 c=mix(blue,cyan,diff*.6+fres*.4);c=mix(c,white,e*.26+ring*.08);if(vSelected>.5)c=mix(c,vec3(.70,.96,1.),.50);outColor=vec4(c,clamp(.30+.38*fres+.16*e+.07*ring,0.,.96));}'
+'#version 300 es\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;layout(location=2)in vec3 aCenter;layout(location=3)in float aScale;layout(location=4)in float aEnergy;layout(location=5)in float aPhase;layout(location=6)in float aSelected;layout(location=7)in float aShape;layout(location=8)in float aBirth;layout(location=9)in vec3 aRot;layout(location=10)in vec3 aAngular;uniform mat4 uMvp;uniform mat4 uView;uniform float uTime;out vec3 vNormal;out vec3 vView;out vec3 vLocal;out float vEnergy;out float vPhase;out float vSelected;\nvoid main(){float life=clamp((uTime-aBirth)/1100.0,0.0,1.0);float grow=life*life*(3.0-2.0*life);float wobble=sin(uTime*.0017+aPhase*1.73)+.5*sin(uTime*.0031+aPhase*.43+aPos.y*5.0);vec3 local=aPos;local.xz*=1.0-.10*max(local.y,0.0)+.035*max(-local.y,0.0);local.xz*=1.0+.035*sin(aPhase*2.0+local.y*4.0);local.y*=1.06;local*=1.0+.018*wobble;if(aShape<1.5){local.y+=.05*pow(max(0.0,1.0-abs(local.x)-abs(local.z)),2.0);}else if(aShape<2.5){local=normalize(local)*(.88+.12*abs(local.y));}else if(aShape<3.5){local*=vec3(.92,1.28,.92);}else if(aShape<4.5){local*=vec3(.74,1.42,.74);}else if(aShape<5.5){float ang=atan(local.z,local.x);local.xz*=1.0+.20*sin(8.0*ang+aPhase);}else if(aShape<6.5){local.y*=.34;local.xz*=1.18;}else if(aShape<7.5){float ang=atan(local.z,local.x);local.xz*=1.0+.42*pow(max(0.,sin(5.*ang+aPhase*.3)),6.0);}else{float seed=aShape-8.;float lobes=2.+mod(seed,7.);float ang=atan(local.z,local.x);local.xz*=1.+.16*sin(lobes*ang+seed*.31);local.y*=.78+.22*abs(sin(seed*.47));}local.x+=.018*sin(aPhase*1.31)*local.y;local.z+=.018*cos(aPhase*.77)*local.y;vec3 rot=aRot+aAngular*uTime*.001;float cx=cos(rot.x),sx=sin(rot.x),cy=cos(rot.y),sy=sin(rot.y),cz=cos(rot.z),sz=sin(rot.z);mat3 rx=mat3(1.,0.,0.,0.,cx,-sx,0.,sx,cx);mat3 ry=mat3(cy,0.,sy,0.,1.,0.,-sy,0.,cy);mat3 rz=mat3(cz,-sz,0.,sz,cz,0.,0.,0.,1.);local=rz*ry*rx*local;local.y+=.014*sin(uTime*.0021+aPhase*1.7);vec3 world=aCenter+local*(aScale*mix(.04,1.0,grow));world+=vec3(sin(uTime*.00031+aPhase)*.025,cos(uTime*.00027+aPhase*1.41)*.021,sin(uTime*.00029+aPhase*.8)*.025)*min(1.0,aScale);vec4 vp=uView*vec4(world,1.0);gl_Position=uMvp*vec4(world,1.0);vNormal=normalize(mat3(uView)*aNormal);vView=normalize(-vp.xyz);vLocal=local;vEnergy=aEnergy;vPhase=aPhase;vSelected=aSelected;}',
+'#version 300 es\nprecision highp float;in vec3 vNormal;in vec3 vView;in vec3 vLocal;in float vEnergy;in float vPhase;in float vSelected;out vec4 outColor;\nvoid main(){vec3 n=normalize(vNormal),v=normalize(vView),l=normalize(vec3(-.42,.74,.56));float ndl=max(0.,dot(n,l));float fres=pow(1.-max(0.,dot(n,v)),4.2);vec3 h=normalize(l+v);float spec=pow(max(0.,dot(n,h)),62.);float e=clamp(vEnergy,0.,1.);float volume=clamp(.5+.5*dot(n,normalize(vec3(.25,.18,-.95))),0.,1.);float rimLight=pow(max(0.,1.-abs(dot(n,v))),2.2);float thickness=clamp(1.-length(vLocal)*.62,0.,1.);float caustic=.25+.75*pow(.5+.5*sin((vLocal.x-vLocal.z)*21.+vPhase*2.1),8.);float micro=pow(max(0.,dot(normalize(vec3(sin(vPhase*3.),.35,cos(vPhase*2.))),n)),7.);vec3 deep=vec3(.008,.075,.18),mid=vec3(.038,.37,.69),edge=vec3(.30,.90,1.0),white=vec3(.94,.995,1.0);vec3 col=mix(deep,mid,volume*.56+ndl*.36);col=mix(col,edge,fres*.93);col+=mid*(thickness*.12+caustic*.055+micro*.04);col+=white*spec*(.28+.72*e);col+=edge*(.10*e+.06*rimLight);if(vSelected>.5)col=mix(col,white,.50);float alpha=clamp(.16+.39*fres+.30*spec+.10*e+.05*thickness,0.,.96);outColor=vec4(col,alpha);}'
 );
 
 const earthProg=program(
 `#version 300 es
 precision highp float;
 layout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;
-uniform mat4 uMvp;uniform mat4 uModel;out vec3 vPos;out vec3 vNormal;
-void main(){vPos=aPos;vNormal=mat3(uModel)*aNormal;gl_Position=uMvp*uModel*vec4(aPos,1.);}`,
+uniform mat4 uMvp;uniform mat4 uModel;uniform float uTime;uniform vec3 uSun;
+out vec3 vPos;out vec3 vNormal;out float vSun;
+void main(){vec4 world=uModel*vec4(aPos,1.);vPos=aPos;vNormal=normalize(mat3(uModel)*aNormal);vSun=dot(vNormal,normalize(uSun));gl_Position=uMvp*world;}`,
 `#version 300 es
 precision highp float;
-in vec3 vPos;in vec3 vNormal;out vec4 outColor;
+in vec3 vPos;in vec3 vNormal;in float vSun;out vec4 outColor;
+float hash21(vec2 p){p=fract(p*vec2(123.34,345.45));p+=dot(p,p+34.345);return fract(p.x*p.y);}
+float noise2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=hash21(i),b=hash21(i+vec2(1.,0.)),c=hash21(i+vec2(0.,1.)),d=hash21(i+vec2(1.,1.));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}
 void main(){
-  vec3 n=normalize(vNormal),light=normalize(vec3(-.55,.68,.75));
-  float lit=.32+.68*max(0.,dot(n,light));
-  float lat=asin(clamp(vPos.y,-1.,1.)),lon=atan(vPos.z,vPos.x);
-  float noise=sin(lon*4.2+sin(lat*5.0))*sin(lat*7.1)+.34*sin(lon*9.2-lat*2.7);
-  float land=smoothstep(.18,.56,noise);
-  float polar=smoothstep(.69,.93,abs(vPos.y));
-  vec3 c=mix(vec3(.012,.20,.46),vec3(.08,.42,.25),land);
-  c=mix(c,vec3(.72,.90,.98),polar*.76);
-  float gridLat=pow(1.-abs(sin(lat*18.)),18.);
-  float gridLon=pow(1.-abs(sin(lon*36.)),24.);
-  c+=vec3(.16,.52,.86)*(gridLat+gridLon)*.038;
-  float rim=pow(1.-max(0.,dot(n,vec3(0.,0.,1.))),2.);
-  c+=vec3(.10,.43,.94)*rim*.34;
-  outColor=vec4(c*lit,1.);
+  vec3 n=normalize(vNormal),sun=normalize(uSun),view=normalize(vec3(0.,0.,1.));
+  float lit=dot(n,sun);
+  float day=smoothstep(-.10,.16,lit),twilight=smoothstep(-.18,.04,lit)*smoothstep(.20,.03,lit);
+  vec2 uv=vec2(atan(vPos.z,vPos.x)/6.2831853+.5,asin(clamp(vPos.y,-1.,1.))/3.14159265+.5);
+  float continent=noise2(uv*5.2)+.35*noise2(uv*11.0)+.14*noise2(uv*24.0);
+  float land=smoothstep(.53,.66,continent);
+  float oceanNoise=noise2(uv*17.0);
+  float cloud=noise2(uv*8.0+vec2(uTime*.000012,-uTime*.000007))*.62+noise2(uv*17.0-vec2(uTime*.000021,uTime*.000011))*.38;
+  cloud=smoothstep(.56,.76,cloud);
+  float coast=smoothstep(.46,.58,continent)-smoothstep(.60,.68,continent);
+  float night=1.-day;
+  float cityNoise=noise2(uv*92.0)+.55*noise2(uv*180.0);
+  float city=night*smoothstep(.60,.82,cityNoise)*land;
+  vec3 ocean=vec3(.008,.055,.14);
+  ocean+=vec3(.01,.10,.22)*oceanNoise*.34;
+  vec3 landCol=mix(vec3(.028,.18,.10),vec3(.075,.34,.16),smoothstep(.55,.8,continent));
+  landCol+=vec3(.20,.26,.12)*smoothstep(.76,.92,continent);
+  vec3 c=mix(ocean,landCol,land);
+  c=mix(c,vec3(.82,.93,.98),cloud*.18*day);
+  c+=vec3(1.0,.46,.12)*city*.72;
+  c+=vec3(.08,.24,.46)*coast*.10;
+  c*=.16+.84*day;
+  c+=vec3(.85,.24,.07)*twilight*.055;
+  float terminator=smoothstep(.24,-.12,lit)*smoothstep(.10,.36,abs(lit));
+  c+=vec3(.18,.34,.62)*terminator*.07;
+  float ice=smoothstep(.68,.94,abs(vPos.y));c=mix(c,vec3(.70,.84,.91),ice*.72);
+  float fres=pow(1.-max(0.,dot(n,view)),3.5);c+=vec3(.05,.38,.95)*fres*.48;
+  outColor=vec4(c,1.);
 }`
+);
+const earthAtmosProg=program(
+`#version 300 es
+precision highp float;
+layout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;
+uniform mat4 uMvp;uniform mat4 uModel;
+out vec3 vNormal;
+void main(){vNormal=normalize(mat3(uModel)*aNormal);gl_Position=uMvp*uModel*vec4(aPos,1.);}`,
+`#version 300 es
+precision highp float;
+in vec3 vNormal;out vec4 outColor;
+void main(){vec3 n=normalize(vNormal);float rim=pow(1.-max(0.,dot(n,vec3(0.,0.,1.))),3.0);float edge=pow(1.-abs(dot(n,vec3(0.,1.,0.))),1.7);float a=.18*rim+.07*edge;outColor=vec4(.12,.57,1.0,a);}`
 );
 const lineProg=program(
 '#version 300 es\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aStrength;layout(location=2)in float aProgress;uniform mat4 uMvp;uniform float uTime;out float vStrength;out float vProgress;void main(){gl_Position=uMvp*vec4(aPos,1.);vStrength=aStrength;vProgress=aProgress;}',
@@ -238,15 +310,22 @@ const partProg=program(
 '#version 300 es\nprecision highp float;in float vLife;out vec4 outColor;void main(){vec2 u=gl_PointCoord*2.-1.;if(length(u)>1.)discard;outColor=vec4(.18,.69,1.,(1.-vLife)*.48);}'
 );
 
-const meshPos=gl.createBuffer(),meshNormal=gl.createBuffer(),meshIndex=gl.createBuffer(),centerBuf=gl.createBuffer(),scaleBuf=gl.createBuffer(),energyBuf=gl.createBuffer(),phaseBuf=gl.createBuffer(),selectedBuf=gl.createBuffer(),shapeBuf=gl.createBuffer(),birthBuf=gl.createBuffer(),rotBuf=gl.createBuffer(),angBuf=gl.createBuffer(),lineBuf=gl.createBuffer(),lineStrengthBuf=gl.createBuffer(),lineProgressBuf=gl.createBuffer(),particleBuf=gl.createBuffer(),particleLifeBuf=gl.createBuffer(),particleSizeBuf=gl.createBuffer();
+
+const fieldProg=program(
+'#version 300 es\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aSize;layout(location=2)in float aEnergy;layout(location=3)in float aPhase;uniform mat4 uMvp;uniform mat4 uView;uniform vec3 uAnchor;uniform float uDeepField;uniform float uTime;out float vEnergy;out float vPhase;void main(){vec3 world=aPos+(uDeepField>.5?uAnchor:vec3(0.));vec4 vp=uView*vec4(world,1.);float depth=max(.18,-vp.z);float radial=length(world-uAnchor);float visibility=uDeepField>.5?1.-smoothstep(124.,182.,radial):1.;if(depth<.08||visibility<=.001)gl_PointSize=0.;else gl_PointSize=clamp(aSize*(10.5/depth)*visibility,1.0,7.0);gl_Position=uMvp*vec4(world,1.);vEnergy=aEnergy*visibility;vPhase=aPhase;}',
+'#version 300 es\nprecision highp float;in float vEnergy;in float vPhase;uniform float uTime;out vec4 outColor;void main(){vec2 q=gl_PointCoord*2.-1.;float r=length(q);if(r>1.)discard;float core=smoothstep(.72,.02,r);float halo=smoothstep(1.,.16,r)*.38;float pulse=.78+.22*sin(uTime*.0018+vPhase*6.283);vec3 c=mix(vec3(.018,.16,.34),vec3(.32,.90,1.),core)*pulse;outColor=vec4(c,(halo+.34*core)*(.20+.80*clamp(vEnergy,0.,1.)));}'
+);
+
+const meshPos=gl.createBuffer(),meshNormal=gl.createBuffer(),meshIndex=gl.createBuffer(),centerBuf=gl.createBuffer(),scaleBuf=gl.createBuffer(),energyBuf=gl.createBuffer(),phaseBuf=gl.createBuffer(),selectedBuf=gl.createBuffer(),shapeBuf=gl.createBuffer(),birthBuf=gl.createBuffer(),rotBuf=gl.createBuffer(),angBuf=gl.createBuffer(),lineBuf=gl.createBuffer(),lineStrengthBuf=gl.createBuffer(),lineProgressBuf=gl.createBuffer(),particleBuf=gl.createBuffer(),particleLifeBuf=gl.createBuffer(),particleSizeBuf=gl.createBuffer(),fieldPosBuf=gl.createBuffer(),fieldSizeBuf=gl.createBuffer(),fieldEnergyBuf=gl.createBuffer(),fieldPhaseBuf=gl.createBuffer(),microPosBuf=gl.createBuffer(),microSizeBuf=gl.createBuffer(),microEnergyBuf=gl.createBuffer(),microPhaseBuf=gl.createBuffer();
 
 function buildDroplet(){
-  const lat=7,lon=10,pos=[],nor=[],idx=[];
+  const lat=16,lon=24,pos=[],nor=[],idx=[];
   for(let iy=0;iy<=lat;iy++){
-    const p=Math.PI*iy/lat,y=Math.cos(p),r=Math.sin(p),pinch=1-.20*Math.max(0,y)+.045*Math.max(0,-y);
+    const p=Math.PI*iy/lat,y=Math.cos(p),r=Math.sin(p);
     for(let ix=0;ix<=lon;ix++){
-      const t=2*Math.PI*ix/lon,a=1+.04*Math.sin(3*t+2*y),x=r*Math.cos(t)*pinch*a,z=r*Math.sin(t)*pinch,yy=y*1.12+.028*Math.sin(2*t)*(1-Math.abs(y));
-      pos.push(x,yy,z);nor.push(...norm([x,yy*.92,z]));
+      const t=2*Math.PI*ix/lon,neck=1-.12*Math.max(0,y)+.035*Math.max(0,-y),taper=1+.025*Math.sin(3*t+y*5.0);
+      const x=r*Math.cos(t)*neck*taper,z=r*Math.sin(t)*neck,yy=y*(1.02+.10*Math.max(0,y))+.035*Math.sin(2*t)*(1-Math.abs(y));
+      pos.push(x,yy,z);nor.push(...norm([x,yy*.96,z]));
     }
   }
   for(let iy=0;iy<lat;iy++)for(let ix=0;ix<lon;ix++){const a=iy*(lon+1)+ix,b=a+1,c=a+lon+1,d=c+1;idx.push(a,c,b,b,c,d);}
@@ -276,84 +355,157 @@ function buildEarthSphere(){
 const earthIndexCount=buildEarthSphere();
 
 function shapeCode(node){const name=String(node.shape&&node.shape.name||"droplet").toLowerCase();const codes={sphere:2,globe:2,planet:2,icosphere:2,capsule:3,crystal:4,torus:5,ring:6,star:7,orbital:8,core:9,heart:10,gear:11,spiral:12,pyramid:13,wave:14,dna:15,molecule:16,arrow:17,cone:13,cylinder:4,disk:6,octahedron:4};if(codes[name]!==undefined)return codes[name];let hash=2166136261;for(let i=0;i<name.length;i++)hash=Math.imul(hash^name.charCodeAt(i),16777619);return 18+(hash>>>0)%46;}
-function nodePosition(n){const o=S.localOffsets.get(n.id),b=o?[n.position[0]+o[0],n.position[1]+o[1],n.position[2]+o[2]]:n.position,p=S.advanced&&S.advanced.physics||{},wave=Number(p.waves&&p.waves[0]&&p.waves[0].amplitude)||0,ripple=Number(p.ripples&&p.ripples[0]&&p.ripples[0].strength)||0,t=performance.now()*.001+Number(n.id.length||0);return[b[0]+Math.sin(t+b[2])*wave*.32,b[1]+Math.cos(t*.83+b[0])*wave*.22,b[2]+Math.sin(t*.71+b[1])*ripple*.16];}
+function proximityShapeCode(node){const base=shapeCode(node),lod=Number(S.lodDetail.get(node.id)||0);if(lod<3)return base;const t=String(node.label||"")+" "+String(node.kind||"")+" "+String(node.source||"");if(/gods? eye|location/i.test(t))return 2;if(/folder|file|document/i.test(t))return 4;if(/repository|memory|database/i.test(t))return 6;if(/application|process|window|page/i.test(t))return 8;if(/core|jarvis|neural/i.test(t))return 9;return base;}
+function autoLayoutBase(n,seen){if(!n||!(n.metadata&&n.metadata.auto_layout)||!n.parent_id)return n&&n.position||[0,0,0];seen=seen||new Set();if(seen.has(n.id))return n.position||[0,0,0];seen.add(n.id);const parent=S.nodeMap.get(String(n.parent_id));if(!parent||parent.id===n.id)return n.position;const seed=hashUnit(String(n.id)+"|"+String(n.parent_id)),seed2=hashUnit("v|"+String(n.id)),theta=seed*Math.PI*2,phi=(seed2-.5)*.62;const radius=(n.kind==="process"?2.1:n.kind==="page"?2.8:n.kind==="application"?3.4:n.kind==="window"?2.7:n.kind==="account"?3.0:2.4)+seed2*2.4;const pp=autoLayoutBase(parent,seen);return[pp[0]+Math.cos(theta)*Math.cos(phi)*radius,pp[1]+Math.sin(phi)*radius*.68,pp[2]+Math.sin(theta)*Math.cos(phi)*radius];}
+function nodePosition(n){const base=autoLayoutBase(n),o=S.localOffsets.get(n.id),b=o?[base[0]+o[0],base[1]+o[1],base[2]+o[2]]:base,p=S.advanced&&S.advanced.physics||{},wave=Number(p.waves&&p.waves[0]&&p.waves[0].amplitude)||0,ripple=Number(p.ripples&&p.ripples[0]&&p.ripples[0].strength)||0,t=S.renderTime+Number(n.id.length||0),ambient=Boolean(n.metadata&&n.metadata.visual_only);if(ambient){const h=hashUnit(String(n.id)),h2=hashUnit("ambient-flow|"+String(n.id));return[b[0]+Math.sin(t*(.12+h*.09)+h2*6.28)*(.18+h*.22),b[1]+Math.cos(t*(.10+h2*.08)+h*5.0)*(.14+h2*.20),b[2]+Math.sin(t*(.14+h2*.06)+h*4.2)*(.18+h*.18)];}return[b[0]+Math.sin(t+b[2])*wave*.32,b[1]+Math.cos(t*.83+b[0])*wave*.22,b[2]+Math.sin(t*.71+b[1])*ripple*.16];}
+function hashUnit(value){let h=2166136261;const s=String(value);for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return((h>>>0)%100000)/100000;}
+function buildAmbientField(realNodes){
+  const list=Array.isArray(realNodes)?realNodes:[],desired=Math.max(1800,Math.min(5200,7000-list.length));
+  if(S.ambientNodes.length===desired)return;
+  const field=[],seeds=list.slice(0,Math.min(list.length,120));
+  for(let i=0;i<desired;i++){
+    const seed=seeds.length?seeds[i%seeds.length]:null,h=hashUnit(String(i)+"|"+(seed&&seed.id||"field")),h2=hashUnit("y|"+i+"|"+(seed&&seed.id||"field")),h3=hashUnit("z|"+i+"|"+(seed&&seed.label||"field")),radius=4.5+h*15.5,theta=h2*Math.PI*2,phi=(h3-.5)*1.0,anchor=seed?seed.position:[0,0,0];
+    field.push({id:"visual:ambient:"+i,label:"Ambient neural field "+(i+1),kind:"temporary",source:"visual-field",status:"idle",lifecycle:"dormant",position:[Math.cos(theta)*Math.cos(phi)*radius+anchor[0]*.08,Math.sin(phi)*radius*.58+anchor[1]*.06,Math.sin(theta)*Math.cos(phi)*radius+anchor[2]*.08],scale:.34+.34*hashUnit("s|"+i),energy:.10+.35*hashUnit("e|"+i),visible:true,persistent:false,parent_id:null,shape:{name:"droplet"},metadata:{visual_only:true,ambient:true,seed_index:i},created_at:"",updated_at:""});
+  }
+  S.ambientNodes=field;
+}
+function visualNodes(){return S.nodes.concat(S.ambientNodes);}
 function activeNodes(cam){
-  const max=S.mode==="background"?320:S.quality==="performance"?720:1500;
-  const c=cam||camera();
-  const visible=S.nodes.filter(function(n){
-    const p=worldToScreen(nodePosition(n),c);
-    return p!==null&&p[0]>-140&&p[0]<canvas.clientWidth+140&&p[1]>-140&&p[1]<canvas.clientHeight+140;
-  });
-  return visible.slice().sort(function(a,b){
-    if(a.kind==="core")return-1;if(b.kind==="core")return 1;
-    const da=Math.hypot(a.position[0]-c.eye[0],a.position[1]-c.eye[1],a.position[2]-c.eye[2]);
-    const db=Math.hypot(b.position[0]-c.eye[0],b.position[1]-c.eye[1],b.position[2]-c.eye[2]);
-    return(b.energy||0)-(a.energy||0)+(da-db)*.0005;
-  }).slice(0,max);
+  const max=S.mode==="background"?720:S.quality==="performance"?1600:2800,c=cam||camera(),now=performance.now();
+  S.lodDetail.clear();S.lodStats={near:0,far:0,culled:0,field:S.microCount};
+  const ranked=[];
+  const score=function(n){
+    const p=nodePosition(n),rel=sub(p,c.eye),d=Math.hypot(rel[0],rel[1],rel[2]),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2],vp=worldToScreen(p,c);
+    const visualOnly=Boolean(n.metadata&&n.metadata.visual_only),text=String(n.label||"")+" "+String(n.kind||"")+" "+String(n.source||"");
+    const semantic=/(core|jarvis|gods? eye|file|folder|repository|memory|location|application|window|process|page)/i.test(text)?28:0;
+    const near=1200/(1+d),screenVisible=Boolean(vp)&&vp[0]>-180&&vp[0]<canvas.clientWidth+180&&vp[1]>-180&&vp[1]<canvas.clientHeight+180,projected=vp?Math.max(0,(canvas.clientHeight/(2*Math.tan(Math.PI/6)))/Math.max(.2,vp[2])*.7*(n.scale||1)):0;
+    let lod=projected>=7||d<18?3:projected>=2.2||d<44?2:projected>=.9||d<72?1:0;
+    if(!screenVisible||depth<=.1||d>96)lod=0;
+    S.lodDetail.set(n.id,lod);
+    if(lod===0)S.lodStats.culled++;else if(lod>=2)S.lodStats.near++;else S.lodStats.far++;
+    const realBias=visualOnly?0:22,energy=Number(n.energy)||0,core=n.id==="jarvis.core"?100000:0;
+    ranked.push({n,score:core+realBias+semantic+near+energy*6,d,lod});
+  };
+  S.nodes.concat(S.ambientNodes).forEach(score);
+  ranked.sort(function(a,b){return b.score-a.score});
+  return ranked.filter(function(x){return x.lod>=2}).slice(0,max).map(function(x){return x.n});
 }
 function simulateFluid(dt,nodes){
-  if(S.mode==="background"||S.quality==="minimal"||S.dragNode)return;
-  const step=Math.min(34,Math.max(0,dt))*.0015;
-  const maxPairs=12000;
-  const cellSize=1.8,grid=new Map(),positions=new Map();
-  nodes.forEach(function(n){
-    const p=nodePosition(n),key=Math.floor(p[0]/cellSize)+":"+Math.floor(p[1]/cellSize)+":"+Math.floor(p[2]/cellSize);
-    if(!grid.has(key))grid.set(key,[]);grid.get(key).push(n);positions.set(n.id,p);
-  });
-  let pairs=0;
-  nodes.forEach(function(n){
-    const base=n.position,o=S.localOffsets.get(n.id)||[0,0,0],p=positions.get(n.id),v=S.velocities.get(n.id)||[0,0,0];
-    let fx=-o[0]*1.65,fy=-o[1]*1.65,fz=-o[2]*1.65;
-    const gx=Math.floor(p[0]/cellSize),gy=Math.floor(p[1]/cellSize),gz=Math.floor(p[2]/cellSize);
-    for(let ix=-1;ix<=1;ix++)for(let iy=-1;iy<=1;iy++)for(let iz=-1;iz<=1;iz++){
-      const bucket=grid.get((gx+ix)+":"+(gy+iy)+":"+(gz+iz));if(!bucket)continue;
-      for(const other of bucket){
-        if(other.id===n.id||pairs>=maxPairs)continue;
-        const q=positions.get(other.id),dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],d=Math.hypot(dx,dy,dz);
-        if(d>0&&d<1.55){
-          const push=(1.55-d)*1.9/d;fx+=dx*push;fy+=dy*push;fz+=dz*push;pairs++;
-        }else if(d>1.55&&d<4.2&&other.kind===n.kind){
-          const pull=(d-1.55)*.035;fx-=dx*pull;fy-=dy*pull;fz-=dz*pull;
-        }
-      }
+  if(S.mode==="background"||S.quality==="minimal")return;
+  const frameMs=Math.min(34,Math.max(4,Number(dt)||16)),substeps=frameMs>22?2:1,dtSec=frameMs*.001/substeps,h=2.55,h2=h*h,restDensity=.92,stiffness=3.8,viscosity=.11,mass=1.0,maxPairs=26000;
+  const c=camera();
+  const source=(nodes||[]).filter(function(n){return!(n.metadata&&n.metadata.visual_only)&&Number(S.lodDetail.get(n.id)||0)>=2}).sort(function(a,b){const ap=nodePosition(a),bp=nodePosition(b),da=Math.hypot(ap[0]-c.eye[0],ap[1]-c.eye[1],ap[2]-c.eye[2]),db=Math.hypot(bp[0]-c.eye[0],bp[1]-c.eye[1],bp[2]-c.eye[2]);return da-db;}).slice(0,620),positions=new Map(),grid=new Map();
+  for(const n of source){const p=nodePosition(n),cell=Math.floor(p[0]/h)+":"+Math.floor(p[1]/h)+":"+Math.floor(p[2]/h);positions.set(n.id,p);if(!grid.has(cell))grid.set(cell,[]);grid.get(cell).push(n);}
+  const poly=315/(64*Math.PI*Math.pow(h,9)),spiky=45/(Math.PI*Math.pow(h,6));
+  for(let sub=0;sub<substeps;sub++){
+    const density=new Map(),pressure=new Map();
+    for(const n of source){
+      const p=positions.get(n.id),gx=Math.floor(p[0]/h),gy=Math.floor(p[1]/h),gz=Math.floor(p[2]/h);let rho=0;
+      for(let ix=-1;ix<=1;ix++)for(let iy=-1;iy<=1;iy++)for(let iz=-1;iz<=1;iz++){const bucket=grid.get((gx+ix)+":"+ (gy+iy)+":"+ (gz+iz));if(!bucket)continue;for(const other of bucket){const q=positions.get(other.id),dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],r2=dx*dx+dy*dy+dz*dz;if(r2<h2){const qh=h2-r2;rho+=mass*poly*qh*qh*qh;}}}
+      density.set(n.id,Math.max(.24,rho));pressure.set(n.id,stiffness*Math.max(0,rho-restDensity));
     }
-    v[0]=(v[0]+fx*step)*.93;v[1]=(v[1]+fy*step)*.93;v[2]=(v[2]+fz*step)*.93;
-    const next=[o[0]+v[0]*step*18,o[1]+v[1]*step*18,o[2]+v[2]*step*18];
-    const mag=Math.hypot(...next);
-    const cap=.95;
-    if(mag>cap){next[0]*=cap/mag;next[1]*=cap/mag;next[2]*=cap/mag;}
-    S.velocities.set(n.id,v);S.localOffsets.set(n.id,next);
-  });
+    let pairs=0;
+    for(const n of source){
+      const p=positions.get(n.id),v=S.velocities.get(n.id)||[0,0,0],gx=Math.floor(p[0]/h),gy=Math.floor(p[1]/h),gz=Math.floor(p[2]/h),rho=Math.max(.24,density.get(n.id)||restDensity),pi=pressure.get(n.id)||0;let fx=0,fy=-.012,fz=0;
+      for(let ix=-1;ix<=1;ix++)for(let iy=-1;iy<=1;iy++)for(let iz=-1;iz<=1;iz++){const bucket=grid.get((gx+ix)+":"+ (gy+iy)+":"+ (gz+iz));if(!bucket)continue;for(const other of bucket){if(other.id===n.id||pairs>=maxPairs)continue;const q=positions.get(other.id),dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],r=Math.hypot(dx,dy,dz);if(r<=0||r>=h)continue;pairs++;const invR=1/r,qh=h-r,rhoj=Math.max(.24,density.get(other.id)||restDensity),pj=pressure.get(other.id)||0,pressureForce=-mass*(pi+pj)*.5*spiky*qh*qh/rhoj;fx+=dx*invR*pressureForce;fy+=dy*invR*pressureForce;fz+=dz*invR*pressureForce;const ov=S.velocities.get(other.id)||[0,0,0],visc=viscosity*mass*qh/rhoj;fx+=(ov[0]-v[0])*visc;fy+=(ov[1]-v[1])*visc;fz+=(ov[2]-v[2])*visc;}}
+      const o=S.localOffsets.get(n.id)||[0,0,0],mag=Math.hypot(o[0],o[1],o[2]);
+      if(mag>6.4){const push=(mag-6.4)*1.65/Math.max(.001,mag);fx-=o[0]*push;fy-=o[1]*push;fz-=o[2]*push;}
+      v[0]=(v[0]+fx*dtSec)*.988;v[1]=(v[1]+fy*dtSec)*.988;v[2]=(v[2]+fz*dtSec)*.988;
+      const next=[o[0]+v[0]*dtSec*24,o[1]+v[1]*dtSec*24,o[2]+v[2]*dtSec*24],nm=Math.hypot(...next);
+      if(nm>6.6){const s=6.6/nm;next[0]*=s;next[1]*=s;next[2]*=s;v[0]*=.25;v[1]*=.25;v[2]*=.25;}
+      S.velocities.set(n.id,v);S.localOffsets.set(n.id,next);
+    }
+  }
+}
+function buildMicroField(){
+  const count=S.microCount;if(S.microPositions&&S.microPositions.length===count*3&&S.microBuffersReady)return;
+  const out=S.microPositions&&S.microPositions.length===count*3?S.microPositions:new Float32Array(count*3);
+  const sizes=new Float32Array(count),energies=new Float32Array(count),phases=new Float32Array(count);
+  for(let i=0;i<count;i++){
+    const a=hashUnit("micro:a:"+i)*Math.PI*2,b=(hashUnit("micro:b:"+i)-.5)*Math.PI,r=7+Math.pow(hashUnit("micro:r:"+i),.64)*118;
+    const lobe=.78+.22*(.5+.5*Math.sin(a*3.0+i*.0007)),flatten=.63+.24*hashUnit("micro:f:"+i),x=Math.cos(a)*Math.cos(b)*r*1.25*lobe,y=Math.sin(b)*r*flatten,z=Math.sin(a)*Math.cos(b)*r*.98*lobe;
+    const strand=Math.pow(hashUnit("micro:s:"+i),9.0)*34.0;
+    out[i*3]=x+Math.cos(a*7.0+b*3.0)*strand*.34;
+    out[i*3+1]=y+Math.sin(a*5.0-b*2.0)*strand*.22;
+    out[i*3+2]=z+Math.cos(a*6.0+b*4.0)*strand*.28;
+    sizes[i]=.28+.34*hashUnit("micro:s:"+i);
+    energies[i]=.08+.30*hashUnit("micro:e:"+i);
+    phases[i]=hashUnit("micro:p:"+i);
+  }
+  S.microPositions=out;
+  upload(microPosBuf,out,gl.STATIC_DRAW);upload(microSizeBuf,sizes,gl.STATIC_DRAW);upload(microEnergyBuf,energies,gl.STATIC_DRAW);upload(microPhaseBuf,phases,gl.STATIC_DRAW);
+  S.microBuffersReady=true;
+}
+function renderPointField(now,c,mvp){
+  buildMicroField();
+  const v=new Float32Array(16);lookAt(v,c.eye,S.target);
+  const core=S.nodes.find(function(n){return n.id==="jarvis.core";}),anchor=core?nodePosition(core):[0,0,0];
+  gl.useProgram(fieldProg);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uView"),false,v);gl.uniform1f(gl.getUniformLocation(fieldProg,"uTime"),now);
+  if(now-S.lastPointBuild>=S.pointBuildMs){
+    const full=new Set(S.activeNodeIds||[]),pp=[],ss=[],ee=[],ph=[];
+    const candidates=S.nodes.concat(S.ambientNodes),candidateCap=S.mode==="background"?7000:S.quality==="performance"?12000:20000;
+    for(let i=0;i<candidates.length&&pp.length/3<candidateCap;i++){
+      const n=candidates[i];if(full.has(n.id))continue;
+      const p=nodePosition(n),rel=sub(p,c.eye),d=Math.hypot(rel[0],rel[1],rel[2]),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];
+      if(d>170||depth<-.10*d)continue;
+      pp.push(p[0],p[1],p[2]);ss.push(Math.max(.45,(n.scale||.5)*1.4));ee.push(Math.min(1,Number(n.energy)||.18));ph.push(hashUnit("point|"+n.id));
+    }
+    S.pointCount=Math.floor(pp.length/3);S.lastPointBuild=now;
+    upload(fieldPosBuf,new Float32Array(pp));upload(fieldSizeBuf,new Float32Array(ss));upload(fieldEnergyBuf,new Float32Array(ee));upload(fieldPhaseBuf,new Float32Array(ph));
+  }
+  gl.uniform3fv(gl.getUniformLocation(fieldProg,"uAnchor"),new Float32Array([0,0,0]));gl.uniform1f(gl.getUniformLocation(fieldProg,"uDeepField"),0);
+  attr(fieldProg,"aPos",3,fieldPosBuf);attr(fieldProg,"aSize",1,fieldSizeBuf);attr(fieldProg,"aEnergy",1,fieldEnergyBuf);attr(fieldProg,"aPhase",1,fieldPhaseBuf);gl.drawArrays(gl.POINTS,0,S.pointCount);
+  if(S.microBuffersReady){
+    const deepCount=S.mode==="background"?12000:S.quality==="performance"?32000:S.microCount;
+    gl.uniform3fv(gl.getUniformLocation(fieldProg,"uAnchor"),new Float32Array(anchor));gl.uniform1f(gl.getUniformLocation(fieldProg,"uDeepField"),1);
+    attr(fieldProg,"aPos",3,microPosBuf);attr(fieldProg,"aSize",1,microSizeBuf);attr(fieldProg,"aEnergy",1,microEnergyBuf);attr(fieldProg,"aPhase",1,microPhaseBuf);
+    gl.drawArrays(gl.POINTS,0,deepCount);
+    S.lodStats.field=deepCount;
+  }
 }
 function resize(){
-  const dpr=Math.min(window.devicePixelRatio||1,S.quality==="maximum"?1.5:1.0),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
+  const dpr=Math.min(window.devicePixelRatio||1,S.quality==="maximum"?1.25:1.0),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}
 }
 function render(now){
   requestAnimationFrame(render);
   if(document.hidden)return;
+  S.renderTime=now*.001;
   renderMinimap();
   animateSurfaceTransforms();
   renderNeuralConsolePlacement(false);
   if(S.view==="earth"){resize();renderEarth(now);return;}
   const dt=now-S.lastFrame;S.lastFrame=now;S.frameMs=S.frameMs*.92+dt*.08;
-  if(S.mode==="foreground"&&S.frameMs>28)S.quality="performance";
-  if(S.mode==="foreground"&&S.frameMs<18&&S.nodes.length<800)S.quality="maximum";
+  if(S.mode==="foreground"&&S.frameMs>27)S.quality="performance";
+  if(S.mode==="foreground"&&S.frameMs<17)S.quality="maximum";
   resize();
   const c=camera();
-  const nodes=activeNodes(c);simulateFluid(dt,nodes);
+  renderCoreStructure();
+  const nodes=activeNodes(c);S.activeNodeIds=nodes.map(function(n){return n.id});simulateFluid(dt,nodes);
   const aspect=canvas.width/Math.max(1,canvas.height),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
   perspective(proj,Math.PI/3,aspect,.05,2000);lookAt(view,c.eye,S.target);multiply(mvp,proj,view);
   gl.clearColor(0,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-  const nowMs=performance.now();
+  const nowMs=performance.now();renderPointField(nowMs,c,mvp);
   const cp=new Float32Array(nodes.length*3),cs=new Float32Array(nodes.length),ce=new Float32Array(nodes.length),ph=new Float32Array(nodes.length),se=new Float32Array(nodes.length),sh=new Float32Array(nodes.length),bi=new Float32Array(nodes.length),rt=new Float32Array(nodes.length*3),av=new Float32Array(nodes.length*3);
-  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);cs[i]=(n.scale||1)*(n.kind==="core"?1.75:n.kind==="subsystem"?1.30:.72);ce[i]=n.energy||.2;ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
+  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);const variance=.84+hashUnit(n.id)*.30,pulse=pulseStrength(n.id,nowMs),retire=retirementStrength(n.id,nowMs),pulseWave=pulse*(.5+.5*Math.sin(nowMs*.016+i));const lod=Number(S.lodDetail.get(n.id)||0),proximity=lod>=3?1:lod>=2?.45:0;cs[i]=(n.scale||1)*variance*(n.kind==="core"?2.35:n.kind==="subsystem"?1.20:.60)*(1+.12*proximity+.16*pulseWave)*(retire?.24+retire*.76:1);ce[i]=Math.min(1,(n.energy||.2)+.34*pulseWave)*(retire?.20+retire*.80:1);ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=proximityShapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
   upload(centerBuf,cp);upload(scaleBuf,cs);upload(energyBuf,ce);upload(phaseBuf,ph);upload(selectedBuf,se);upload(shapeBuf,sh);upload(birthBuf,bi);upload(rotBuf,rt);upload(angBuf,av);
   gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),nowMs);
   attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,centerBuf,1);attr(droplet,"aScale",1,scaleBuf,1);attr(droplet,"aEnergy",1,energyBuf,1);attr(droplet,"aPhase",1,phaseBuf,1);attr(droplet,"aSelected",1,selectedBuf,1);attr(droplet,"aShape",1,shapeBuf,1);attr(droplet,"aBirth",1,birthBuf,1);attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,nodes.length);
 
   const map=new Map(nodes.map(function(n){return[n.id,n]})),lp=[],ls=[],lg=[];
-  const visibleRelationCap=S.mode==="background"?600:S.quality==="performance"?1200:4200;let relationCount=0;for(const r of S.links){if(relationCount>=visibleRelationCap)break;if(S.dragNode&&(r.source===S.dragNode||r.target===S.dragNode))continue;const a=map.get(r.source),b=map.get(r.target);if(!a||!b)continue;relationCount++;const ap=nodePosition(a),bp=nodePosition(b),mid=[(ap[0]+bp[0])*.5,(ap[1]+bp[1])*.5,(ap[2]+bp[2])*.5],bend=norm(cross(norm(sub(bp,ap)),[0,1,0])),mag=.16+Math.min(1.1,Math.hypot(...sub(bp,ap))*.055),p1=add(mid,mul3(bend,mag)),p2=add(mid,mul3(bend,-mag)),pts=[ap,p1,p1,p2,p2,bp];pts.forEach(function(p,i){lp.push(...p);ls.push(r.strength||.4);lg.push((i%2)*.5);});}
+  const visibleRelationCap=S.mode==="background"?700:S.quality==="performance"?1900:5200;let relationCount=0;for(const r of S.links){if(relationCount>=visibleRelationCap)break;if(S.dragNode&&(r.source===S.dragNode||r.target===S.dragNode))continue;const a=map.get(r.source),b=map.get(r.target);if(!a||!b)continue;const ad=Math.hypot(...sub(nodePosition(a),c.eye)),bd=Math.hypot(...sub(nodePosition(b),c.eye));if(Math.min(ad,bd)>88&&Number(r.strength||0)<.62)continue;relationCount++;const ap=nodePosition(a),bp=nodePosition(b),axis=norm(sub(bp,ap)),basis=Math.abs(axis[1])<.9?[0,1,0]:[1,0,0],bend=norm(cross(axis,basis)),seed=hashUnit(String(r.source)+"|"+r.target+"|"+r.relation_type),lift=(.18+Math.min(1.35,Math.hypot(...sub(bp,ap))*.075))*(.76+seed*.48),c1=add(ap,mul3(bend,lift)),c2=add(bp,mul3(bend,lift*(.72+.28*seed))),prev=ap;for(let s=1;s<=8;s++){const t=s/8,inv=1-t,pt=add(add(add(mul3(ap,inv*inv*inv),mul3(c1,3*inv*inv*t)),mul3(c2,3*inv*t*t)),mul3(bp,t*t*t));lp.push(...prev,...pt);ls.push((r.strength||.4)*(.72+.28*(1-t)),(r.strength||.4)*(.72+.28*t));lg.push((s-1)/8,s/8);prev=pt;}}
+  const realNodes=S.nodes.filter(function(n){return !(n.metadata&&n.metadata.visual_only)});
+  const ambientCap=S.mode==="background"?120:S.quality==="performance"?220:420;
+  if(realNodes.length){
+    let ambientEdges=0;
+    for(let i=0;i<S.ambientNodes.length&&ambientEdges<ambientCap;i++){
+      if(i%3!==0)continue;
+      const ambient=S.ambientNodes[i],target=realNodes[Math.floor(hashUnit(ambient.id)*realNodes.length)];
+      if(!target)continue;
+      const ap=nodePosition(ambient),bp=nodePosition(target),axis=norm(sub(bp,ap)),basis=Math.abs(axis[1])<.9?[0,1,0]:[1,0,0],bend=norm(cross(axis,basis)),lift=.10+.18*hashUnit("ambient-lift|"+ambient.id),mid=add(add(ap,mul3(axis,.5)),mul3(bend,lift));
+      lp.push(...ap,...mid,...mid,...bp);const str=.028+.07*hashUnit("ambient-strength|"+ambient.id);ls.push(str,str*.88,str*.88,str);lg.push(0,.5,.5,1);ambientEdges++;
+    }
+  }
   upload(lineBuf,new Float32Array(lp));upload(lineStrengthBuf,new Float32Array(ls));upload(lineProgressBuf,new Float32Array(lg));
   gl.useProgram(lineProg);gl.uniformMatrix4fv(gl.getUniformLocation(lineProg,"uMvp"),false,mvp);gl.uniform1f(gl.getUniformLocation(lineProg,"uTime"),nowMs);attr(lineProg,"aPos",3,lineBuf);attr(lineProg,"aStrength",1,lineStrengthBuf);attr(lineProg,"aProgress",1,lineProgressBuf);gl.drawArrays(gl.LINES,0,lp.length/3);
 
@@ -363,7 +515,7 @@ function render(now){
     upload(particleBuf,new Float32Array(pp));upload(particleLifeBuf,new Float32Array(pl));upload(particleSizeBuf,new Float32Array(ps));
     gl.useProgram(partProg);gl.uniformMatrix4fv(gl.getUniformLocation(partProg,"uMvp"),false,mvp);attr(partProg,"aPos",3,particleBuf);attr(partProg,"aLife",1,particleLifeBuf);attr(partProg,"aSize",1,particleSizeBuf);gl.drawArrays(gl.POINTS,0,S.particles.length);
   }
-  rootStatus("AUTO QUALITY · "+S.quality.toUpperCase()+" · "+Math.round(1000/Math.max(1,S.frameMs))+" FPS · "+nodes.length+" ACTIVE");
+  rootStatus("LOD "+S.lodStats.near+" NEAR · "+S.lodStats.far+" MID · "+S.lodStats.culled+" CULLED · "+S.pointCount+" FAR · "+S.microCount+" DEEP · "+Math.round(1000/Math.max(1,S.frameMs))+" FPS");
 }
 function pickEarthLocator(x,y){
   const oldYaw=S.yaw,oldPitch=S.pitch,oldDistance=S.distance,oldTarget=S.target.slice();
@@ -384,7 +536,46 @@ function renderEarthLabels(){
   const locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
   if(S.view==="earth"&&locators.length)box.textContent="GOD'S EYE · "+locators.map(function(x){return String(x.label||"Locator").slice(0,36)}).slice(0,5).join(" · ");
 }
+function renderEarthMarkers(){
+  const layer=ui.querySelector("#jn-earth-marker-layer"),locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
+  if(!layer)return;
+  const keep=new Set();
+  for(const item of locators){
+    const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180,r=1.075,rr=Math.cos(lat)*r;
+    const p=[rr*Math.cos(lon),Math.sin(lat)*r,rr*Math.sin(lon)],s=worldToScreen(p);
+    if(!s)continue;
+    const id=String(item.id||item.label||"locator"),key="earth-marker-"+id.replace(/[^a-zA-Z0-9_-]/g,"_");keep.add(key);
+    let el=layer.querySelector('[data-key="'+key.replace(/"/g,"")+'"]');
+    if(!el){el=document.createElement("div");el.className="jn-earth-marker";el.dataset.key=key;el.title=String(item.label||"Locator");layer.appendChild(el);}
+    el.classList.toggle("current",item.kind==="current");el.classList.toggle("family",item.kind==="family");el.classList.toggle("saved",item.kind==="saved");el.classList.toggle("selected",id===String(S.earthSelected||""));
+    el.style.transform="translate3d("+Math.round(s[0])+"px,"+Math.round(s[1])+"px,0) translate(-50%,-50%)";
+  }
+  Array.from(layer.children).forEach(function(el){if(!keep.has(el.dataset.key))el.remove();});
+}
+function renderEarthSensor(){
+  const feeds=ui.querySelector("#jn-earth-feeds"),readout=ui.querySelector("#jn-earth-readout");if(!feeds||!readout)return;
+  const current=Boolean(S.earthData.authorized_current),locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[],states=Array.isArray(S.earthData.provider_status)?S.earthData.provider_status:[],sensorState=String(S.earthData.sensor_state||"sensor-status-unavailable");
+  const stateLabel={"current-live":"CURRENT FEED LIVE","authorized-feeds-live":"AUTHORIZED FEEDS LIVE","feeds-unavailable-or-unauthorized":"FEEDS UNAVAILABLE / NOT AUTHORIZED","sensor-status-unavailable":"SENSOR STATUS UNAVAILABLE"}[sensorState]||sensorState.toUpperCase();
+  const source=String(S.earthData.current_source||"").slice(0,42);
+  const accuracy=Number(S.earthData.current_accuracy_m);
+  const precision=Number.isFinite(accuracy)?" · ±"+Math.round(Math.max(0,accuracy))+"M":"";
+  readout.textContent=stateLabel+" · "+locators.length+" AUTHORIZED LOCATOR"+(locators.length===1?"":"S")+(source?" · "+source.toUpperCase():"")+precision;
+  feeds.replaceChildren();
+  if(!states.length){const x=document.createElement("div");x.className="jn-earth-feed";x.textContent="LOCATION FEEDS · UNAVAILABLE";feeds.appendChild(x);return;}
+  states.slice(0,3).forEach(function(state){
+    const x=document.createElement("div");
+    const active=Boolean(state.live&&state.authorized&&state.available);
+    x.className="jn-earth-feed "+(active?"live":state.authorized?"auth":"");
+    const detail=String(state.detail||"").replace(/\s+/g," ").slice(0,42);
+    x.textContent=String(state.kind||"feed").toUpperCase()+" · "+(active?"LIVE":state.authorized?"AUTH":"OFF")+(detail?" · "+detail:"");
+    x.title=detail;
+    feeds.appendChild(x);
+  });
+}
+function earthLocatorById(id){const target=String(id||"");return (Array.isArray(S.earthData.locators)?S.earthData.locators:[]).find(function(item){return String(item.id||item.label||"")===target})||null;}
+function smoothEarthFollow(){if(!S.earthFollow||!S.earthSelected)return;const item=earthLocatorById(S.earthSelected);if(!item)return;const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;const targetYaw=lon-Math.PI*.5,targetPitch=lat;let dyaw=targetYaw-S.earthYaw;while(dyaw>Math.PI)dyaw-=Math.PI*2;while(dyaw<-Math.PI)dyaw+=Math.PI*2;S.earthYaw+=dyaw*.075;S.earthPitch+=(targetPitch-S.earthPitch)*.075;S.earthDistance+=(6.8-S.earthDistance)*.045;}
 function renderEarth(now){
+  if(S.earthFollow) smoothEarthFollow();
   const oldYaw=S.yaw,oldPitch=S.pitch,oldDistance=S.distance,oldTarget=S.target.slice();
   S.yaw=S.earthYaw;S.pitch=S.earthPitch;S.distance=S.earthDistance;S.target=[0,0,0];
   const c=camera(),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
@@ -392,35 +583,32 @@ function renderEarth(now){
   lookAt(view,c.eye,S.target);multiply(mvp,proj,view);
   gl.clearColor(.001,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.disable(gl.BLEND);
-  gl.useProgram(earthProg);
-  gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uMvp"),false,mvp);
   const model=new Float32Array(16);model[0]=model[5]=model[10]=model[15]=1;
-  gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uModel"),false,model);
-  attr(earthProg,"aPos",3,earthPos);attr(earthProg,"aNormal",3,earthNormal);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,earthIndex);gl.drawElements(gl.TRIANGLES,earthIndexCount,gl.UNSIGNED_SHORT,0);
-
+  const sunDay=(performance.now()*.000003)%6.2831853;S.earthSun=[Math.cos(sunDay)*.62,.68,Math.sin(sunDay)*.62];
+  gl.useProgram(earthProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uModel"),false,model);gl.uniform1f(gl.getUniformLocation(earthProg,"uTime"),now);gl.uniform3fv(gl.getUniformLocation(earthProg,"uSun"),new Float32Array(S.earthSun));
+  attr(earthProg,"aPos",3,earthPos);attr(earthProg,"aNormal",3,earthNormal);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,earthIndex);gl.drawElements(gl.TRIANGLES,earthIndexCount,gl.UNSIGNED_SHORT,0);
+  const atModel=new Float32Array([1.025,0,0,0,0,1.025,0,0,0,0,1.025,0,0,0,0,1]);
+  gl.enable(gl.BLEND);gl.depthMask(false);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.useProgram(earthAtmosProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(earthAtmosProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(earthAtmosProg,"uModel"),false,atModel);
+  attr(earthAtmosProg,"aPos",3,earthPos);attr(earthAtmosProg,"aNormal",3,earthNormal);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,earthIndex);gl.drawElements(gl.TRIANGLES,earthIndexCount,gl.UNSIGNED_SHORT,0);
   const locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
   if(locators.length){
     const cp=new Float32Array(locators.length*3),cs=new Float32Array(locators.length),ce=new Float32Array(locators.length),ph=new Float32Array(locators.length),sel=new Float32Array(locators.length),sh=new Float32Array(locators.length),bi=new Float32Array(locators.length);
-    locators.forEach(function(item,i){
-      const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;
-      const r=1.075,rr=Math.cos(lat)*r;
-      cp.set([rr*Math.cos(lon),Math.sin(lat)*r,rr*Math.sin(lon)],i*3);
-      cs[i]=.10;ce[i]=1;ph[i]=i*.91;sel[i]=0;sh[i]=1;bi[i]=now-1700;
-    });
-    gl.enable(gl.BLEND);gl.depthMask(false);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-    upload(earthCenterBuf,cp);upload(earthScaleBuf,cs);upload(earthEnergyBuf,ce);upload(earthPhaseBuf,ph);upload(earthSelectedBuf,sel);upload(earthShapeBuf,sh);upload(earthBirthBuf,bi);
-    gl.useProgram(droplet);
-    gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);
-    gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);
-    gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),now);
-    attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,earthCenterBuf,1);attr(droplet,"aScale",1,earthScaleBuf,1);attr(droplet,"aEnergy",1,earthEnergyBuf,1);attr(droplet,"aPhase",1,earthPhaseBuf,1);attr(droplet,"aSelected",1,earthSelectedBuf,1);attr(droplet,"aShape",1,earthShapeBuf,1);attr(droplet,"aBirth",1,earthBirthBuf,1);upload(rotBuf,new Float32Array(locators.length*3));upload(angBuf,new Float32Array(locators.length*3));attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,locators.length);
+    locators.forEach(function(item,i){const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180,r=1.075,rr=Math.cos(lat)*r;cp.set([rr*Math.cos(lon),Math.sin(lat)*r,rr*Math.sin(lon)],i*3);cs[i]=item.kind==="current"?.12:item.kind==="family"?.105:.09;ce[i]=1;ph[i]=i*.91;sel[i]=String(item.id)===String(S.earthSelected||"")?1:0;sh[i]=2;bi[i]=now-1700;});
+    gl.depthMask(false);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+    upload(earthCenterBuf,cp);upload(earthScaleBuf,cs);upload(earthEnergyBuf,ce);upload(earthPhaseBuf,ph);upload(earthSelectedBuf,sel);upload(earthShapeBuf,sh);upload(earthBirthBuf,bi);upload(rotBuf,new Float32Array(locators.length*3));upload(angBuf,new Float32Array(locators.length*3));
+    gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),now);
+    attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,earthCenterBuf,1);attr(droplet,"aScale",1,earthScaleBuf,1);attr(droplet,"aEnergy",1,earthEnergyBuf,1);attr(droplet,"aPhase",1,earthPhaseBuf,1);attr(droplet,"aSelected",1,earthSelectedBuf,1);attr(droplet,"aShape",1,earthShapeBuf,1);attr(droplet,"aBirth",1,earthBirthBuf,1);attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,locators.length);
   }
+  renderEarthMarkers();
+  const current=Boolean(S.earthData.authorized_current);
   S.yaw=oldYaw;S.pitch=oldPitch;S.distance=oldDistance;S.target=oldTarget;
   ui.querySelector("#jn-title").textContent="GOD'S EYE";
-  renderEarthLabels();
-  ui.querySelector("#jn-status").textContent="3D EARTH · "+locators.length+" LOCATORS · "+(S.earthData.authorized_current?"CURRENT LOCATION AUTHORIZED":"CURRENT LOCATION UNAVAILABLE");
+  renderEarthLabels();renderEarthSensor();
+  const sensorState=String(S.earthData.sensor_state||"sensor-status-unavailable");
+  const feedLabel={"current-live":"CURRENT FEED LIVE","authorized-feeds-live":"AUTHORIZED FEEDS LIVE","feeds-unavailable-or-unauthorized":"FEEDS UNAVAILABLE / NOT AUTHORIZED","sensor-status-unavailable":"SENSOR STATUS UNAVAILABLE"}[sensorState]||sensorState.toUpperCase();
+  ui.querySelector("#jn-status").textContent="PLANETARY SENSOR · "+locators.length+" AUTHORIZED TARGETS · "+feedLabel;
 }
 async function pollEarth(){
   const a=api();if(!a||!a.gods_eye_globe)return;
@@ -471,7 +659,7 @@ async function pollHand(){
     if(Boolean(sample.pinch)&&!S.handPinching){
       const target=document.elementFromPoint(x,y);const surface=target&&target.closest?target.closest(".jn-spatial-window"):null;
       if(surface){S.handWindow=surface;S.handX=x;S.handY=y;}else{const node=pick(x,y);if(node){S.handNode=node.id;setSelected(node.id);S.handX=x;S.handY=y;}}
-      S.handPinching=true;
+      S.handDragLastTime=performance.now();S.handDragLastDelta=[0,0,0];S.handPinching=true;
     }else if(Boolean(sample.pinch)&&S.handPinching&&S.handWindow){
       const dx=x-S.handX,dy=y-S.handY;await moveHandWindow(S.handWindow,dx,dy);S.handX=x;S.handY=y;
     }else if(Boolean(sample.pinch)&&S.handPinching&&S.handNode){
@@ -480,8 +668,10 @@ async function pollHand(){
       if(node){
         const p=worldToScreen(nodePosition(node));
         if(p){
-          const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(node.id)||[0,0,0];
+          const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(node.id)||[0,0,0],now=performance.now(),dragDt=Math.max(8,now-S.handDragLastTime)*.001;
           S.localOffsets.set(node.id,add(old,delta));
+          S.velocities.set(node.id,[delta[0]/dragDt*.12,delta[1]/dragDt*.12,delta[2]/dragDt*.12]);
+          S.handDragLastTime=now;S.handDragLastDelta=delta;
           spawn(nodePosition(node),Math.max(1,Math.floor(Math.hypot(dx,dy)/16)));
         }
       }
@@ -489,9 +679,7 @@ async function pollHand(){
     }else if(!Boolean(sample.pinch)&&S.handPinching){
       if(S.handWindow){S.handWindow=null;}
       if(S.handNode){
-        const id=S.handNode,from=S.localOffsets.get(id)||[0,0,0],start=performance.now();S.handNode=null;
-        function settleHand(){const t=Math.min(1,(performance.now()-start)/780),e=t*t*(3-2*t);S.localOffsets.set(id,[from[0]*(1-e),from[1]*(1-e),from[2]*(1-e)]);if(t<1)requestAnimationFrame(settleHand);else S.localOffsets.delete(id);}
-        requestAnimationFrame(settleHand);
+        const id=S.handNode,v=S.velocities.get(id)||[0,0,0];S.velocities.set(id,[v[0]*.42,v[1]*.42,v[2]*.42]);S.handNode=null;
       }
       S.handPinching=false;
     }
@@ -512,8 +700,8 @@ function renderMinimap(){
 }
 function animateSurfaceTransforms(){ui.querySelectorAll(".jn-spatial-window").forEach(function(el){applySurfaceTransform(el);});}
 function rootStatus(text){ui.querySelector("#jn-perf").textContent=text}
-function worldToScreen(p){
-  const c=camera(),rel=sub(p,c.eye),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];if(depth<=.1)return null;
+function worldToScreen(p,cOverride){
+  const c=cOverride||camera(),rel=sub(p,c.eye),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];if(depth<=.1)return null;
   const focal=canvas.clientHeight/(2*Math.tan(Math.PI/6));
   return[canvas.clientWidth/2+(rel[0]*c.right[0]+rel[1]*c.right[1]+rel[2]*c.right[2])*focal/depth,canvas.clientHeight/2-(rel[0]*c.up[0]+rel[1]*c.up[1]+rel[2]*c.up[2])*focal/depth,depth];
 }
@@ -536,6 +724,7 @@ function setConsoleCollapsed(collapsed){
   try{localStorage.setItem("jarvis.neuralCommand.collapsed",S.consoleCollapsed?"1":"0");}catch(_){}
   requestAnimationFrame(function(){renderNeuralConsolePlacement(true);});
 }
+function renderCoreStructure(){const el=ui.querySelector("#jn-core-structure");if(!el)return;const core=S.nodes.find(function(n){return n.id==="jarvis.core";});if(!core)return;const p=worldToScreen(nodePosition(core));if(!p){el.style.opacity="0";return;}const depth=p[2]||16,scale=clampNumber(.72+14/(depth+24),.72,1.34),size=188*scale;el.style.width=size+"px";el.style.height=size+"px";el.style.transform="translate3d("+Math.round(p[0]-size*.5)+"px,"+Math.round(p[1]-size*.5)+"px,0) scale("+scale.toFixed(3)+")";el.style.opacity=(S.view==="earth"?"0":String(clampNumber(1.05-depth/180,.35,1)));}
 function renderNeuralConsolePlacement(force){
   const now=performance.now();
   if(!force&&now-S.lastConsoleLayout<S.consoleLayoutMs)return;
@@ -582,12 +771,13 @@ function renderNeuralConsolePlacement(force){
   }
 }
 
-function setSelected(id){S.selected=id;const a=api();if(a&&a.neural_selection_set&&id)a.neural_selection_set(String(id)).catch(function(){});}
+function setSelected(id){S.selected=id;const n=S.nodes.find(function(x){return x.id===id})||S.ambientNodes.find(function(x){return x.id===id});const a=api();if(n&&!(n.metadata&&n.metadata.visual_only)&&a&&a.neural_selection_set&&id)a.neural_selection_set(String(id)).catch(function(){});}
 function screenDelta(dx,dy,depth){const c=camera(),f=canvas.clientHeight/(2*Math.tan(Math.PI/6));return add(mul3(c.right,dx*depth/f),mul3(c.up,-dy*depth/f))}
 function pick(x,y){
   let best=null,bestD=Infinity;
-  for(const n of activeNodes()){const p=worldToScreen(nodePosition(n),camera());if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y);if(d<bestD){bestD=d;best=n;}}
-  return bestD<75?best:null;
+  const list=activeNodes(camera());
+  for(const n of list){if(n.metadata&&n.metadata.visual_only)continue;const p=worldToScreen(nodePosition(n),camera());if(!p)continue;const d=Math.hypot(p[0]-x,p[1]-y),radius=(S.lodDetail.get(n.id)||1)>=2?68:52;if(d<bestD){bestD=d;best=n;best._pickRadius=radius;}}
+  return best&&bestD<(best._pickRadius||68)?best:null;
 }
 function focus(n){
   setSelected(n.id);S.target=[...nodePosition(n)];if(S.follow){S.yaw+=.0008;S.pitch+=.0004;}S.distance=Math.max(5,Math.min(90,11/Math.max(.5,n.scale||1)));
@@ -598,6 +788,22 @@ function spawn(pos,count){
   if(S.quality==="minimal")return;
   for(let i=0;i<Math.min(5,count||2);i++)S.particles.push({pos:[...pos],vel:[(Math.random()-.5)*1.1,(Math.random()-.5)*1.1,(Math.random()-.5)*1.1],life:0,size:5+Math.random()*8});
   if(S.particles.length>180)S.particles.splice(0,S.particles.length-180);
+}
+function pulseStrength(id,now){
+  const started=Number(S.pulses.get(id)||0);
+  if(!started)return 0;
+  const age=Math.max(0,now-started);
+  if(age>1150){S.pulses.delete(id);return 0;}
+  const phase=age/1150;
+  return (1-phase)*(1-phase);
+}
+function retirementStrength(id,now){
+  const started=Number(S.retirements.get(id)||0);
+  if(!started)return 0;
+  const age=Math.max(0,now-started);
+  if(age>1400){S.retirements.delete(id);return 0;}
+  const phase=age/1400;
+  return Math.max(0,1-phase);
 }
 function api(){return window.pywebview&&window.pywebview.api}
 async function pollAdvanced(){
@@ -614,19 +820,33 @@ async function pollAdvanced(){
 async function pollSnapshot(){
   const a=api();if(!a||!a.neural_world_snapshot)return;
   try{
-    const d=await a.neural_world_snapshot(S.quality==="maximum"?2200:900);
-    S.nodes=Array.isArray(d.entities)?d.entities:[];S.links=Array.isArray(d.relations)?d.relations:[];S.windows=Array.isArray(d.windows)?d.windows:[];
+    const d=await a.neural_world_snapshot(S.quality==="maximum"?5000:2600);
+    S.nodes=Array.isArray(d.entities)?d.entities:[];S.nodeMap=new Map(S.nodes.map(function(n){return[n.id,n]}));S.links=Array.isArray(d.relations)?d.relations:[];S.windows=Array.isArray(d.windows)?d.windows:[];buildAmbientField(S.nodes);buildMicroField();S.lastPointBuild=0;
     S.quality=d.performance&&d.performance.quality||S.quality;S.mode=d.performance&&d.performance.mode||S.mode;
-    ui.querySelector("#jn-status").textContent="NEURAL MESH · "+S.nodes.length+" NEURONS · "+S.links.length+" LINKS · "+S.windows.length+" WINDOWS";
+    ui.querySelector("#jn-status").textContent="NEURAL MESH · "+S.nodes.length+" REAL + "+S.ambientNodes.length+" FIELD · "+S.links.length+" LINKS · "+S.windows.length+" WINDOWS";
     S.lastSnapshot=performance.now();renderSpatialWindows();
   }catch(_){ui.querySelector("#jn-status").textContent="NEURAL MESH · BACKEND DEGRADED";}
 }
 async function pollEvents(){
   const a=api();if(!a||!a.neural_events)return;
   try{
+    const now=performance.now();
     const list=await a.neural_events(S.eventSequence,300);
-    for(const e of Array.isArray(list)?list:[]){S.eventSequence=Math.max(S.eventSequence,Number(e.sequence)||0);if(e.kind==="entity.created")S.births.set(e.entity_id,performance.now());else if(e.kind==="entity.retired")S.retirements.set(e.entity_id,performance.now());}
-    S.lastEvents=performance.now();
+    for(const e of Array.isArray(list)?list:[]){
+      S.eventSequence=Math.max(S.eventSequence,Number(e.sequence)||0);
+      if(e.kind==="entity.created"){
+        S.births.set(e.entity_id,now);
+        S.pulses.set(e.entity_id,now);
+      }else if(e.kind==="entity.retired"){
+        S.retirements.set(e.entity_id,now);
+        S.pulses.set(e.entity_id,now);
+      }else if(e.kind==="relation.created"||e.kind==="relation.updated"){
+        if(e.entity_id)S.pulses.set(e.entity_id,now);
+        if(e.payload&&e.payload.source)S.pulses.set(e.payload.source,now);
+        if(e.payload&&e.payload.target)S.pulses.set(e.payload.target,now);
+      }
+    }
+    S.lastEvents=now;
   }catch(_){}
 }
 async function pollLayouts(){
@@ -843,25 +1063,14 @@ function resizeNeuralComposer(){
   input.style.height=Math.min(92,Math.max(34,input.scrollHeight))+"px";
   renderNeuralConsolePlacement(true);
 }
-function toggleNeuralConsole(){
-  setConsoleCollapsed(!S.consoleCollapsed);
-  const input=ui.querySelector("#jn-chat-input");
-  if(!S.consoleCollapsed&&input)window.setTimeout(function(){input.focus();},0);
-}
+function toggleNeuralConsole(){const surface=window.jarvisTextInput;if(surface&&surface.setVisible){surface.setVisible(document.querySelector("#jarvis-text-shell")?.style.display==="none");surface.focus();}}
 window.jarvisNeuralCommandSurface={
-  setVisible:function(visible){
-    const el=ui.querySelector("#jn-neural-console"),tether=ui.querySelector("#jn-console-tether");
-    if(el)el.style.display=visible?"":"none";
-    if(tether)tether.style.display=visible?"":"none";
-    if(visible){renderNeuralConsolePlacement(true);const input=ui.querySelector("#jn-chat-input");if(input)input.focus();}
-  },
-  focus:function(){
-    const input=ui.querySelector("#jn-chat-input");if(input)input.focus();
-  }
+  setVisible:function(visible){const surface=window.jarvisTextInput;if(surface&&surface.setVisible)surface.setVisible(visible);},
+  focus:function(){const surface=window.jarvisTextInput;if(surface&&surface.focus)surface.focus();}
 };
 canvas.addEventListener("pointerdown",function(e){
-  if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
-  const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;
+  if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){S.earthSelected=String(locator.id||locator.label||"");S.earthFollow=true;ui.querySelector("#jn-follow").textContent="FOLLOWING";ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
+  const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;S.dragLastTime=performance.now();S.dragLastDelta=[0,0,0];
   if(n){S.dragNode=n.id;setSelected(n.id);canvas.setPointerCapture(e.pointerId);return;}
   S.orbit=true;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);
 });
@@ -869,18 +1078,11 @@ canvas.addEventListener("pointermove",function(e){
   const dx=e.clientX-S.lastX,dy=e.clientY-S.lastY;
   if(S.view==="earth"){if(S.orbit){S.earthYaw+=dx*.01;S.earthPitch=Math.max(-1.1,Math.min(1.1,S.earthPitch+dy*.007));S.lastX=e.clientX;S.lastY=e.clientY;}return;}
   if(S.dragNode){
-    const n=S.nodes.find(function(x){return x.id===S.dragNode});if(n){const p=worldToScreen(nodePosition(n));if(p){const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(n.id)||[0,0,0];S.localOffsets.set(n.id,add(old,delta));spawn(nodePosition(n),Math.max(1,Math.floor(Math.hypot(dx,dy)/14)));}}
+    const n=S.nodes.find(function(x){return x.id===S.dragNode});if(n){const p=worldToScreen(nodePosition(n));if(p){const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(n.id)||[0,0,0];S.localOffsets.set(n.id,add(old,delta));const now=performance.now(),dragDt=Math.max(8,now-S.dragLastTime)*.001;S.velocities.set(n.id,[delta[0]/dragDt*.12,delta[1]/dragDt*.12,delta[2]/dragDt*.12]);S.dragLastTime=now;S.dragLastDelta=delta;spawn(nodePosition(n),Math.max(1,Math.floor(Math.hypot(dx,dy)/10)));}}
   }else if(S.orbit){S.yaw+=dx*.008;S.pitch=Math.max(-1.35,Math.min(1.35,S.pitch+dy*.006));}
   S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=true;
 });
-function release(){
-  S.orbit=false;canvas.classList.remove("dragging");
-  if(S.dragNode){
-    const id=S.dragNode,from=S.localOffsets.get(id)||[0,0,0],start=performance.now();S.dragNode=null;
-    function settle(){const t=Math.min(1,(performance.now()-start)/780),e=t*t*(3-2*t);S.localOffsets.set(id,[from[0]*(1-e),from[1]*(1-e),from[2]*(1-e)]);if(t<1)requestAnimationFrame(settle);else S.localOffsets.delete(id);}
-    requestAnimationFrame(settle);
-  }
-}
+function release(){S.orbit=false;canvas.classList.remove("dragging");if(S.dragNode){const id=S.dragNode,v=S.velocities.get(id)||[0,0,0];S.velocities.set(id,[v[0]*.42,v[1]*.42,v[2]*.42]);S.dragNode=null;}}
 canvas.addEventListener("pointerup",function(){S.orbit=false;release()});
 canvas.addEventListener("pointercancel",function(){release()});
 canvas.addEventListener("wheel",function(e){e.preventDefault();S.distance=Math.max(3.5,Math.min(180,S.distance*Math.exp(e.deltaY*.001)));},{passive:false});
@@ -895,7 +1097,7 @@ ui.querySelector("#jn-follow").addEventListener("click",function(){S.follow=!S.f
 ui.querySelector("#jn-map").addEventListener("click",function(){S.minimap=!S.minimap;ui.querySelector("#jn-map").textContent=S.minimap?"MAP ON":"MAP";renderMinimap();});
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
-ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
+ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";S.earthSelected=null;S.earthFollow=false;ui.querySelector("#jn-follow").textContent="FOLLOW";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
 ui.querySelector("#jn-mode").addEventListener("click",function(){setSurfaceMode(S.surfaceMode==="3d"?"2d":"3d")});
 ui.querySelector("#jn-windows").addEventListener("click",function(){S.showWindows=!S.showWindows;ui.querySelector("#jn-windows").textContent=S.showWindows?"WINDOWS":"WINDOWS OFF";renderSpatialWindows()});
 ui.querySelector("#jn-giant").addEventListener("click",function(){S.giant=!S.giant;ui.querySelector("#jn-giant").textContent=S.giant?"NORMAL":"GIANT";renderSpatialWindows()});
@@ -920,7 +1122,7 @@ ui.querySelector("#jn-console-hotkey").addEventListener("click",function(){setCo
 ui.querySelectorAll(".jn-console-chip").forEach(function(button){button.addEventListener("click",function(){const input=ui.querySelector("#jn-chat-input");if(!input)return;input.value=String(button.dataset.command||"");resizeNeuralComposer();input.focus();});});
 try{S.consoleCollapsed=localStorage.getItem("jarvis.neuralCommand.collapsed")==="1";}catch(_){}
 setConsoleCollapsed(S.consoleCollapsed);
-window.addEventListener("keydown",function(e){if(e.code==="F13"){e.preventDefault();toggleNeuralConsole();}});
+window.addEventListener("keydown",function(e){if(e.code==="F13"){e.preventDefault();const surface=window.jarvisTextInput;if(surface&&surface.setVisible){const shell=document.querySelector("#jarvis-text-shell");surface.setVisible(!shell||shell.style.display==="none");surface.focus();}}});
 window.addEventListener("resize",function(){resize();resizeNeuralComposer();});
 window.addEventListener("scroll",function(){renderNeuralConsolePlacement(true)},{passive:true});
 document.addEventListener("visibilitychange",function(){const hidden=document.hidden;canvas.style.visibility=hidden?"hidden":"visible";ui.querySelector("#jn-surfaces").style.visibility=hidden?"hidden":"visible";});

@@ -31,6 +31,16 @@ class NeuralWorldTests(unittest.TestCase):
         self.assertIn("jarvis.browser", ids)
         self.assertGreaterEqual(snapshot["counts"]["relations"], 8)
 
+    def test_subsystems_use_stable_orbital_positions(self):
+        world = NeuralWorld()
+        snapshot = world.snapshot(limit=100)
+        nodes = {item["id"]: item for item in snapshot["entities"]}
+        core = nodes["jarvis.core"]["position"]
+        for entity_id in ("jarvis.browser", "jarvis.coding", "jarvis.system", "jarvis.gods-eye", "jarvis.workflows", "jarvis.memory", "jarvis.agents", "jarvis.devices"):
+            pos = nodes[entity_id]["position"]
+            self.assertGreater(((pos[0]-core[0])**2 + (pos[1]-core[1])**2 + (pos[2]-core[2])**2) ** 0.5, 3.5)
+            self.assertLess(((pos[0]-core[0])**2 + (pos[1]-core[1])**2 + (pos[2]-core[2])**2) ** 0.5, 6.5)
+
     def test_identity_and_update_are_stable(self):
         world = NeuralWorld()
         first = world.upsert("app:opera", EntityKind.APPLICATION, "Opera GX", source="browser")

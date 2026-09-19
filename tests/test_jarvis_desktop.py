@@ -15,6 +15,18 @@ class JarvisDesktopTests(unittest.TestCase):
         self.assertIsNotNone(runtime.policy)
         self.assertIn("computer", runtime.available_tools())
 
+    def test_webview2_autoplay_policy_is_set_before_window_creation(self):
+        with patch.object(jarvis_desktop.sys, "platform", "win32"), patch.dict(
+            jarvis_desktop.os.environ,
+            {"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS": "--disable-gpu --autoplay-policy=user-gesture-required"},
+            clear=False,
+        ):
+            FullstackJarvisHost._configure_webview2_autoplay()
+            configured = jarvis_desktop.os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"]
+        self.assertIn("--disable-gpu", configured)
+        self.assertIn("--autoplay-policy=no-user-gesture-required", configured)
+        self.assertNotIn("--autoplay-policy=user-gesture-required", configured)
+
     def test_execute_request_forwards_confirmation(self):
         runtime = Mock()
         runtime._assistant_orchestrator.return_value.execute.return_value = "result"
@@ -104,6 +116,73 @@ class JarvisDesktopTests(unittest.TestCase):
         fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
         self.assertIsNotNone(host._window)
 
+    def test_omniroute_provider_api_is_exposed(self):
+        self.assertTrue(hasattr(jarvis_desktop, "OMNIROUTE_SETTINGS_HTML"))
+        self.assertIn("open_omniroute_settings", dir(jarvis_desktop.JarvisWebApi))
+        self.assertIn("omniroute_configure_provider", dir(jarvis_desktop.JarvisWebApi))
+        self.assertIn('type="password"', jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
+        self.assertIn("CONNECT & TEST", jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
+
+    def test_omniroute_and_elevenlabs_shared_settings_surface(self):
+        html = jarvis_desktop.OMNIROUTE_SETTINGS_HTML
+        for token in (
+            "Auto-detect from API key",
+            "omniroute_detect_provider",
+            "VOICE ENGINE · ELEVENLABS",
+            "SAVE & TEST VOICE",
+            "elevenlabs_configure",
+            "elevenlabs_test",
+            "elevenlabs_voices",
+        ):
+            self.assertIn(token, html)
+        for method in (
+            "voice_audio",
+            "elevenlabs_status",
+            "elevenlabs_configure",
+            "elevenlabs_test",
+            "elevenlabs_voices",
+            "omniroute_detect_provider",
+        ):
+            self.assertIn(method, dir(jarvis_desktop.JarvisWebApi))
+
+    def test_voice_adapter_uses_elevenlabs_as_mouth(self):
+        controller = Mock()
+        adapter = VoiceAdapter(controller)
+        self.assertIsInstance(adapter.elevenlabs, jarvis_desktop.ElevenLabsMouth)
+
+    def test_voice_audio_drains_elevenlabs_packets(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=SimpleNamespace(elevenlabs=Mock()), hands=Mock())
+        host.voice.elevenlabs.take_audio.return_value = [{"sequence": 1, "mime": "audio/mpeg", "data": "YQ=="}]
+        self.assertEqual(host.voice_audio()["items"][0]["sequence"], 1)
+        host.voice.elevenlabs.take_audio.assert_called_once_with()
+
+    def test_auto_detect_api_method_never_receives_provider_secret_back(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
+        result = host.web_api.omniroute_detect_provider("sk-ant-example")
+        self.assertEqual(result, {"ok": True, "provider": "anthropic", "detected": True})
+        self.assertNotIn("sk-ant-example", repr(result))
+
+    def test_omniroute_status_uses_secret_free_summary(self):
+        controller = Mock()
+        controller.runtime = Mock()
+        host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
+        host.omniroute = Mock()
+        host.omniroute.status.return_value.as_dict.return_value = {
+            "available": True,
+            "source": "bundled",
+            "version": "3.8.51",
+            "base_url": "http://127.0.0.1:20128/v1",
+            "data_dir": "/safe",
+        }
+        host.omniroute.ensure_running.return_value = True
+        host.omniroute.list_providers.return_value = [{"name": "openai", "status": "connected"}]
+        result = host.omniroute_status()
+        self.assertEqual(result["version"], "3.8.51")
+        self.assertEqual(result["providers"], [{"name": "openai", "status": "connected"}])
+        self.assertNotIn("api_key", repr(result))
+
     def test_text_input_api_is_exposed_to_native_window(self):
         self.assertTrue(hasattr(jarvis_desktop, "JarvisWebApi"))
         self.assertTrue(hasattr(jarvis_desktop, "TEXT_INPUT_SCRIPT"))
@@ -140,6 +219,38 @@ class JarvisDesktopTests(unittest.TestCase):
         controller.execute_request.assert_called_once_with("run diagnostics", confirmed=False)
         self.assertEqual(result["text"], "controller response")
         self.assertFalse(result["needs_confirmation"])
+
+    def test_voice_adapter_can_be_stopped_without_live_provider(self):
+        controller = Mock()
+        adapter = VoiceAdapter(controller)
+        adapter.stop()
+        self.assertIsNone(adapter.bridge)
+
+    def test_embedded_text_and_settings_javascript_parse_when_node_exists(self):
+        node = __import__("shutil").which("node")
+        if node is None:
+            self.skipTest("node is not installed on this runner")
+        import re
+        import subprocess
+        import tempfile
+        cases = [
+            (jarvis_desktop.TEXT_INPUT_SCRIPT, "text-input", False),
+            (jarvis_desktop.OMNIROUTE_SETTINGS_HTML, "settings", True),
+        ]
+        for source, label, is_html in cases:
+            scripts = (
+                re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", source, re.DOTALL | re.IGNORECASE)
+                if is_html else [source]
+            )
+            self.assertTrue(scripts, label)
+            with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as handle:
+                handle.write("\n".join(scripts))
+                path = handle.name
+            try:
+                result = subprocess.run([node, "--check", path], capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+            finally:
+                __import__("os").unlink(path)
 
     def test_frozen_backtalk_smoke_mode_validates_embedded_modules_without_audio_hardware(self):
         controller = Mock()

@@ -9,6 +9,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .omniroute_setup import OmniRouteProvisioner
+
 
 class OmniRouteLifecycle:
     """Keep the documented local OmniRoute gateway available when installed."""
@@ -53,6 +55,16 @@ class OmniRouteLifecycle:
         argv = shlex.split(configured, posix=os.name != "nt")
         if not argv:
             raise RuntimeError("OmniRoute startup command is empty")
+        if argv[0] == "omniroute":
+            resolved = shutil.which(argv[0])
+            if not resolved:
+                raise RuntimeError(
+                    f"OmniRoute is not running at {self.base_url} and the '{argv[0]}' command was not found"
+                )
+            argv[0] = resolved
+            if "--no-open" not in argv:
+                argv.append("--no-open")
+            return argv
         resolved = shutil.which(argv[0])
         if resolved:
             argv[0] = resolved
