@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "product_quality_level": 4,
+  "ui_minimum_level": 4,
+  "required_protected_ui_builds": 4,
+  "performance": {
+    "max_ui_build_bytes": 350000,
+    "max_ui_manager_script_bytes": 50000
+  },
+  "required_files": [
+    "quality_of_life/ui_builds.py",
+    "quality_of_life/runtime.py",
+    "self_coding/agent.py",
+    "scripts/jarvis_desktop.py",
+    ".github/workflows/jarvis-release-gate.yml",
+    "tests/test_ui_builds.py",
+    "tests/test_self_coding.py",
+    "tests/test_qol_runtime.py"
+  ],
+  "required_tokens": {
+    "quality_of_life/ui_builds.py": [
+      "class UIBuildStore",
+      "def activate",
+      "def rollback",
+      "def build_manager_script",
+      "quality_level"
+    ],
+    "quality_of_life/runtime.py": [
+      "self_coding.approve",
+      "self_coding.undo"
+    ],
+    "self_coding/agent.py": [
+      "Direct main publication is disabled",
+      "System-coherence mandate",
+      "approve_checkpoint",
+      "undo_checkpoint"
+    ],
+    ".github/workflows/jarvis-release-gate.yml": [
+      "Native Windows Jarvis.exe",
+      "Smoke-test the packaged native Jarvis host"
+    ],
+    "tests/test_ui_builds.py": [
+      "test_protected_builds_cannot_be_overwritten_or_deleted",
+      "test_manager_script_is_valid_javascript_when_node_is_available"
+    ],
+    "tests/test_self_coding.py": [
+      "test_direct_main_publication_is_disabled",
+      "test_self_coding_prompt_requires_repository_wide_coherence"
+    ]
+  }
+}
