@@ -140,6 +140,33 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _stable_child_position(entity_id: str, parent: tuple[float, float, float], kind: EntityKind | str) -> tuple[float, float, float]:
+    digest = hashlib.sha256((entity_id + "|child").encode("utf-8")).digest()
+    a = int.from_bytes(digest[0:4], "big") / 0xFFFFFFFF
+    b = int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF
+    c = int.from_bytes(digest[8:12], "big") / 0xFFFFFFFF
+    kind_value = kind.value if isinstance(kind, EntityKind) else str(kind)
+    radius_by_kind = {
+        "process": (1.8, 5.8),
+        "application": (2.6, 6.8),
+        "page": (2.2, 5.4),
+        "account": (2.4, 5.0),
+        "window": (2.0, 5.6),
+        "task": (1.6, 4.4),
+        "memory": (2.0, 4.8),
+        "service": (2.4, 5.2),
+    }
+    low, high = radius_by_kind.get(kind_value, (2.2, 5.8))
+    radius = low + a * (high - low)
+    theta = b * math.tau
+    phi = (c - 0.5) * 0.75
+    return (
+        parent[0] + math.cos(theta) * math.cos(phi) * radius,
+        parent[1] + math.sin(phi) * radius * 0.62,
+        parent[2] + math.sin(theta) * math.cos(phi) * radius,
+    )
+
+
 def _stable_position(entity_id: str) -> tuple[float, float, float]:
     digest = hashlib.sha256(entity_id.encode("utf-8")).digest()
     a = int.from_bytes(digest[0:4], "big") / 0xFFFFFFFF
@@ -217,6 +244,8 @@ class NeuralWorld:
             if len(self._entities) >= self.max_entities and safe_id not in self._entities:
                 raise MemoryError("neural world entity budget exhausted")
             now = _now()
+            normalized_kind = kind if isinstance(kind, EntityKind) else EntityKind(str(kind))
+            normalized_parent = None if parent_id is _UNSET else (str(parent_id) if parent_id is not None else None)
             existing = self._entities.get(safe_id)
             if existing is not None:
                 before = existing.as_dict()
@@ -240,15 +269,19 @@ class NeuralWorld:
                 if before != after:
                     self.events.publish("entity.updated", entity_id=existing.id, payload=after)
                 return existing
+            parent_node = self._entities.get(normalized_parent) if normalized_parent else None
+            auto_position = position
+            if auto_position is None and parent_node is not None:
+                auto_position = _stable_child_position(safe_id, parent_node.position, normalized_kind)
             node = NeuralEntity(
-                id=safe_id, kind=kind if isinstance(kind, EntityKind) else EntityKind(str(kind)), label=str(label)[:500],
+                id=safe_id, kind=normalized_kind, label=str(label)[:500],
                 source=str(source)[:200], status=str(status)[:120],
                 lifecycle=lifecycle if isinstance(lifecycle, LifecycleState) else LifecycleState(str(lifecycle)),
-                position=position or _stable_position(safe_id),
+                position=auto_position or _stable_position(safe_id),
                 scale=max(0.1, min(8.0, float(scale))),
                 energy=max(0.0, min(1.0, float(energy))),
                 visible=bool(visible), persistent=bool(persistent),
-                parent_id=None if parent_id is _UNSET else (str(parent_id) if parent_id is not None else None),
+                parent_id=normalized_parent,
                 shape=normalize_shape("droplet" if shape is _UNSET else shape).as_dict(),
                 metadata=dict(metadata or {}),
                 created_at=now, updated_at=now,
