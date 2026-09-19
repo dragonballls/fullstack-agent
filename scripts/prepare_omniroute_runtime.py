@@ -27,6 +27,7 @@ NODE_SHA256 = "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541"
 OMNIROUTE_VERSION = "3.8.50"
 OMNIROUTE_COMMIT = "5458026c216f77a3da68ea49152dc33470cfe2cb"
 OMNIROUTE_SOURCE_URL = f"https://github.com/diegosouzapw/OmniRoute/archive/{OMNIROUTE_COMMIT}.zip"
+RUNTIME_CACHE_SCHEMA = "2"
 
 
 def sha256_file(path: Path) -> str:
@@ -49,6 +50,63 @@ def _single_extracted_root(directory: Path) -> Path:
     return roots[0]
 
 
+def _native_load_ok(node: Path, native: Path) -> bool:
+    if not node.is_file() or not native.is_file():
+        return False
+    try:
+        result = subprocess.run(
+            [
+                str(node),
+                "-e",
+                "const p=process.argv[1]; process.dlopen({exports:{}},p); console.log('native-ok')",
+                str(native),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+            env={**os.environ, "NODE_ENV": "production"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and "native-ok" in (result.stdout or "")
+
+
+def _runtime_is_healthy(destination: Path) -> bool:
+    node = destination / "node.exe"
+    entry = destination / "node_modules" / "omniroute" / "bin" / "omniroute.mjs"
+    native = (
+        destination
+        / "node_modules"
+        / "omniroute"
+        / "dist"
+        / "node_modules"
+        / "better-sqlite3"
+        / "build"
+        / "Release"
+        / "better_sqlite3.node"
+    )
+    if not _native_load_ok(node, native) or not entry.is_file():
+        return False
+    try:
+        check = subprocess.run(
+            [str(node), str(entry), "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+            env={**os.environ, "NODE_ENV": "production"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    version = (check.stdout or "").strip()
+    return check.returncode == 0 and version.splitlines()[-1:] == [OMNIROUTE_VERSION]
+
+
 def prepare(destination: Path) -> None:
     if sys.platform != "win32":
         raise RuntimeError("The embedded OmniRoute runtime is currently a Windows release component")
@@ -58,9 +116,15 @@ def prepare(destination: Path) -> None:
     node = destination / "node.exe"
     entry = destination / "node_modules" / "omniroute" / "bin" / "omniroute.mjs"
     if manifest.is_file() and node.is_file() and entry.is_file():
-        expected = f"node={NODE_VERSION}\nomniroute={OMNIROUTE_VERSION}\ncommit={OMNIROUTE_COMMIT}\n"
-        if manifest.read_text(encoding="utf-8") == expected:
+        expected = (
+            f"schema={RUNTIME_CACHE_SCHEMA}\n"
+            f"node={NODE_VERSION}\n"
+            f"omniroute={OMNIROUTE_VERSION}\n"
+            f"commit={OMNIROUTE_COMMIT}\n"
+        )
+        if manifest.read_text(encoding="utf-8") == expected and _runtime_is_healthy(destination):
             return
+        shutil.rmtree(destination, ignore_errors=True)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="jarvis-omniroute-", ignore_cleanup_errors=True) as temp_name:
@@ -124,6 +188,32 @@ def prepare(destination: Path) -> None:
             tarball = candidates[0]
 
         staging = temp / "omniroute_runtime"
+        staging.mkdir(parents=True)
+        (staging / "package.json").write_text(
+            json.dumps(
+                {
+                    "name": "jarvis-omniroute-runtime-builder",
+                    "private": True,
+                    "version": "1.0.0",
+                    "allowScripts": {
+                        "omniroute": True,
+                        "better-sqlite3": True,
+                        "wreq-js": True,
+                        "tls-client-node": True,
+                        "onnxruntime-node": True,
+                        "@parcel/watcher": True,
+                        "@swc/core": True,
+                        "koffi": True,
+                        "keytar": True,
+                        "esbuild": True,
+                        "protobufjs": True,
+                        "sharp": True,
+                        "unrs-resolver": True,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         result = subprocess.run(
             [
                 str(npm),
@@ -133,9 +223,10 @@ def prepare(destination: Path) -> None:
                 "--no-fund",
                 "--no-audit",
                 "--omit=dev",
-                # Keep OmniRoute dependencies nested so its postinstall resolves
-                # native modules relative to the installed package root.
-                "--install-strategy=nested",
+                # Keep dependencies hoisted so OmniRoute's postinstall can
+                # copy platform-correct natives from the project root into dist/.
+                "--install-strategy=hoisted",
+                "--package-lock=false",
                 "--ignore-scripts=false",
                 "--prefer-offline",
                 "--fetch-retries=2",
@@ -161,7 +252,7 @@ def prepare(destination: Path) -> None:
         # executed the package postinstall.
         shutil.copy2(bundled_node, staging / "node.exe")
         package_root = staging / "node_modules" / "omniroute"
-        root_native = package_root / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
+        root_native = staging / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
         app_native = package_root / "dist" / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
         if root_native.is_file():
             app_native.parent.mkdir(parents=True, exist_ok=True)
@@ -172,28 +263,9 @@ def prepare(destination: Path) -> None:
         ]
         if not critical_native[0].is_file():
             raise RuntimeError("Prepared OmniRoute runtime is missing its repaired Windows better-sqlite3 binary")
-        try:
-            native_check = subprocess.run(
-                [
-                    str(bundled_node),
-                    "-e",
-                    "const p=process.argv[1]; process.dlopen({exports:{}},p); console.log('native-ok')",
-                    str(critical_native[0]),
-                ],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=30,
-                check=False,
-                env={**os.environ, "NODE_ENV": "production"},
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise RuntimeError(f"Prepared OmniRoute native runtime check could not run: {exc}") from exc
-        if native_check.returncode != 0 or "native-ok" not in native_check.stdout:
+        if not _native_load_ok(bundled_node, critical_native[0]):
             raise RuntimeError(
-                "Prepared OmniRoute better-sqlite3 binary could not be loaded: "
-                f"{(native_check.stdout or native_check.stderr or '').strip()[-1000:]}"
+                "Prepared OmniRoute better-sqlite3 binary could not be loaded"
             )
 
         installed_entry = staging / "node_modules" / "omniroute" / "bin" / "omniroute.mjs"
@@ -226,7 +298,9 @@ def prepare(destination: Path) -> None:
         shutil.copytree(staging, destination)
         manifest = destination / "runtime-manifest.txt"
         manifest.write_text(
-            f"node={NODE_VERSION}\nomniroute={OMNIROUTE_VERSION}\ncommit={OMNIROUTE_COMMIT}\n",
+            f"schema={RUNTIME_CACHE_SCHEMA}\n"
+            f"node={NODE_VERSION}\nomniroute={OMNIROUTE_VERSION}\n"
+            f"commit={OMNIROUTE_COMMIT}\n",
             encoding="utf-8",
         )
 
