@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections import deque
 from typing import Any
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
@@ -135,6 +136,19 @@ class VoiceAdapter:
         self.controller = controller
         self.bridge: Any | None = None
 
+    def _record_transcript(self, text: str) -> None:
+        message = str(text or "").strip()
+        if not message:
+            return
+        with self._transcript_lock:
+            self._transcript_queue.append(message[:12000])
+
+    def drain_transcript(self) -> list[str]:
+        with self._transcript_lock:
+            items = list(self._transcript_queue)
+            self._transcript_queue.clear()
+        return items
+
     @staticmethod
     def _truthy(name: str) -> bool:
         return os.environ.get(name, "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -157,7 +171,7 @@ class VoiceAdapter:
             LOGGER.info("voice disabled by configuration")
             return
         from scripts.jarvis_voice_bridge import JarvisVoiceBridge
-        self.bridge = JarvisVoiceBridge(self.controller)
+        self.bridge = JarvisVoiceBridge(self.controller, on_output=self._record_transcript)
         self.bridge.start()
 
     def stop(self) -> None:
@@ -368,6 +382,16 @@ class JarvisWebApi:
 
     def text_link_state(self) -> dict[str, Any]:
         return self.host.text_link_state()
+
+    def voice_transcript(self) -> dict[str, Any]:
+        voice = getattr(self.host, "voice", None)
+        drain = getattr(voice, "drain_transcript", None)
+        if not callable(drain):
+            return {"ok": True, "messages": []}
+        try:
+            return {"ok": True, "messages": [str(item)[:12000] for item in drain()]}
+        except Exception:
+            return {"ok": True, "messages": []}
 
     def submit_text(self, text: str, confirmed: bool = False) -> dict[str, Any]:
         normalized = str(text or "").strip()
@@ -583,6 +607,13 @@ TEXT_INPUT_SCRIPT = r'''
 
   window.addEventListener("pywebviewready",markReady,{once:true});
   if(window.pywebview&&window.pywebview.api)markReady();
+
+  async function pollVoiceTranscript(){
+    if(!apiReady||!window.pywebview.api.voice_transcript)return;
+    try{const result=await window.pywebview.api.voice_transcript();if(result&&Array.isArray(result.messages))result.messages.forEach(function(message){addMessage("jarvis",message);});}catch(_){}
+  }
+  setInterval(pollVoiceTranscript,700);
+  pollVoiceTranscript();
 
   window.jarvisTextInput={
     setVisible:function(visible){shell.style.display=visible?"":"none";if(!visible)setActive(false);},
