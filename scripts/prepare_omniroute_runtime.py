@@ -133,7 +133,7 @@ def prepare(destination: Path) -> None:
                 "--no-fund",
                 "--no-audit",
                 "--omit=dev",
-                "--ignore-scripts",
+                "--ignore-scripts=false",
                 "--prefer-offline",
                 "--fetch-retries=2",
                 "--legacy-peer-deps",
@@ -152,24 +152,42 @@ def prepare(destination: Path) -> None:
             detail = "npm install returned a non-zero exit status"
             raise RuntimeError(f"OmniRoute package installation failed in the release build: {detail[-5000:]}")
 
-        # Install without lifecycle scripts, then run only OmniRoute's own native/runtime
-        # repair hook. This avoids spending the release gate executing every dependency
-        # postinstall while npm is still constructing the production dependency tree.
-        postinstall = staging / "node_modules" / "omniroute" / "scripts" / "build" / "postinstall.mjs"
-        if not postinstall.is_file():
-            raise RuntimeError("Installed OmniRoute package is missing its required postinstall repair script")
-        repair = subprocess.run(
-            [str(bundled_node), str(postinstall)],
-            cwd=staging / "node_modules" / "omniroute",
-            capture_output=False,
-            timeout=420,
-            env={**os.environ, "NODE_ENV": "production"},
-            check=False,
-        )
-        if repair.returncode != 0:
-            raise RuntimeError("OmniRoute native/runtime postinstall repair failed")
+        # The published OmniRoute package requires its postinstall hook because
+        # the standalone Next.js bundle contains platform-specific native modules.
+        # Keep npm lifecycle scripts enabled so the hook runs in the actual installed
+        # package context and the Windows-native binaries are repaired before packaging.
 
-        shutil.copy2(bundled_node, staging / "node.exe")
+                shutil.copy2(bundled_node, staging / "node.exe")
+        critical_native = [
+            staging / "node_modules" / "omniroute" / "dist" / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node",
+            staging / "node_modules" / "omniroute" / "dist" / "node_modules" / "wreq-js",
+        ]
+        if not critical_native[0].is_file():
+            raise RuntimeError("Prepared OmniRoute runtime is missing its repaired Windows better-sqlite3 binary")
+        try:
+            native_check = subprocess.run(
+                [
+                    str(bundled_node),
+                    "-e",
+                    "const p=process.argv[1]; process.dlopen({exports:{}},p); console.log('native-ok')",
+                    str(critical_native[0]),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                check=False,
+                env={**os.environ, "NODE_ENV": "production"},
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(f"Prepared OmniRoute native runtime check could not run: {exc}") from exc
+        if native_check.returncode != 0 or "native-ok" not in native_check.stdout:
+            raise RuntimeError(
+                "Prepared OmniRoute better-sqlite3 binary could not be loaded: "
+                f"{(native_check.stdout or native_check.stderr or '').strip()[-1000:]}"
+            )
+
         installed_entry = staging / "node_modules" / "omniroute" / "bin" / "omniroute.mjs"
         if not installed_entry.is_file():
             raise RuntimeError("Installed OmniRoute runtime is missing its CLI entrypoint")
