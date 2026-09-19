@@ -18,7 +18,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.parse
+import urllib.request
 
 
 OMNIROUTE_VERSION = "3.8.51"
@@ -82,6 +85,7 @@ class OmniRouteProvisioner:
         self.data_dir = (data_dir or default_data_dir()).expanduser()
         self._resolved: tuple[str, ...] | None = None
         self._source = "unavailable"
+        self._process: subprocess.Popen[bytes] | None = None
 
     @property
     def port(self) -> int:
@@ -230,6 +234,50 @@ class OmniRouteProvisioner:
         env["OMNIROUTE_TELEMETRY"] = env.get("OMNIROUTE_TELEMETRY", "false")
         return env
 
+    def _probe(self) -> bool:
+        parsed = urllib.parse.urlparse(self.base_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        for url in (self.base_url + "/models", origin + "/api/monitoring/health", origin + "/healthz"):
+            try:
+                with urllib.request.urlopen(
+                    urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET"),
+                    timeout=1.5,
+                ) as response:
+                    if 200 <= int(response.status) < 300:
+                        return True
+            except urllib.error.HTTPError as exc:
+                if exc.code in {401, 403, 405}:
+                    return True
+            except (urllib.error.URLError, TimeoutError, OSError):
+                continue
+        return False
+
+    def ensure_running(self, *, wait_seconds: float = 15.0) -> bool:
+        if self._probe():
+            return True
+        command = self.command_argv()
+        if self._process is not None and self._process.poll() is None:
+            process = self._process
+        else:
+            process = subprocess.Popen(
+                command + ["--port", str(self.port)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=self.environment(),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                close_fds=True,
+            )
+            self._process = process
+        deadline = time.monotonic() + max(0.5, float(wait_seconds))
+        while time.monotonic() < deadline:
+            if self._probe():
+                return True
+            if process.poll() is not None:
+                break
+            time.sleep(0.25)
+        return False
+
     def status(self) -> OmniRouteRuntimeStatus:
         try:
             argv = self.resolve_command(install_if_missing=False)
@@ -335,14 +383,4 @@ class OmniRouteProvisioner:
         }
 
     def start(self) -> bool:
-        command = self.command_argv()
-        subprocess.Popen(
-            command + ["--port", str(self.port)],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=self.environment(),
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            close_fds=True,
-        )
-        return True
+        return self.ensure_running(wait_seconds=15.0)
