@@ -168,6 +168,16 @@ class UIBuildStoreTests(unittest.TestCase):
         self.assertIn("sharedSurface.setBuildTheme", manager)
         self.assertIn("jarvis:uibuildchanged", manager)
 
+
+    def test_every_ui_build_exposes_omniroute_settings_surface(self):
+        from quality_of_life.ui_builds import _BUILTIN_BUILDS, build_manager_script
+        manager = build_manager_script()
+        self.assertIn('id="juib-ai"', manager)
+        self.assertIn("open_omniroute_settings", manager)
+        self.assertIn("AI KEYS", manager)
+        self.assertGreaterEqual(len(_BUILTIN_BUILDS), 4)
+        self.assertTrue(all(build.protected for build in _BUILTIN_BUILDS))
+
     def test_manager_script_exposes_catalog_save_switch_and_rollback(self):
         script = build_manager_script()
         for token in (
