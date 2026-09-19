@@ -104,6 +104,7 @@ class JarvisVoiceBridge:
         ptt: Any | None = None,
         confirmation: Callable[[str], bool] | None = None,
         record_held: Callable[[Callable[[], bool]], str] | None = None,
+        on_output: Callable[[str], None] | None = None,
     ) -> None:
         self.controller = controller
         self.ears = ears
@@ -111,9 +112,13 @@ class JarvisVoiceBridge:
         self.ptt = ptt
         self.confirmation = confirmation or self._native_confirmation
         self.record_held = record_held
+        self.on_output = on_output
         self.thread: threading.Thread | None = None
         self.stop_event = threading.Event()
         self.stopped = False
+        self._speak_lock = threading.RLock()
+        self._last_spoken_text = ""
+        self._last_spoken_at = 0.0
         self.config: dict[str, Any] = dict(DEFAULT_CONFIG)
 
     def _load_components(self) -> None:
@@ -178,12 +183,26 @@ class JarvisVoiceBridge:
         self.thread.start()
 
     def _speak(self, text: str) -> None:
-        if self.mouth is None or not text:
+        message = str(text or "").strip()
+        if not message:
             return
-        try:
-            self.mouth.say(text)
-        except Exception as exc:
-            _log(f"speech output error: {type(exc).__name__}: {exc}")
+        now = __import__("time").monotonic()
+        with self._speak_lock:
+            if message == self._last_spoken_text and now - self._last_spoken_at < 1.5:
+                return
+            self._last_spoken_text = message
+            self._last_spoken_at = now
+            if self.on_output is not None:
+                try:
+                    self.on_output(message)
+                except Exception as exc:
+                    _log(f"output transcript callback error: {type(exc).__name__}: {exc}")
+            if self.mouth is None:
+                return
+            try:
+                self.mouth.say(message)
+            except Exception as exc:
+                _log(f"speech output error: {type(exc).__name__}: {exc}")
 
     def handle_transcript(self, text: str) -> Any:
         text = text.strip()
