@@ -45,7 +45,8 @@ NEURAL_MESH_BUILTIN = {
 .jn-earth-marker.saved{border-style:dashed}
 .jn-earth-marker.selected{box-shadow:0 0 0 3px rgba(105,216,255,.18),0 0 30px rgba(105,216,255,.78)}
 @keyframes jn-earth-pulse{0%{transform:scale(.58);opacity:.9}100%{transform:scale(1.75);opacity:0}}
-\n#jn-focus{position:absolute;left:24px;top:86px;max-width:420px;font-size:10px;color:#78b9dc;pointer-events:none}
+
+#jn-focus{position:absolute;left:24px;top:86px;max-width:420px;font-size:10px;color:#78b9dc;pointer-events:none}
 #jn-search{position:absolute;right:24px;top:20px;width:min(340px,36vw);box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:12px;padding:11px 13px;outline:none;color:#dff6ff;background:rgba(2,12,24,.72);box-shadow:0 0 28px rgba(20,130,220,.1);backdrop-filter:blur(10px)}
 #jn-kind,#jn-life{position:absolute;top:63px;width:145px;box-sizing:border-box;padding:7px 8px;border:1px solid rgba(91,190,255,.18);border-radius:9px;color:#88cfff;background:rgba(2,12,24,.68);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.1em;pointer-events:auto;text-transform:uppercase}
 #jn-kind{right:322px}#jn-life{right:165px}
