@@ -786,6 +786,7 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 const provider=document.getElementById("provider"), custom=document.getElementById("customWrap"), customInput=document.getElementById("customProvider"), key=document.getElementById("key"), connect=document.getElementById("connect"), refresh=document.getElementById("refresh"), dashboard=document.getElementById("dashboard"), runtime=document.getElementById("runtime"), message=document.getElementById("message"), providers=document.getElementById("providers");
 const elevenKey=document.getElementById("elevenKey"), voiceId=document.getElementById("voiceId"), voiceModel=document.getElementById("voiceModel"), voiceSave=document.getElementById("voiceSave"), voiceTest=document.getElementById("voiceTest"), voiceLoad=document.getElementById("voiceLoad"), voiceRuntime=document.getElementById("voiceRuntime"), voiceMessage=document.getElementById("voiceMessage"), voiceList=document.getElementById("voiceList");
 provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});async function detectProvider(){
+  if(provider.value!=="auto")return;
   const secret=key.value;
   if(!secret||!window.pywebview||!window.pywebview.api)return;
   try{
