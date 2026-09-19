@@ -9,7 +9,7 @@ class ReleaseContractTests(unittest.TestCase):
         required = (
             "matrix.os",
             "matrix.python",
-            "python -m compileall quality_of_life self_coding windows_maintenance scripts tests readiness.py",
+            "python -m compileall quality_of_life self_coding windows_maintenance scripts tests third_party/free_astra readiness.py",
             "python -m unittest discover -s tests -p 'test_*.py' -v",
             "Build single-file Jarvis.exe",
             "Smoke-test embedded visualizer",
