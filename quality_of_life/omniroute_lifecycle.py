@@ -57,8 +57,11 @@ class OmniRouteLifecycle:
             raise RuntimeError("OmniRoute startup command is empty")
         if argv[0] == "omniroute":
             resolved = shutil.which(argv[0])
-            if resolved:
-                argv[0] = resolved
+            if not resolved:
+                raise RuntimeError(
+                    f"OmniRoute is not running at {self.base_url} and the '{argv[0]}' command was not found"
+                )
+            argv[0] = resolved
             if "--no-open" not in argv:
                 argv.append("--no-open")
             return argv
