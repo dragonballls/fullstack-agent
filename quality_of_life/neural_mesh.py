@@ -177,7 +177,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 
 const S={
   nodes:[],links:[],windows:[],nodeMap:new Map(),selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
-  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthFollow:false,earthSun:[-.55,.68,.75],
+  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),pulses:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthFollow:false,earthSun:[-.55,.68,.75],
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
@@ -404,7 +404,7 @@ function render(now){
   gl.clearColor(0,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   const nowMs=performance.now();
   const cp=new Float32Array(nodes.length*3),cs=new Float32Array(nodes.length),ce=new Float32Array(nodes.length),ph=new Float32Array(nodes.length),se=new Float32Array(nodes.length),sh=new Float32Array(nodes.length),bi=new Float32Array(nodes.length),rt=new Float32Array(nodes.length*3),av=new Float32Array(nodes.length*3);
-  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);const variance=.84+hashUnit(n.id)*.30;cs[i]=(n.scale||1)*variance*(n.kind==="core"?2.35:n.kind==="subsystem"?1.20:.60);ce[i]=n.energy||.2;ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
+  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);const variance=.84+hashUnit(n.id)*.30,pulse=pulseStrength(n.id,nowMs),pulseWave=pulse*(.5+.5*Math.sin(nowMs*.016+i));cs[i]=(n.scale||1)*variance*(n.kind==="core"?2.35:n.kind==="subsystem"?1.20:.60)*(1+.16*pulseWave);ce[i]=Math.min(1,(n.energy||.2)+.34*pulseWave);ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
   upload(centerBuf,cp);upload(scaleBuf,cs);upload(energyBuf,ce);upload(phaseBuf,ph);upload(selectedBuf,se);upload(shapeBuf,sh);upload(birthBuf,bi);upload(rotBuf,rt);upload(angBuf,av);
   gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),nowMs);
   attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,centerBuf,1);attr(droplet,"aScale",1,scaleBuf,1);attr(droplet,"aEnergy",1,energyBuf,1);attr(droplet,"aPhase",1,phaseBuf,1);attr(droplet,"aSelected",1,selectedBuf,1);attr(droplet,"aShape",1,shapeBuf,1);attr(droplet,"aBirth",1,birthBuf,1);attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,nodes.length);
@@ -699,6 +699,14 @@ function spawn(pos,count){
   for(let i=0;i<Math.min(5,count||2);i++)S.particles.push({pos:[...pos],vel:[(Math.random()-.5)*1.1,(Math.random()-.5)*1.1,(Math.random()-.5)*1.1],life:0,size:5+Math.random()*8});
   if(S.particles.length>180)S.particles.splice(0,S.particles.length-180);
 }
+function pulseStrength(id,now){
+  const started=Number(S.pulses.get(id)||0);
+  if(!started)return 0;
+  const age=Math.max(0,now-started);
+  if(age>1150){S.pulses.delete(id);return 0;}
+  const phase=age/1150;
+  return (1-phase)*(1-phase);
+}
 function api(){return window.pywebview&&window.pywebview.api}
 async function pollAdvanced(){
   const a=api();if(!a||!a.neural_advanced_tick)return;
@@ -724,9 +732,23 @@ async function pollSnapshot(){
 async function pollEvents(){
   const a=api();if(!a||!a.neural_events)return;
   try{
+    const now=performance.now();
     const list=await a.neural_events(S.eventSequence,300);
-    for(const e of Array.isArray(list)?list:[]){S.eventSequence=Math.max(S.eventSequence,Number(e.sequence)||0);if(e.kind==="entity.created")S.births.set(e.entity_id,performance.now());else if(e.kind==="entity.retired")S.retirements.set(e.entity_id,performance.now());}
-    S.lastEvents=performance.now();
+    for(const e of Array.isArray(list)?list:[]){
+      S.eventSequence=Math.max(S.eventSequence,Number(e.sequence)||0);
+      if(e.kind==="entity.created"){
+        S.births.set(e.entity_id,now);
+        S.pulses.set(e.entity_id,now);
+      }else if(e.kind==="entity.retired"){
+        S.retirements.set(e.entity_id,now);
+        S.pulses.set(e.entity_id,now);
+      }else if(e.kind==="relation.created"||e.kind==="relation.updated"){
+        if(e.entity_id)S.pulses.set(e.entity_id,now);
+        if(e.payload&&e.payload.source)S.pulses.set(e.payload.source,now);
+        if(e.payload&&e.payload.target)S.pulses.set(e.payload.target,now);
+      }
+    }
+    S.lastEvents=now;
   }catch(_){}
 }
 async function pollLayouts(){
