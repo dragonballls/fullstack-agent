@@ -260,6 +260,8 @@ System-coherence mandate:
 - Prefer existing shared abstractions, adapters, events, and contracts over duplicating logic.
 - After implementing, test the changed feature and the integration paths it can affect. Check for broken imports, stale APIs, contradictory configuration, missing packaging assets, and inconsistent user-facing behavior.
 - Do not declare a feature complete merely because its local unit test passes; verify that it is wired into the surrounding Jarvis workflow where applicable.
+- Preserve or improve the repository quality floor; never lower a verified quality level, remove a protected contract, or loosen a performance budget.
+- Treat UI quality as a monotonic ladder: only equal-or-higher verified rungs may become the new baseline; a richer UI must not trade away existing functionality, safety, integration, or performance.
 
 Implement the goal directly, then leave the repository in a clean, testable, coherently integrated state."""
 
@@ -294,6 +296,18 @@ Implement the goal directly, then leave the repository in a clean, testable, coh
                 output = (result.stdout + "\n" + result.stderr).strip()
                 raise SelfCodingError(f"Verification failed for {' '.join(command)}.\n{output[-12000:]}")
 
+        baseline = getattr(self, "_verification_baseline", "")
+        quality_floor = self.repo / "quality_floor.json"
+        quality_gate = self.repo / "scripts" / "verify_quality_floor.py"
+        if quality_floor.is_file() and quality_gate.is_file():
+            command = (sys.executable, "-m", "scripts.verify_quality_floor")
+            if baseline:
+                command += ("--baseline", baseline)
+            result = self._run(command)
+            if result.returncode != 0:
+                output = (result.stdout + "\n" + result.stderr).strip()
+                raise SelfCodingError(f"Quality-floor verification failed.\n{output[-12000:]}")
+
         status = self._git("status", "--porcelain")
         if status.returncode != 0:
             raise SelfCodingError("Unable to verify the post-test Git state.")
@@ -324,6 +338,7 @@ Implement the goal directly, then leave the repository in a clean, testable, coh
 
         self.validate_repo()
         branch, baseline, base_branch = self._new_branch(goal)
+        self._verification_baseline = baseline
         checkpoint_id = branch.split("/", 2)[-1]
         created_at = datetime.now(timezone.utc).isoformat()
         commits: list[str] = []
