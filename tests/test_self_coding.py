@@ -104,6 +104,9 @@ class SelfCodingTests(unittest.TestCase):
             "existing shared abstractions",
             "integration paths",
             "not declare a feature complete",
+            "quality floor",
+            "monotonic ladder",
+            "performance budget",
         ):
             self.assertIn(phrase, prompt)
 
