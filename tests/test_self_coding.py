@@ -93,6 +93,20 @@ class SelfCodingTests(unittest.TestCase):
         self.assertEqual((root / "verified.txt").read_text(encoding="utf-8"), "verified\n")
         self.assertEqual(self.git(root, "log", "-1", "--pretty=%s"), "agent: verified self-coding change")
 
+    def test_self_coding_prompt_requires_repository_wide_coherence(self) -> None:
+        root = self.make_repo()
+        prompt = SelfCodingAgent._prompt("improve a capability")
+        for phrase in (
+            "one integrated assistant",
+            "capability registry",
+            "UI/voice surfaces",
+            "packaging implications",
+            "existing shared abstractions",
+            "integration paths",
+            "not declare a feature complete",
+        ):
+            self.assertIn(phrase, prompt)
+
     def test_direct_main_publication_is_disabled(self) -> None:
         root = self.make_repo()
         config = SelfCodingConfig(
