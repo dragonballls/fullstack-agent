@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 import time
 
 
@@ -18,6 +19,7 @@ class NeuralDiscovery:
         self._seen_accounts: set[str] = set()
         self._seen_services: set[str] = set()
         self._last_net: tuple[int, int, float] | None = None
+        self._cpu_sample_initialized = False
 
     @staticmethod
     def _app_id(app: Any) -> str:
@@ -36,11 +38,13 @@ class NeuralDiscovery:
             label = str(getattr(app, "name", "") or "").strip() or app_id
             seen.add(app_id)
             folded = label.casefold()
-            subsystem = (
-                "jarvis.browser"
-                if any(token in folded for token in ("opera", "edge", "chrome", "firefox", "browser"))
-                else "jarvis.system"
-            )
+            identity = " ".join((
+                folded,
+                str(getattr(app, "id", "")).casefold(),
+                str(getattr(app, "source", "")).casefold(),
+            ))
+            browser_match = re.search(r"(?<![a-z])(opera|edge|chrome|firefox|browser)(?![a-z])", identity)
+            subsystem = "jarvis.browser" if browser_match else "jarvis.system"
             node = self.world.upsert(
                 app_id,
                 EntityKind.APPLICATION,
@@ -214,7 +218,12 @@ class NeuralDiscovery:
         except ImportError:
             return 0
         now = time.monotonic()
-        cpu = float(psutil.cpu_percent(interval=None))
+        if not self._cpu_sample_initialized:
+            psutil.cpu_percent(interval=None)
+            self._cpu_sample_initialized = True
+            cpu = float(psutil.cpu_percent(interval=0.1))
+        else:
+            cpu = float(psutil.cpu_percent(interval=None))
         memory = psutil.virtual_memory()
         swap = psutil.swap_memory()
         try:
