@@ -155,13 +155,20 @@ def prepare(destination: Path) -> None:
             detail = "npm install returned a non-zero exit status"
             raise RuntimeError(f"OmniRoute package installation failed in the release build: {detail[-5000:]}")
 
-        # Keep npm lifecycle scripts enabled so the published OmniRoute package
-        # can repair platform-specific native modules in the actual installed
-        # package context before packaging.
+        # npm 11 may suppress lifecycle scripts even with ignore-scripts=false.
+        # Repair OmniRoute's standalone native payload explicitly from the
+        # platform-correct nested dependency install instead of assuming npm
+        # executed the package postinstall.
         shutil.copy2(bundled_node, staging / "node.exe")
+        package_root = staging / "node_modules" / "omniroute"
+        root_native = package_root / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
+        app_native = package_root / "dist" / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
+        if root_native.is_file():
+            app_native.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root_native, app_native)
         critical_native = [
-            staging / "node_modules" / "omniroute" / "dist" / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node",
-            staging / "node_modules" / "omniroute" / "dist" / "node_modules" / "wreq-js",
+            app_native,
+            package_root / "node_modules" / "wreq-js",
         ]
         if not critical_native[0].is_file():
             raise RuntimeError("Prepared OmniRoute runtime is missing its repaired Windows better-sqlite3 binary")
