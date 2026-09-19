@@ -152,12 +152,10 @@ def prepare(destination: Path) -> None:
             detail = "npm install returned a non-zero exit status"
             raise RuntimeError(f"OmniRoute package installation failed in the release build: {detail[-5000:]}")
 
-        # The published OmniRoute package requires its postinstall hook because
-        # the standalone Next.js bundle contains platform-specific native modules.
-        # Keep npm lifecycle scripts enabled so the hook runs in the actual installed
-        # package context and the Windows-native binaries are repaired before packaging.
-
-                shutil.copy2(bundled_node, staging / "node.exe")
+        # Keep npm lifecycle scripts enabled so the published OmniRoute package
+        # can repair platform-specific native modules in the actual installed
+        # package context before packaging.
+        shutil.copy2(bundled_node, staging / "node.exe")
         critical_native = [
             staging / "node_modules" / "omniroute" / "dist" / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node",
             staging / "node_modules" / "omniroute" / "dist" / "node_modules" / "wreq-js",
