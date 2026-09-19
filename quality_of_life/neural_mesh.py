@@ -416,7 +416,7 @@ function render(now){
   gl.clearColor(0,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   const nowMs=performance.now();
   const cp=new Float32Array(nodes.length*3),cs=new Float32Array(nodes.length),ce=new Float32Array(nodes.length),ph=new Float32Array(nodes.length),se=new Float32Array(nodes.length),sh=new Float32Array(nodes.length),bi=new Float32Array(nodes.length),rt=new Float32Array(nodes.length*3),av=new Float32Array(nodes.length*3);
-  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);const variance=.84+hashUnit(n.id)*.30,pulse=pulseStrength(n.id,nowMs),pulseWave=pulse*(.5+.5*Math.sin(nowMs*.016+i));cs[i]=(n.scale||1)*variance*(n.kind==="core"?2.35:n.kind==="subsystem"?1.20:.60)*(1+.16*pulseWave);ce[i]=Math.min(1,(n.energy||.2)+.34*pulseWave);ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
+  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);const variance=.84+hashUnit(n.id)*.30,pulse=pulseStrength(n.id,nowMs),retire=retirementStrength(n.id,nowMs),pulseWave=pulse*(.5+.5*Math.sin(nowMs*.016+i));cs[i]=(n.scale||1)*variance*(n.kind==="core"?2.35:n.kind==="subsystem"?1.20:.60)*(1+.16*pulseWave)*(retire?.24+retire*.76:1);ce[i]=Math.min(1,(n.energy||.2)+.34*pulseWave)*(retire?.20+retire*.80:1);ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
   upload(centerBuf,cp);upload(scaleBuf,cs);upload(energyBuf,ce);upload(phaseBuf,ph);upload(selectedBuf,se);upload(shapeBuf,sh);upload(birthBuf,bi);upload(rotBuf,rt);upload(angBuf,av);
   gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),nowMs);
   attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,centerBuf,1);attr(droplet,"aScale",1,scaleBuf,1);attr(droplet,"aEnergy",1,energyBuf,1);attr(droplet,"aPhase",1,phaseBuf,1);attr(droplet,"aSelected",1,selectedBuf,1);attr(droplet,"aShape",1,shapeBuf,1);attr(droplet,"aBirth",1,birthBuf,1);attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,nodes.length);
@@ -535,7 +535,9 @@ function renderEarth(now){
   S.yaw=oldYaw;S.pitch=oldPitch;S.distance=oldDistance;S.target=oldTarget;
   ui.querySelector("#jn-title").textContent="GOD'S EYE";
   renderEarthLabels();renderEarthSensor();
-  ui.querySelector("#jn-status").textContent="PLANETARY SENSOR · "+locators.length+" AUTHORIZED TARGETS · "+(current?"CURRENT FEED LIVE":"CURRENT FEED OFFLINE");
+  const sensorState=String(S.earthData.sensor_state||"sensor-status-unavailable");
+  const feedLabel={"current-live":"CURRENT FEED LIVE","authorized-feeds-live":"AUTHORIZED FEEDS LIVE","feeds-unavailable-or-unauthorized":"FEEDS UNAVAILABLE / NOT AUTHORIZED","sensor-status-unavailable":"SENSOR STATUS UNAVAILABLE"}[sensorState]||sensorState.toUpperCase();
+  ui.querySelector("#jn-status").textContent="PLANETARY SENSOR · "+locators.length+" AUTHORIZED TARGETS · "+feedLabel;
 }
 async function pollEarth(){
   const a=api();if(!a||!a.gods_eye_globe)return;
@@ -722,6 +724,14 @@ function pulseStrength(id,now){
   if(age>1150){S.pulses.delete(id);return 0;}
   const phase=age/1150;
   return (1-phase)*(1-phase);
+}
+function retirementStrength(id,now){
+  const started=Number(S.retirements.get(id)||0);
+  if(!started)return 0;
+  const age=Math.max(0,now-started);
+  if(age>1400){S.retirements.delete(id);return 0;}
+  const phase=age/1400;
+  return Math.max(0,1-phase);
 }
 function api(){return window.pywebview&&window.pywebview.api}
 async function pollAdvanced(){
