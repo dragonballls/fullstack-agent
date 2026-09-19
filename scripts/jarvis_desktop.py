@@ -957,12 +957,12 @@ class FullstackJarvisHost:
         result = configure(api_key, voice_id=voice_id or None, model_id=model_id or None)
         test = self.test_elevenlabs()
         result["tested"] = bool(test.get("ok"))
-        result["message"] = "ElevenLabs voice connected and tested" if result["tested"] else "ElevenLabs key saved; connection test failed"
+        result["message"] = "ElevenLabs voice connected and speech-tested" if result["tested"] else "ElevenLabs key saved; speech test failed"
         return result
 
     def test_elevenlabs(self) -> dict[str, Any]:
         voice = getattr(self.voice, "elevenlabs", None)
-        test = getattr(voice, "test", None)
+        test = getattr(voice, "test_speech", None)
         return test() if callable(test) else {"ok": False, "tested": False, "message": "ElevenLabs voice engine is unavailable"}
 
     def elevenlabs_voices(self) -> dict[str, Any]:
