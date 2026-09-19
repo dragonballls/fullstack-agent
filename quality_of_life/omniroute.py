@@ -77,19 +77,20 @@ class OmniRouteConnection:
         return configured.split()
 
     def _start(self) -> bool:
-        command = self._command()
+        configured_command = os.environ.get("JARVIS_OMNIROUTE_COMMAND", "").strip()
         provisioner = OmniRouteProvisioner(self.base_url)
-        executable = shutil.which(command[0])
-        if executable is None:
-            if command[0] == "omniroute":
-                try:
-                    command = provisioner.command_argv()
-                except RuntimeError:
-                    return False
-            else:
+        if configured_command:
+            command = self._command()
+            executable = shutil.which(command[0])
+            if executable is None and not os.path.isfile(command[0]):
                 return False
-        elif len(command) == 1:
-            command[0] = executable
+            if executable and len(command) == 1:
+                command[0] = executable
+        else:
+            try:
+                command = provisioner.command_argv()
+            except RuntimeError:
+                return False
         env = provisioner.environment()
         parsed = urllib.parse.urlparse(self.base_url)
         env["PORT"] = str(parsed.port or 20128)
