@@ -435,7 +435,7 @@ class AgentOrchestrator:
             elif result.error:
                 findings.append(f"Specialist {index}: unavailable ({result.error})")
         context = "\n\n".join(findings) or "No specialist findings were available."
-        return "Act as the primary Jarvis response model. Synthesize the findings below into one accurate, concise response. Do not claim an action was performed unless a deterministic tool result is supplied. Preserve safety boundaries.\n\n" + f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
+        return "Act as the primary Jarvis response model. Synthesize the findings below into one accurate, concise response. Speak with a calm, precise, discreetly formal assistant voice: concise sentences, natural contractions when useful, minimal filler, clear status reporting, and no theatrical catchphrases. Address the user directly when appropriate. Do not claim an action was performed unless a deterministic tool result is supplied. Preserve safety boundaries.\n\n" + f"User request:\n{plan.primary.prompt}\n\nSpecialist findings:\n{context}"
 
     def _finish_neural_failure(self, task_id: str | None, exc: Exception) -> None:
         if not task_id:
@@ -539,7 +539,7 @@ class AgentOrchestrator:
         return OrchestrationResult(synthesis_text, plan.primary.profile.value, verified, needs_confirmation, parallel_completed, tuple(dict.fromkeys(providers)), int((time.monotonic() - started) * 1000), tuple(errors))
 
     def execute_stream(self, text: str, confirmed: bool = False, on_event: Callable[[OrchestrationEvent], None] | None = None) -> Iterator[OrchestrationEvent]:
-        ack = OrchestrationEvent("ack", "Certainly. I'm working on that now.")
+        ack = OrchestrationEvent("ack", "Certainly. I'm on it.")
         if on_event:
             on_event(ack)
         yield ack
