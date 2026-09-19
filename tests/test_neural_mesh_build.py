@@ -32,6 +32,9 @@ class NeuralMeshBuildTests(unittest.TestCase):
             "screen-space LOD", "lodDetail", "depthVisible", "proximityShapeCode",
             "drawArrays(gl.POINTS", "Math.min(5200,7000-list.length)",
             "S.lodStats.culled", "vLocal.x-vLocal.z", "26000",
+            "microPosBuf", "microSizeBuf", "microEnergyBuf", "microPhaseBuf",
+            "gl.STATIC_DRAW", "microBuffersReady", "uDeepField", "uAnchor",
+            "gl.drawArrays(gl.POINTS,0,S.microCount", "jn-core-heart",
         ):
             self.assertIn(token, script)
 
