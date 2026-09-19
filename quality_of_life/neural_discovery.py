@@ -15,6 +15,7 @@ class NeuralDiscovery:
         self._seen_processes: set[str] = set()
         self._seen_pages: set[str] = set()
         self._seen_accounts: set[str] = set()
+        self._seen_services: set[str] = set()
 
     @staticmethod
     def _app_id(app: Any) -> str:
@@ -119,6 +120,48 @@ class NeuralDiscovery:
         self._seen_pages = seen
         return count
 
+    def sync_services(self) -> int:
+        from .neural_world import EntityKind, LifecycleState
+        try:
+            services = self.runtime._tool("processes").list_services()
+        except Exception:
+            return 0
+        count = 0
+        seen: set[str] = set()
+        for service in services or ():
+            service_name = str(getattr(service, "name", "")).strip()
+            if not service_name:
+                continue
+            entity_id = "service:" + service_name.casefold()
+            seen.add(entity_id)
+            state = str(getattr(service, "state", "unknown"))
+            active = "RUNNING" in state.casefold()
+            node = self.world.upsert(
+                entity_id,
+                EntityKind.SERVICE,
+                str(getattr(service, "display_name", service_name))[:220],
+                source="windows.services",
+                status=state[:120],
+                lifecycle=LifecycleState.ACTIVE if active else LifecycleState.DORMANT,
+                energy=0.48 if active else 0.18,
+                scale=0.72,
+                parent_id="jarvis.system",
+                metadata={
+                    "service_name": service_name[:120],
+                    "display_name": str(getattr(service, "display_name", service_name))[:220],
+                    "auto_layout": True,
+                },
+            )
+            try:
+                self.world.relate("jarvis.system", node.id, "runs_service", 0.35 if active else 0.16)
+            except KeyError:
+                pass
+            count += 1
+        for stale in self._seen_services - seen:
+            self.world.retire(stale, remove=False)
+        self._seen_services = seen
+        return count
+
     def sync_accounts(self) -> int:
         from .neural_world import EntityKind, LifecycleState
         try:
@@ -157,6 +200,7 @@ class NeuralDiscovery:
             "processes": self.sync_processes(),
             "browser_pages": self.sync_browser_pages(),
             "accounts": self.sync_accounts(),
+            "services": self.sync_services(),
         }
 
     def sync(self) -> dict[str, int]:
