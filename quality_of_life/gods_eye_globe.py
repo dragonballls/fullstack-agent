@@ -99,7 +99,7 @@ def globe_payload(runtime: Any) -> dict[str, object]:
         sensor_state = "current-live"
     elif live_provider_count:
         sensor_state = "authorized-feeds-live"
-    elif provider_status:
+    elif current or provider_status:
         sensor_state = "feeds-unavailable-or-unauthorized"
     else:
         sensor_state = "sensor-status-unavailable"
