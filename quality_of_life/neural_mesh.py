@@ -440,17 +440,19 @@ function renderPointField(now,c,mvp){
   buildMicroField();
   const v=new Float32Array(16);lookAt(v,c.eye,S.target);
   const core=S.nodes.find(function(n){return n.id==="jarvis.core";}),anchor=core?nodePosition(core):[0,0,0];
-  const full=new Set(S.activeNodeIds||[]),pp=[],ss=[],ee=[],ph=[];
-  const candidates=S.nodes.concat(S.ambientNodes),candidateCap=14000;
-  for(let i=0;i<candidates.length&&pp.length/3<candidateCap;i++){
-    const n=candidates[i];if(full.has(n.id))continue;
-    const p=nodePosition(n),rel=sub(p,c.eye),d=Math.hypot(rel[0],rel[1],rel[2]),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];
-    if(d>170||depth<-.10*d)continue;
-    pp.push(p[0],p[1],p[2]);ss.push(Math.max(.45,(n.scale||.5)*1.4));ee.push(Math.min(1,Number(n.energy)||.18));ph.push(hashUnit("point|"+n.id));
-  }
-  S.pointCount=Math.floor(pp.length/3);S.lastPointBuild=now;
-  upload(fieldPosBuf,new Float32Array(pp));upload(fieldSizeBuf,new Float32Array(ss));upload(fieldEnergyBuf,new Float32Array(ee));upload(fieldPhaseBuf,new Float32Array(ph));
   gl.useProgram(fieldProg);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uView"),false,v);gl.uniform1f(gl.getUniformLocation(fieldProg,"uTime"),now);
+  if(now-S.lastPointBuild>=S.pointBuildMs){
+    const full=new Set(S.activeNodeIds||[]),pp=[],ss=[],ee=[],ph=[];
+    const candidates=S.nodes.concat(S.ambientNodes),candidateCap=14000;
+    for(let i=0;i<candidates.length&&pp.length/3<candidateCap;i++){
+      const n=candidates[i];if(full.has(n.id))continue;
+      const p=nodePosition(n),rel=sub(p,c.eye),d=Math.hypot(rel[0],rel[1],rel[2]),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];
+      if(d>170||depth<-.10*d)continue;
+      pp.push(p[0],p[1],p[2]);ss.push(Math.max(.45,(n.scale||.5)*1.4));ee.push(Math.min(1,Number(n.energy)||.18));ph.push(hashUnit("point|"+n.id));
+    }
+    S.pointCount=Math.floor(pp.length/3);S.lastPointBuild=now;
+    upload(fieldPosBuf,new Float32Array(pp));upload(fieldSizeBuf,new Float32Array(ss));upload(fieldEnergyBuf,new Float32Array(ee));upload(fieldPhaseBuf,new Float32Array(ph));
+  }
   gl.uniform3fv(gl.getUniformLocation(fieldProg,"uAnchor"),new Float32Array([0,0,0]));gl.uniform1f(gl.getUniformLocation(fieldProg,"uDeepField"),0);
   attr(fieldProg,"aPos",3,fieldPosBuf);attr(fieldProg,"aSize",1,fieldSizeBuf);attr(fieldProg,"aEnergy",1,fieldEnergyBuf);attr(fieldProg,"aPhase",1,fieldPhaseBuf);gl.drawArrays(gl.POINTS,0,S.pointCount);
   if(S.microBuffersReady){
