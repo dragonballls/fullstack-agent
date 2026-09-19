@@ -542,7 +542,8 @@ function setConsoleCollapsed(collapsed){
   try{localStorage.setItem("jarvis.neuralCommand.collapsed",S.consoleCollapsed?"1":"0");}catch(_){}
   requestAnimationFrame(function(){renderNeuralConsolePlacement(true);});
 }
-function renderCoreStructure(){const el=ui.querySelector("#jn-core-structure");if(!el)return;const core=S.nodes.find(function(n){return n.id==="jarvis.core";});if(!core)return;const p=worldToScreen(nodePosition(core));if(!p){el.style.opacity="0";return;}const depth=p[2]||16,scale=clampNumber(.72+14/(depth+24),.72,1.28),size=188*scale;el.style.width=size+"px";el.style.height=size+"px";el.style.transform="translate3d("+Math.round(p[0]-size*.5)+"px,"+Math.round(p[1]-size*.5)+"px,0) scale("+scale.toFixed(3)+")";el.style.opacity=(S.view==="earth"?"0":String(clampNumber(1.05-depth/180,.35,1)));}\nfunction renderNeuralConsolePlacement(force){
+function renderCoreStructure(){const el=ui.querySelector("#jn-core-structure");if(!el)return;const core=S.nodes.find(function(n){return n.id==="jarvis.core";});if(!core)return;const p=worldToScreen(nodePosition(core));if(!p){el.style.opacity="0";return;}const depth=p[2]||16,scale=clampNumber(.72+14/(depth+24),.72,1.28),size=188*scale;el.style.width=size+"px";el.style.height=size+"px";el.style.transform="translate3d("+Math.round(p[0]-size*.5)+"px,"+Math.round(p[1]-size*.5)+"px,0) scale("+scale.toFixed(3)+")";el.style.opacity=(S.view==="earth"?"0":String(clampNumber(1.05-depth/180,.35,1)));}
+function renderNeuralConsolePlacement(force){
   const now=performance.now();
   if(!force&&now-S.lastConsoleLayout<S.consoleLayoutMs)return;
   S.lastConsoleLayout=now;
