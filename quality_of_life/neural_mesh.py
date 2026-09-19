@@ -178,7 +178,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 const S={
   nodes:[],links:[],windows:[],nodeMap:new Map(),selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
   localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),pulses:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthFollow:false,earthSun:[-.55,.68,.75],
-  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
+  lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,handDragLastTime:0,handDragLastDelta:[0,0,0],
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
@@ -352,9 +352,20 @@ function buildAmbientField(realNodes){
 }
 function visualNodes(){return S.nodes.concat(S.ambientNodes);}
 function activeNodes(cam){
-  const max=S.mode==="background"?720:S.quality==="performance"?1500:2600,c=cam||camera(),source=visualNodes();
-  const visible=source.filter(function(n){const p=worldToScreen(nodePosition(n),c);return p!==null&&p[0]>-220&&p[0]<canvas.clientWidth+220&&p[1]>-220&&p[1]<canvas.clientHeight+220;});
-  return visible.slice().sort(function(a,b){if(a.kind==="core")return-1;if(b.kind==="core")return 1;const da=Math.hypot(a.position[0]-c.eye[0],a.position[1]-c.eye[1],a.position[2]-c.eye[2]),db=Math.hypot(b.position[0]-c.eye[0],b.position[1]-c.eye[1],b.position[2]-c.eye[2]);return(b.energy||0)-(a.energy||0)+(da-db)*.0005;}).slice(0,max);
+  const max=S.mode==="background"?720:S.quality==="performance"?1500:2600,c=cam||camera();
+  const inViewport=function(n){const p=worldToScreen(nodePosition(n),c);return p!==null&&p[0]>-220&&p[0]<canvas.clientWidth+220&&p[1]>-220&&p[1]<canvas.clientHeight+220;};
+  const rank=function(list){
+    return list.filter(inViewport).slice().sort(function(a,b){
+      if(a.kind==="core")return-1;if(b.kind==="core")return 1;
+      const ap=nodePosition(a),bp=nodePosition(b);
+      const da=Math.hypot(ap[0]-c.eye[0],ap[1]-c.eye[1],ap[2]-c.eye[2]),db=Math.hypot(bp[0]-c.eye[0],bp[1]-c.eye[1],bp[2]-c.eye[2]);
+      return(b.energy||0)-(a.energy||0)+(da-db)*.0005;
+    });
+  };
+  const real=rank(S.nodes.filter(function(n){return!(n.metadata&&n.metadata.visual_only)}));
+  const ambient=rank(S.ambientNodes);
+  const keptReal=real.slice(0,max),remaining=Math.max(0,max-keptReal.length);
+  return keptReal.concat(ambient.slice(0,remaining));
 }
 function simulateFluid(dt,nodes){
   if(S.mode==="background"||S.quality==="minimal")return;
@@ -398,6 +409,7 @@ function render(now){
   if(S.mode==="foreground"&&S.frameMs<18&&S.nodes.length<800)S.quality="maximum";
   resize();
   const c=camera();
+  renderCoreStructure();
   const nodes=activeNodes(c);simulateFluid(dt,nodes);
   const aspect=canvas.width/Math.max(1,canvas.height),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
   perspective(proj,Math.PI/3,aspect,.05,2000);lookAt(view,c.eye,S.target);multiply(mvp,proj,view);
@@ -518,9 +530,11 @@ function renderEarth(now){
     gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),now);
     attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,earthCenterBuf,1);attr(droplet,"aScale",1,earthScaleBuf,1);attr(droplet,"aEnergy",1,earthEnergyBuf,1);attr(droplet,"aPhase",1,earthPhaseBuf,1);attr(droplet,"aSelected",1,earthSelectedBuf,1);attr(droplet,"aShape",1,earthShapeBuf,1);attr(droplet,"aBirth",1,earthBirthBuf,1);attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,locators.length);
   }
+  renderEarthMarkers();
+  const current=Boolean(S.earthData.authorized_current);
   S.yaw=oldYaw;S.pitch=oldPitch;S.distance=oldDistance;S.target=oldTarget;
   ui.querySelector("#jn-title").textContent="GOD'S EYE";
-  renderEarthLabels();renderEarthMarkers();renderEarthSensor();
+  renderEarthLabels();renderEarthSensor();
   ui.querySelector("#jn-status").textContent="PLANETARY SENSOR · "+locators.length+" AUTHORIZED TARGETS · "+(current?"CURRENT FEED LIVE":"CURRENT FEED OFFLINE");
 }
 async function pollEarth(){
@@ -572,7 +586,7 @@ async function pollHand(){
     if(Boolean(sample.pinch)&&!S.handPinching){
       const target=document.elementFromPoint(x,y);const surface=target&&target.closest?target.closest(".jn-spatial-window"):null;
       if(surface){S.handWindow=surface;S.handX=x;S.handY=y;}else{const node=pick(x,y);if(node){S.handNode=node.id;setSelected(node.id);S.handX=x;S.handY=y;}}
-      S.handPinching=true;
+      S.handDragLastTime=performance.now();S.handDragLastDelta=[0,0,0];S.handPinching=true;
     }else if(Boolean(sample.pinch)&&S.handPinching&&S.handWindow){
       const dx=x-S.handX,dy=y-S.handY;await moveHandWindow(S.handWindow,dx,dy);S.handX=x;S.handY=y;
     }else if(Boolean(sample.pinch)&&S.handPinching&&S.handNode){
@@ -581,8 +595,10 @@ async function pollHand(){
       if(node){
         const p=worldToScreen(nodePosition(node));
         if(p){
-          const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(node.id)||[0,0,0];
+          const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(node.id)||[0,0,0],now=performance.now(),dragDt=Math.max(8,now-S.handDragLastTime)*.001;
           S.localOffsets.set(node.id,add(old,delta));
+          S.velocities.set(node.id,[delta[0]/dragDt*.12,delta[1]/dragDt*.12,delta[2]/dragDt*.12]);
+          S.handDragLastTime=now;S.handDragLastDelta=delta;
           spawn(nodePosition(node),Math.max(1,Math.floor(Math.hypot(dx,dy)/16)));
         }
       }
