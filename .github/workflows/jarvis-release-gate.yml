@@ -20,7 +20,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality-floor:
+    name: Quality floor / no downgrade
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install quality-floor dependencies
+        run: python -m pip install -r quality_of_life/requirements.txt
+      - name: Enforce repository quality floor
+        run: python scripts/verify_quality_floor.py --baseline "${{ github.event.pull_request.base.sha || github.event.before }}"
+
   regression:
+    needs: quality-floor
     name: Regression / ${{ matrix.os }} / Python ${{ matrix.python }}
     strategy:
       fail-fast: false
