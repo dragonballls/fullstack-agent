@@ -35,21 +35,21 @@ class NeuralDiscovery:
             app_id = self._app_id(app)
             label = str(getattr(app, "name", "") or "").strip() or app_id
             seen.add(app_id)
+            folded = label.casefold()
+            subsystem = (
+                "jarvis.browser"
+                if any(token in folded for token in ("opera", "edge", "chrome", "firefox", "browser"))
+                else "jarvis.system"
+            )
             node = self.world.upsert(
-                app_id, EntityKind.APPLICATION,
+                app_id,
+                EntityKind.APPLICATION,
                 label,
                 source="windows.applications",
                 status="installed",
                 lifecycle=LifecycleState.MATURE,
-            folded = str(getattr(app, "name", "")).casefold()
-            subsystem = "jarvis.browser" if any(token in folded for token in ("opera", "edge", "chrome", "firefox", "browser")) else "jarvis.system"
-            node = self.world.upsert(
-                app_id, EntityKind.APPLICATION,
-                label,
-                source="windows.applications",
-                status="installed",
-                lifecycle=LifecycleState.MATURE,
-                energy=0.35, scale=0.9,
+                energy=0.35,
+                scale=0.9,
                 parent_id=subsystem,
                 metadata={
                     "publisher": str(getattr(app, "publisher", ""))[:200],
