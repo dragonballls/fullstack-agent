@@ -182,6 +182,14 @@ jobs:
               Start-Sleep -Milliseconds 500
             }
             if (-not $ready) { throw 'Embedded Fullstack visualizer did not become ready within 90 seconds' }
+            $omniDeadline = (Get-Date).AddSeconds(60)
+            $omniReady = $false
+            while ((Get-Date) -lt $omniDeadline) {
+              $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
+              if ($tcp) { $omniReady = $true; break }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $omniReady) { throw 'Embedded OmniRoute did not become ready before Jarvis.exe was stopped' }
           }
           catch {
             Write-Host '=== Jarvis process diagnostics ==='
