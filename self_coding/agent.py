@@ -244,8 +244,8 @@ Implement the goal directly, then leave the repository clean and testable."""
             raise SelfCodingError("A non-empty coding goal is required.")
         if self.config.max_passes < 1:
             raise SelfCodingError("max_passes must be at least 1.")
-        if self.config.publish_main and self.config.push_branch:
-            raise SelfCodingError("publish_main and push_branch cannot be combined")
+        if self.config.publish_main:
+            raise SelfCodingError("Direct main publication is disabled; create the preview and use self_coding.approve instead.")
 
         self.validate_repo()
         if self.checkpoints.active_preview(self.repo) is not None:
@@ -336,13 +336,12 @@ Implement the goal directly, then leave the repository clean and testable."""
         if published_head.returncode != 0:
             raise SelfCodingError("Unable to record the promoted commit.")
         published = published_head.stdout.strip()
+        self.checkpoints.update(record.checkpoint_id, status="published", published_head=published)
+        self._git("branch", "-D", record.preview_branch)
         if push:
             pushed = self._git("push", "origin", "main")
             if pushed.returncode != 0:
-                raise SelfCodingError(pushed.stderr.strip() or "Preview was promoted locally, but pushing main failed.")
-
-        self.checkpoints.update(record.checkpoint_id, status="published", published_head=published)
-        self._git("branch", "-D", record.preview_branch)
+                raise SelfCodingError("Preview was promoted locally, but pushing main failed; local checkpoint state remains published.")
         return "main"
 
     def undo(self, *, push: bool = True) -> str:
@@ -396,11 +395,15 @@ Implement the goal directly, then leave the repository clean and testable."""
         except Exception:
             self._git("reset", "--hard", original_head)
             raise
+        clean_after_undo = self._git("status", "--porcelain")
+        if clean_after_undo.returncode != 0 or clean_after_undo.stdout.strip():
+            self._git("reset", "--hard", original_head)
+            raise SelfCodingError("Undo verification left the repository dirty; the undo was discarded.")
+        self.checkpoints.update(published.checkpoint_id, status="reverted", revert_commit=undo_head.stdout.strip())
         if push:
             pushed = self._git("push", "origin", "main")
             if pushed.returncode != 0:
-                raise SelfCodingError(pushed.stderr.strip() or "Undo committed locally, but pushing main failed.")
-        self.checkpoints.update(published.checkpoint_id, status="reverted", revert_commit=undo_head.stdout.strip())
+                raise SelfCodingError("Undo committed locally, but pushing main failed; local checkpoint state remains reverted.")
         return "main"
 
     def status(self) -> dict[str, object]:
