@@ -29,6 +29,26 @@ class OmniRouteProvisionerTests(unittest.TestCase):
             import shutil
             shutil.rmtree(root, ignore_errors=True)
 
+    def test_ensure_running_starts_headless_gateway_and_waits_for_probe(self):
+        provisioner = OmniRouteProvisioner()
+        process = unittest.mock.Mock()
+        process.poll.return_value = None
+        with patch.object(provisioner, "command_argv", return_value=["omniroute", "--no-open"]), patch.object(
+            provisioner, "_probe", side_effect=(False, True)
+        ), patch("subprocess.Popen", return_value=process) as popen:
+            self.assertTrue(provisioner.ensure_running(wait_seconds=1))
+        popen.assert_called_once()
+        self.assertEqual(popen.call_args.args[0], ["omniroute", "--no-open", "--port", "20128"])
+
+    def test_status_never_exposes_provider_credentials(self):
+        provisioner = OmniRouteProvisioner()
+        with patch.object(provisioner, "resolve_command", return_value=("omniroute",)), patch.object(
+            provisioner, "_version", return_value="3.8.51"
+        ):
+            status = provisioner.status().as_dict()
+        self.assertNotIn("api_key", status)
+        self.assertNotIn("secret", repr(status))
+
     def test_provider_key_is_sent_only_over_stdin(self):
         provisioner = OmniRouteProvisioner(data_dir=Path(tempfile.mkdtemp(prefix="jarvis-omni-data-")))
         with patch.object(provisioner, "command_argv", return_value=["omniroute"]):
