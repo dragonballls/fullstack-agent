@@ -307,38 +307,30 @@ function activeNodes(cam){
   return visible.slice().sort(function(a,b){if(a.kind==="core")return-1;if(b.kind==="core")return 1;const da=Math.hypot(a.position[0]-c.eye[0],a.position[1]-c.eye[1],a.position[2]-c.eye[2]),db=Math.hypot(b.position[0]-c.eye[0],b.position[1]-c.eye[1],b.position[2]-c.eye[2]);return(b.energy||0)-(a.energy||0)+(da-db)*.0005;}).slice(0,max);
 }
 function simulateFluid(dt,nodes){
-  if(S.mode==="background"||S.quality==="minimal"||S.dragNode)return;
-  const step=Math.min(34,Math.max(0,dt))*.0015;
-  const maxPairs=12000;
-  const cellSize=1.8,grid=new Map(),positions=new Map();
-  nodes.forEach(function(n){
-    const p=nodePosition(n),key=Math.floor(p[0]/cellSize)+":"+Math.floor(p[1]/cellSize)+":"+Math.floor(p[2]/cellSize);
-    if(!grid.has(key))grid.set(key,[]);grid.get(key).push(n);positions.set(n.id,p);
-  });
-  let pairs=0;
-  nodes.forEach(function(n){
-    const base=n.position,o=S.localOffsets.get(n.id)||[0,0,0],p=positions.get(n.id),v=S.velocities.get(n.id)||[0,0,0];
-    let fx=-o[0]*1.65,fy=-o[1]*1.65,fz=-o[2]*1.65;
-    const gx=Math.floor(p[0]/cellSize),gy=Math.floor(p[1]/cellSize),gz=Math.floor(p[2]/cellSize);
-    for(let ix=-1;ix<=1;ix++)for(let iy=-1;iy<=1;iy++)for(let iz=-1;iz<=1;iz++){
-      const bucket=grid.get((gx+ix)+":"+(gy+iy)+":"+(gz+iz));if(!bucket)continue;
-      for(const other of bucket){
-        if(other.id===n.id||pairs>=maxPairs)continue;
-        const q=positions.get(other.id),dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],d=Math.hypot(dx,dy,dz);
-        if(d>0&&d<1.55){
-          const push=(1.55-d)*1.9/d;fx+=dx*push;fy+=dy*push;fz+=dz*push;pairs++;
-        }else if(d>1.55&&d<4.2&&other.kind===n.kind){
-          const pull=(d-1.55)*.035;fx-=dx*pull;fy-=dy*pull;fz-=dz*pull;
-        }
-      }
+  if(S.mode==="background"||S.quality==="minimal")return;
+  const frameMs=Math.min(34,Math.max(4,Number(dt)||16)),substeps=frameMs>22?2:1,dtSec=frameMs*.001/substeps,h=2.55,h2=h*h,restDensity=.92,stiffness=3.8,viscosity=.11,mass=1.0,maxPairs=36000;
+  const source=(nodes||[]).filter(function(n){return!(n.metadata&&n.metadata.visual_only)}),positions=new Map(),grid=new Map();
+  for(const n of source){const p=nodePosition(n),cell=Math.floor(p[0]/h)+":"+Math.floor(p[1]/h)+":"+Math.floor(p[2]/h);positions.set(n.id,p);if(!grid.has(cell))grid.set(cell,[]);grid.get(cell).push(n);}
+  const poly=315/(64*Math.PI*Math.pow(h,9)),spiky=45/(Math.PI*Math.pow(h,6));
+  for(let sub=0;sub<substeps;sub++){
+    const density=new Map(),pressure=new Map();
+    for(const n of source){
+      const p=positions.get(n.id),gx=Math.floor(p[0]/h),gy=Math.floor(p[1]/h),gz=Math.floor(p[2]/h);let rho=0;
+      for(let ix=-1;ix<=1;ix++)for(let iy=-1;iy<=1;iy++)for(let iz=-1;iz<=1;iz++){const bucket=grid.get((gx+ix)+":"+ (gy+iy)+":"+ (gz+iz));if(!bucket)continue;for(const other of bucket){const q=positions.get(other.id),dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],r2=dx*dx+dy*dy+dz*dz;if(r2<h2){const qh=h2-r2;rho+=mass*poly*qh*qh*qh;}}}
+      density.set(n.id,Math.max(.24,rho));pressure.set(n.id,stiffness*Math.max(0,rho-restDensity));
     }
-    v[0]=(v[0]+fx*step)*.93;v[1]=(v[1]+fy*step)*.93;v[2]=(v[2]+fz*step)*.93;
-    const next=[o[0]+v[0]*step*18,o[1]+v[1]*step*18,o[2]+v[2]*step*18];
-    const mag=Math.hypot(...next);
-    const cap=.95;
-    if(mag>cap){next[0]*=cap/mag;next[1]*=cap/mag;next[2]*=cap/mag;}
-    S.velocities.set(n.id,v);S.localOffsets.set(n.id,next);
-  });
+    let pairs=0;
+    for(const n of source){
+      const p=positions.get(n.id),v=S.velocities.get(n.id)||[0,0,0],gx=Math.floor(p[0]/h),gy=Math.floor(p[1]/h),gz=Math.floor(p[2]/h),rho=Math.max(.24,density.get(n.id)||restDensity),pi=pressure.get(n.id)||0;let fx=0,fy=-.012,fz=0;
+      for(let ix=-1;ix<=1;ix++)for(let iy=-1;iy<=1;iy++)for(let iz=-1;iz<=1;iz++){const bucket=grid.get((gx+ix)+":"+ (gy+iy)+":"+ (gz+iz));if(!bucket)continue;for(const other of bucket){if(other.id===n.id||pairs>=maxPairs)continue;const q=positions.get(other.id),dx=p[0]-q[0],dy=p[1]-q[1],dz=p[2]-q[2],r=Math.hypot(dx,dy,dz);if(r<=0||r>=h)continue;pairs++;const invR=1/r,qh=h-r,rhoj=Math.max(.24,density.get(other.id)||restDensity),pj=pressure.get(other.id)||0,pressureForce=-mass*(pi+pj)*.5*spiky*qh*qh/rhoj;fx+=dx*invR*pressureForce;fy+=dy*invR*pressureForce;fz+=dz*invR*pressureForce;const ov=S.velocities.get(other.id)||[0,0,0],visc=viscosity*mass*qh/rhoj;fx+=(ov[0]-v[0])*visc;fy+=(ov[1]-v[1])*visc;fz+=(ov[2]-v[2])*visc;}}
+      const o=S.localOffsets.get(n.id)||[0,0,0],mag=Math.hypot(o[0],o[1],o[2]);
+      if(mag>6.4){const push=(mag-6.4)*1.65/Math.max(.001,mag);fx-=o[0]*push;fy-=o[1]*push;fz-=o[2]*push;}
+      v[0]=(v[0]+fx*dtSec)*.988;v[1]=(v[1]+fy*dtSec)*.988;v[2]=(v[2]+fz*dtSec)*.988;
+      const next=[o[0]+v[0]*dtSec*24,o[1]+v[1]*dtSec*24,o[2]+v[2]*dtSec*24],nm=Math.hypot(...next);
+      if(nm>6.6){const s=6.6/nm;next[0]*=s;next[1]*=s;next[2]*=s;v[0]*=.25;v[1]*=.25;v[2]*=.25;}
+      S.velocities.set(n.id,v);S.localOffsets.set(n.id,next);
+    }
+  }
 }
 function resize(){
   const dpr=Math.min(window.devicePixelRatio||1,S.quality==="maximum"?1.5:1.0),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
@@ -876,7 +868,7 @@ window.jarvisNeuralCommandSurface={
 };
 canvas.addEventListener("pointerdown",function(e){
   if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
-  const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;
+  const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;S.dragLastTime=performance.now();S.dragLastDelta=[0,0,0];
   if(n){S.dragNode=n.id;setSelected(n.id);canvas.setPointerCapture(e.pointerId);return;}
   S.orbit=true;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);
 });
@@ -884,19 +876,11 @@ canvas.addEventListener("pointermove",function(e){
   const dx=e.clientX-S.lastX,dy=e.clientY-S.lastY;
   if(S.view==="earth"){if(S.orbit){S.earthYaw+=dx*.01;S.earthPitch=Math.max(-1.1,Math.min(1.1,S.earthPitch+dy*.007));S.lastX=e.clientX;S.lastY=e.clientY;}return;}
   if(S.dragNode){
-    const n=S.nodes.find(function(x){return x.id===S.dragNode});if(n){const p=worldToScreen(nodePosition(n));if(p){const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(n.id)||[0,0,0];S.localOffsets.set(n.id,add(old,delta));spawn(nodePosition(n),Math.max(1,Math.floor(Math.hypot(dx,dy)/14)));}}
+    const n=S.nodes.find(function(x){return x.id===S.dragNode});if(n){const p=worldToScreen(nodePosition(n));if(p){const delta=screenDelta(dx,dy,p[2]),old=S.localOffsets.get(n.id)||[0,0,0];S.localOffsets.set(n.id,add(old,delta));const now=performance.now(),dragDt=Math.max(8,now-S.dragLastTime)*.001;S.velocities.set(n.id,[delta[0]/dragDt*.12,delta[1]/dragDt*.12,delta[2]/dragDt*.12]);S.dragLastTime=now;S.dragLastDelta=delta;spawn(nodePosition(n),Math.max(1,Math.floor(Math.hypot(dx,dy)/10)));}}
   }else if(S.orbit){S.yaw+=dx*.008;S.pitch=Math.max(-1.35,Math.min(1.35,S.pitch+dy*.006));}
   S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=true;
 });
-function release(){
-  S.orbit=false;canvas.classList.remove("dragging");
-  if(S.dragNode){
-    const id=S.dragNode,from=S.localOffsets.get(id)||[0,0,0],start=performance.now();S.dragNode=null;
-    function settle(){const t=Math.min(1,(performance.now()-start)/780),e=t*t*(3-2*t);S.localOffsets.set(id,[from[0]*(1-e),from[1]*(1-e),from[2]*(1-e)]);if(t<1)requestAnimationFrame(settle);else S.localOffsets.delete(id);}
-    requestAnimationFrame(settle);
-  }
-}
-canvas.addEventListener("pointerup",function(){S.orbit=false;release()});
+function release(){S.orbit=false;canvas.classList.remove("dragging");if(S.dragNode){const id=S.dragNode,v=S.velocities.get(id)||[0,0,0];S.velocities.set(id,[v[0]*.42,v[1]*.42,v[2]*.42]);S.dragNode=null;}}\ncanvas.addEventListener("pointerup",function(){S.orbit=false;release()});
 canvas.addEventListener("pointercancel",function(){release()});
 canvas.addEventListener("wheel",function(e){e.preventDefault();S.distance=Math.max(3.5,Math.min(180,S.distance*Math.exp(e.deltaY*.001)));},{passive:false});
 canvas.addEventListener("dblclick",function(e){const n=pick(e.clientX,e.clientY);if(n)focus(n)});
