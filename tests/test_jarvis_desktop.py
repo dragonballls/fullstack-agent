@@ -111,6 +111,47 @@ class JarvisDesktopTests(unittest.TestCase):
         self.assertIn('type="password"', jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
         self.assertIn("CONNECT & TEST", jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
 
+    def test_omniroute_and_elevenlabs_shared_settings_surface(self):
+        html = jarvis_desktop.OMNIROUTE_SETTINGS_HTML
+        for token in (
+            "Auto-detect from API key",
+            "omniroute_detect_provider",
+            "VOICE ENGINE · ELEVENLABS",
+            "SAVE & TEST VOICE",
+            "elevenlabs_configure",
+            "elevenlabs_test",
+            "elevenlabs_voices",
+        ):
+            self.assertIn(token, html)
+        for method in (
+            "voice_audio",
+            "elevenlabs_status",
+            "elevenlabs_configure",
+            "elevenlabs_test",
+            "elevenlabs_voices",
+            "omniroute_detect_provider",
+        ):
+            self.assertIn(method, dir(jarvis_desktop.JarvisWebApi))
+
+    def test_voice_adapter_uses_elevenlabs_as_mouth(self):
+        controller = Mock()
+        adapter = VoiceAdapter(controller)
+        self.assertIsInstance(adapter.elevenlabs, jarvis_desktop.ElevenLabsMouth)
+
+    def test_voice_audio_drains_elevenlabs_packets(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=SimpleNamespace(elevenlabs=Mock()), hands=Mock())
+        host.voice.elevenlabs.take_audio.return_value = [{"sequence": 1, "mime": "audio/mpeg", "data": "YQ=="}]
+        self.assertEqual(host.voice_audio()["items"][0]["sequence"], 1)
+        host.voice.elevenlabs.take_audio.assert_called_once_with()
+
+    def test_auto_detect_api_method_never_receives_provider_secret_back(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
+        result = host.web_api.omniroute_detect_provider("sk-ant-example")
+        self.assertEqual(result, {"ok": True, "provider": "anthropic", "detected": True})
+        self.assertNotIn("sk-ant-example", repr(result))
+
     def test_omniroute_status_uses_secret_free_summary(self):
         controller = Mock()
         controller.runtime = Mock()
@@ -166,6 +207,12 @@ class JarvisDesktopTests(unittest.TestCase):
         controller.execute_request.assert_called_once_with("run diagnostics", confirmed=False)
         self.assertEqual(result["text"], "controller response")
         self.assertFalse(result["needs_confirmation"])
+
+    def test_voice_adapter_can_be_stopped_without_live_provider(self):
+        controller = Mock()
+        adapter = VoiceAdapter(controller)
+        adapter.stop()
+        self.assertIsNone(adapter.bridge)
 
     def test_frozen_backtalk_smoke_mode_validates_embedded_modules_without_audio_hardware(self):
         controller = Mock()
