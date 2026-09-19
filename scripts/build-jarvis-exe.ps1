@@ -14,11 +14,12 @@ if (-not (Test-Path -LiteralPath $Entry)) {
 }
 
 & $Python scripts/fetch-fullstack-components.py $Vendor
+& $Python scripts/prepare_omniroute_runtime.py (Join-Path $Vendor 'omniroute_runtime')
 & $Python -m pip install -r (Join-Path $Root 'quality_of_life\requirements.txt')
 & $Python -m pip install pyinstaller faster-whisper kokoro pynput sounddevice soundfile webrtcvad-wheels numpy httpx
 & $Python -m pip check
 
-& $Python -m PyInstaller --noconfirm --clean --onefile --windowed --name Jarvis --paths $Root --paths (Join-Path $Vendor 'backtalk\source') --add-data "$(Join-Path $Vendor 'ai-visualizer\source');ai-visualizer/source" --add-data "$(Join-Path $Vendor 'barehands\source');barehands/source" --add-data "$(Join-Path $Vendor 'ai-memory-vault\source');ai-memory-vault/source" --collect-submodules quality_of_life --collect-submodules self_coding --collect-submodules windows_maintenance --collect-submodules backtalk --collect-all faster_whisper --collect-all kokoro --collect-submodules webrtcvad --hidden-import sounddevice --hidden-import soundfile --hidden-import pynput $Entry
+& $Python -m PyInstaller --noconfirm --clean --onefile --windowed --name Jarvis --paths $Root --paths (Join-Path $Vendor 'backtalk\source') --add-data "$(Join-Path $Vendor 'ai-visualizer\source');ai-visualizer/source" --add-data "$(Join-Path $Vendor 'barehands\source');barehands/source" --add-data "$(Join-Path $Vendor 'ai-memory-vault\source');ai-memory-vault/source" --add-binary "$(Join-Path $Vendor 'omniroute_runtime\node.exe');omniroute_runtime" --add-data "$(Join-Path $Vendor 'omniroute_runtime\node_modules');omniroute_runtime/node_modules" --collect-submodules quality_of_life --collect-submodules self_coding --collect-submodules windows_maintenance --collect-submodules backtalk --collect-all faster_whisper --collect-all kokoro --collect-submodules webrtcvad --hidden-import sounddevice --hidden-import soundfile --hidden-import pynput $Entry
 
 if (-not (Test-Path -LiteralPath $Output)) {
     throw "Jarvis.exe was not produced: $Output"
