@@ -9,6 +9,9 @@ on:
       - "scripts/jarvis_desktop.py"
       - "scripts/jarvis_desktop.pyw"
       - "quality_of_life/ui_builds.py"
+      - "quality_of_life/omniroute.py"
+      - "quality_of_life/omniroute_setup.py"
+      - "tests/test_omniroute_provisioning.py"
   pull_request:
     branches: [main]
     paths:
@@ -31,7 +34,7 @@ jobs:
         with:
           node-version: "22"
       - name: Verify Build 2 neural renderer
-        run: python -m unittest tests.test_neural_mesh_build -v
+        run: python -m unittest tests.test_neural_mesh_build tests.test_omniroute_provisioning -v
 
   neural-renderer-windows:
     runs-on: windows-latest
