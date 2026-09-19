@@ -246,8 +246,9 @@ in vec3 vPos;in vec3 vNormal;in float vSun;out vec4 outColor;
 float hash21(vec2 p){p=fract(p*vec2(123.34,345.45));p+=dot(p,p+34.345);return fract(p.x*p.y);}
 float noise2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=hash21(i),b=hash21(i+vec2(1.,0.)),c=hash21(i+vec2(0.,1.)),d=hash21(i+vec2(1.,1.));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}
 void main(){
-  vec3 n=normalize(vNormal),sun=normalize(vec3(-.55,.68,.75)),view=normalize(vec3(0.,0.,1.));
-  float day=smoothstep(-.10,.16,vSun),twilight=smoothstep(-.18,.04,vSun)*smoothstep(.20,.03,vSun);
+  vec3 n=normalize(vNormal),sun=normalize(uSun),view=normalize(vec3(0.,0.,1.));
+  float lit=dot(n,sun);
+  float day=smoothstep(-.10,.16,lit),twilight=smoothstep(-.18,.04,lit)*smoothstep(.20,.03,lit);
   vec2 uv=vec2(atan(vPos.z,vPos.x)/6.2831853+.5,asin(clamp(vPos.y,-1.,1.))/3.14159265+.5);
   float continent=noise2(uv*5.2)+.35*noise2(uv*11.0)+.14*noise2(uv*24.0);
   float land=smoothstep(.53,.66,continent);
@@ -268,6 +269,8 @@ void main(){
   c+=vec3(.08,.24,.46)*coast*.10;
   c*=.16+.84*day;
   c+=vec3(.85,.24,.07)*twilight*.055;
+  float terminator=smoothstep(.24,-.12,lit)*smoothstep(.10,.36,abs(lit));
+  c+=vec3(.18,.34,.62)*terminator*.07;
   float ice=smoothstep(.68,.94,abs(vPos.y));c=mix(c,vec3(.70,.84,.91),ice*.72);
   float fres=pow(1.-max(0.,dot(n,view)),3.5);c+=vec3(.05,.38,.95)*fres*.48;
   outColor=vec4(c,1.);
@@ -477,6 +480,7 @@ function renderEarthSensor(){
 function earthLocatorById(id){const target=String(id||"");return (Array.isArray(S.earthData.locators)?S.earthData.locators:[]).find(function(item){return String(item.id||item.label||"")===target})||null;}
 function smoothEarthFollow(){if(!S.earthFollow||!S.earthSelected)return;const item=earthLocatorById(S.earthSelected);if(!item)return;const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;const targetYaw=lon-Math.PI*.5,targetPitch=lat;let dyaw=targetYaw-S.earthYaw;while(dyaw>Math.PI)dyaw-=Math.PI*2;while(dyaw<-Math.PI)dyaw+=Math.PI*2;S.earthYaw+=dyaw*.075;S.earthPitch+=(targetPitch-S.earthPitch)*.075;S.earthDistance+=(6.8-S.earthDistance)*.045;}
 function renderEarth(now){
+  if(S.earthFollow) smoothEarthFollow();
   const oldYaw=S.yaw,oldPitch=S.pitch,oldDistance=S.distance,oldTarget=S.target.slice();
   S.yaw=S.earthYaw;S.pitch=S.earthPitch;S.distance=S.earthDistance;S.target=[0,0,0];
   const c=camera(),proj=new Float32Array(16),view=new Float32Array(16),mvp=new Float32Array(16);
