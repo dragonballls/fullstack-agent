@@ -9,6 +9,9 @@ Each listed capability has an executable runtime primitive, bridge command, or
 simulation/analytics contract. Windows/GPU/XR/audio/provider-specific execution is
 kept behind adapters so unsupported hardware does not break the core world.
 
+## Scalable visual ecology / LOD
+Build #2 renders the neural field as layered detail rather than one uniform geometry budget. Near-camera neurons use the highest-detail liquid-cell geometry and semantic presentation; mid-range neurons use reduced visual detail; distant real entities and ambient neurons use lightweight point sprites; a deterministic deep field supplies **64,000** additional visual-only micro-neurons. Screen-space visibility, distance/depth culling, adaptive frame-time quality, relation caps, and bounded near-field SPH simulation keep the visual population much larger than the expensive per-frame geometry layer. The deep field remains visual-only and is never treated as a backend entity or authorization source.
+
 ## Core / Neural
 Living computational organism behavior; fine-filament complexity; surrounding data
 structures; priority-driven core reorganization; surface-tension cohesion; elasticity;
