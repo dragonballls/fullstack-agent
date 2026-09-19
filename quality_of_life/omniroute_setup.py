@@ -221,10 +221,10 @@ class OmniRouteProvisioner:
             "has neither the bundled runtime nor Node/npm available."
         )
 
-    def command_argv(self, *, install_if_missing: bool = True) -> list[str]:
+    def command_argv(self, *, install_if_missing: bool = True, for_start: bool = False) -> list[str]:
         command = list(self.resolve_command(install_if_missing=install_if_missing))
-        if len(command) == 2 and command[1].endswith("omniroute.mjs"):
-            command.extend(["--no-open"])
+        if for_start and "--no-open" not in command:
+            command.append("--no-open")
         return command
 
     def environment(self) -> dict[str, str]:
