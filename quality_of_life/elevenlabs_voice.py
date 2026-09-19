@@ -27,8 +27,10 @@ ACCOUNT_NAME = "ElevenLabs"
 API_BASE = "https://api.elevenlabs.io/v1"
 DEFAULT_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # compatibility fallback; first-time setup prefers a current voice
 DEFAULT_PREFERRED_VOICE_NAME = "Eldrin"
-DEFAULT_MODEL_ID = "eleven_flash_v2_5"
+DEFAULT_MODEL_ID = "eleven_v3_conversational"
+LOW_LATENCY_MODEL_ID = "eleven_flash_v2_5"
 EXPRESSIVE_MODEL_ID = "eleven_v3"
+SUPPORTED_MODEL_IDS = {DEFAULT_MODEL_ID, LOW_LATENCY_MODEL_ID, EXPRESSIVE_MODEL_ID}
 DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
 CONFIG_DIR = Path.home() / "AppData" / "Local" / "Jarvis" / "settings"
 CONFIG_FILE = CONFIG_DIR / "elevenlabs.json"
@@ -67,7 +69,7 @@ def _load_settings() -> dict[str, str]:
     if not isinstance(payload, dict):
         payload = {}
     model = str(payload.get("model_id") or DEFAULT_MODEL_ID).strip()
-    if model not in {DEFAULT_MODEL_ID, EXPRESSIVE_MODEL_ID}:
+    if model not in SUPPORTED_MODEL_IDS:
         model = DEFAULT_MODEL_ID
     voice_id = str(payload.get("voice_id") or DEFAULT_VOICE_ID).strip()
     return {"voice_id": voice_id[:256], "model_id": model}
@@ -115,7 +117,7 @@ def clear_api_key() -> None:
 def decorate_for_jarvis(text: str, model_id: str) -> str:
     """Add sparse delivery guidance without changing the user's words."""
     message = str(text or "").strip()
-    if not message or model_id != EXPRESSIVE_MODEL_ID:
+    if not message or model_id not in {EXPRESSIVE_MODEL_ID, DEFAULT_MODEL_ID}:
         return message
     lowered = message.lower()
     if message.endswith("?"):
@@ -275,7 +277,7 @@ class ElevenLabsMouth:
                 pass
         selected_voice = str(selected_voice).strip()[:256]
         selected_model = str(model_id or self.model_id or DEFAULT_MODEL_ID).strip()
-        if selected_model not in {DEFAULT_MODEL_ID, EXPRESSIVE_MODEL_ID}:
+        if selected_model not in SUPPORTED_MODEL_IDS:
             raise ValueError("unsupported ElevenLabs model")
         _save_settings({"voice_id": selected_voice, "model_id": selected_model})
         with self._lock:
