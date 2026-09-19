@@ -1,6 +1,6 @@
 """Build the pinned, self-contained OmniRoute runtime used by Jarvis.exe.
 
-OmniRoute 3.8.51 is currently an unreleased GitHub release-branch snapshot,
+OmniRoute 3.8.50 is the current official published Windows release,
 so the release bundle is sourced from its exact immutable commit instead of
 assuming the version already exists on npm. The resulting local package is
 installed with production dependencies and verified before packaging.
@@ -24,8 +24,8 @@ NODE_VERSION = "24.21.0"
 NODE_ZIP_NAME = f"node-v{NODE_VERSION}-win-x64.zip"
 NODE_URL = f"https://nodejs.org/dist/v{NODE_VERSION}/{NODE_ZIP_NAME}"
 NODE_SHA256 = "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541"
-OMNIROUTE_VERSION = "3.8.51"
-OMNIROUTE_COMMIT = "271ec25f12e4d59bc4c406f26d33666798299d25"
+OMNIROUTE_VERSION = "3.8.50"
+OMNIROUTE_COMMIT = "5458026c216f77a3da68ea49152dc33470cfe2cb"
 OMNIROUTE_SOURCE_URL = f"https://github.com/diegosouzapw/OmniRoute/archive/{OMNIROUTE_COMMIT}.zip"
 
 
