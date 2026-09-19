@@ -15,6 +15,8 @@ class DiscoveryTests(unittest.TestCase):
                 ]),
                 "processes": SimpleNamespace(list_processes=lambda: [
                     SimpleNamespace(pid=123, name="opera.exe", executable="C:/opera.exe")
+                ], list_services=lambda: [
+                    SimpleNamespace(name="Dnscache", display_name="DNS Client", state="RUNNING")
                 ]),
             }[name]
         )
