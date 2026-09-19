@@ -86,7 +86,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build_vendor/omniroute_runtime
-          key: jarvis-omniroute-windows-${{ runner.arch }}-node-24.21.0-omni-3.8.50-5458026c216f77a3da68ea49152dc33470cfe2cb
+          key: jarvis-omniroute-windows-${{ runner.arch }}-node-24.21.0-omni-3.8.50-5458026c216f77a3da68ea49152dc33470cfe2cb-schema-2
 
       - name: Prepare pinned embedded OmniRoute runtime
         shell: pwsh
@@ -200,7 +200,7 @@ jobs:
         run: |
           $info = python -m PyInstaller --version
           if ($info -ne '6.22.3') { throw "Unexpected PyInstaller version: $info" }
-      - name: Smoke-test embedded visualizer
+      - name: Smoke-test embedded visualizer and OmniRoute
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -212,7 +212,7 @@ jobs:
           $ready = $false
           try {
             $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru -WorkingDirectory (Resolve-Path '.')
-            $startupTimeoutSeconds = 300
+            $startupTimeoutSeconds = 120
             $deadline = (Get-Date).AddSeconds($startupTimeoutSeconds)
             while ((Get-Date) -lt $deadline) {
               if ($process.HasExited) { throw "Jarvis.exe exited during startup with code $($process.ExitCode)" }
@@ -223,39 +223,59 @@ jobs:
               Start-Sleep -Milliseconds 500
             }
             if (-not $ready) { throw "Embedded Fullstack visualizer did not become ready within $startupTimeoutSeconds seconds" }
-            $omniStartupTimeoutSeconds = 180
+
+            $omniStartupTimeoutSeconds = 120
             $omniDeadline = (Get-Date).AddSeconds($omniStartupTimeoutSeconds)
             $omniReady = $false
+            $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
             while ((Get-Date) -lt $omniDeadline) {
+              if (Test-Path -LiteralPath $log) {
+                $contents = Get-Content -LiteralPath $log -Raw
+                if ($contents -match 'embedded OmniRoute warm-up (?:failed|did not complete)') {
+                  throw 'Jarvis reported that embedded OmniRoute warm-up failed or timed out'
+                }
+              }
               $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
               if ($tcp) { $omniReady = $true; break }
               Start-Sleep -Milliseconds 500
             }
             if (-not $omniReady) { throw "Embedded OmniRoute did not become ready within $omniStartupTimeoutSeconds seconds" }
+
+            $healthOk = $false
+            foreach ($url in @(
+              'http://127.0.0.1:20128/api/monitoring/health',
+              'http://127.0.0.1:20128/v1/models',
+              'http://127.0.0.1:20128/healthz'
+            )) {
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri $url -Headers @{ Accept = 'application/json' } -TimeoutSec 3
+                if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) { $healthOk = $true; break }
+              } catch {
+                $status = $_.Exception.Response.StatusCode.value__
+                if ($status -in @(401, 403, 405)) { $healthOk = $true; break }
+              }
+            }
+            if (-not $healthOk) { throw 'Embedded OmniRoute opened its TCP port but did not answer a health/API probe' }
+
+            & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
+            if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
           }
           catch {
             Write-Host '=== Jarvis process diagnostics ==='
             if ($null -ne $process) { Write-Host ("PID={0} HasExited={1} ExitCode={2}" -f $process.Id, $process.HasExited, $process.ExitCode) }
             Get-NetTCPConnection -LocalPort 8790 -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
+            Get-NetTCPConnection -LocalPort 20128 -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
             $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
             if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Raw | Write-Host }
             throw
           }
-          finally { if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } }
-      - name: Smoke-test embedded OmniRoute gateway
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $deadline = (Get-Date).AddSeconds(60)
-          $ready = $false
-          while ((Get-Date) -lt $deadline) {
-            $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
-            if ($tcp) { $ready = $true; break }
-            Start-Sleep -Milliseconds 500
+          finally {
+            if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+            $owners = @(Get-NetTCPConnection -LocalPort 20128 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
+            foreach ($owner in $owners) {
+              if ($owner -and $owner -ne $PID) { Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue }
+            }
           }
-          if (-not $ready) { throw 'Embedded OmniRoute did not open port 20128 during packaged smoke test' }
-          & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
-          if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
 
       - name: Smoke-test the packaged native Jarvis host
         shell: pwsh
