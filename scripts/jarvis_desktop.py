@@ -493,9 +493,15 @@ TEXT_INPUT_SCRIPT = r'''
     shell.style.left=Math.max(8,Math.round((window.innerWidth-shell.offsetWidth)/2))+"px";
     shell.style.top=Math.max(8,Math.round((window.innerHeight-shell.offsetHeight)/2))+"px";
   }
+  let lastTranscriptKey = "";
+  let lastTranscriptAt = 0;
   function addMessage(kind,text){
     const value=String(text||"").slice(0,12000);
     if(!value)return;
+    const key=(kind||"jarvis")+"|"+value;
+    const now=Date.now();
+    if(key===lastTranscriptKey && now-lastTranscriptAt<1400)return;
+    lastTranscriptKey=key;lastTranscriptAt=now;
     const row=document.createElement("div");
     row.className="jarvis-text-message "+(kind==="user"?"user":kind==="error"?"error":"jarvis");
     row.textContent=value;
