@@ -736,7 +736,17 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
       try{const result=await window.pywebview.api.voice_audio();enqueue(result&&result.items);}
       catch(_e){}finally{polling=false;}
     }
-    function resume(){playNext();}
+    let audioContext=null;
+    function resume(){
+      try{
+        if(window.AudioContext||window.webkitAudioContext){
+          const Ctor=window.AudioContext||window.webkitAudioContext;
+          audioContext=audioContext||new Ctor();
+          if(audioContext.state==="suspended")audioContext.resume().catch(()=>{});
+        }
+      }catch(_e){}
+      playNext();
+    }
     document.addEventListener("pointerdown",resume,{passive:true});
     window.jarvisVoicePlayer={enqueue,poll,resume};
     window.setInterval(poll,180);
