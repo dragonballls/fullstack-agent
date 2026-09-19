@@ -1289,6 +1289,16 @@ class FullstackJarvisHost:
             LOGGER.exception("centered Jarvis text input overlay failed to inject")
 
     @staticmethod
+    def _configure_webview2_autoplay() -> None:
+        """Allow the hidden floating text surface to play queued voice audio without a DOM gesture."""
+        if sys.platform != "win32":
+            return
+        existing = os.environ.get("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "").strip()
+        parts = [item for item in existing.split() if not item.startswith("--autoplay-policy=")]
+        parts.append("--autoplay-policy=no-user-gesture-required")
+        os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = " ".join(parts)
+
+    @staticmethod
     def _native_window_kwargs(url: str, fullscreen: bool) -> dict[str, Any]:
         """Return the exact native pywebview window contract used by production."""
         return {
@@ -1304,6 +1314,7 @@ class FullstackJarvisHost:
     def run_window(self) -> None:
         """Create the native visualizer window on the foreground thread."""
         headless_smoke = os.environ.get("JARVIS_UI_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        self._configure_webview2_autoplay()
         try:
             import webview
         except ImportError as exc:
