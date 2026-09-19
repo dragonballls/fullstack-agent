@@ -15,6 +15,7 @@ from typing import Iterable, Sequence
 
 from .omniroute import OmniRouteConnection, is_loopback_hostname
 from .orchestration import RequestProfile
+from .prism_gateway import PrismGateway
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,9 @@ class CloudModelRouter:
     OMNIROUTE_BASE_URL = "http://127.0.0.1:20128/v1"
     OMNIROUTE_API_KEY_ENV = "OMNIROUTE_API_KEY"
     OMNIROUTE_MODEL = "auto"
+    PRISM_BASE_URL = "http://127.0.0.1:8319/v1"
+    PRISM_MODEL = "prism-astra"
+    PRISM_API_KEY_ENV = "JARVIS_PRISM_API_KEY"
     PROFILE_ENV_NAMES = {
         RequestProfile.FAST: "JARVIS_OMNIROUTE_FAST_MODEL",
         RequestProfile.SMART: "JARVIS_OMNIROUTE_SMART_MODEL",
@@ -87,6 +91,8 @@ class CloudModelRouter:
     _EWMA_ALPHA = 0.25
     _omniroute_lock = threading.Lock()
     _omniroute_connections: dict[tuple[str, str], OmniRouteConnection] = {}
+    _prism_lock = threading.Lock()
+    _prism_gateways: dict[str, PrismGateway] = {}
 
     def __init__(self, targets: Iterable[ProviderTarget]) -> None:
         self.targets = tuple(targets)
@@ -120,6 +126,36 @@ class CloudModelRouter:
     def omniroute_target(cls, model: str | None = None) -> ProviderTarget:
         """Build the default OmniRoute target."""
         return ProviderTarget("omniroute", cls.omniroute_base_url(), cls.omniroute_api_key_env(), model or cls.omniroute_model())
+
+    @classmethod
+    def prism_base_url(cls) -> str:
+        """Return the local embedded Prism compatibility endpoint."""
+        return os.environ.get("JARVIS_PRISM_BASE_URL", cls.PRISM_BASE_URL)
+
+    @classmethod
+    def prism_target(cls, model: str | None = None) -> ProviderTarget:
+        """Build the optional remote-inference Prism/Astra target."""
+        return ProviderTarget(
+            "prism-astra",
+            cls.prism_base_url(),
+            cls.PRISM_API_KEY_ENV,
+            model or cls.PRISM_MODEL,
+        )
+
+    @classmethod
+    def _ensure_prism(cls, target: ProviderTarget) -> bool:
+        """Lazily start the embedded Prism bridge when it is configured."""
+        if target.name.casefold() != "prism-astra" or not target.is_loopback:
+            return True
+        key = target.base_url.rstrip("/")
+        with cls._prism_lock:
+            gateway = cls._prism_gateways.get(key)
+            if gateway is None:
+                gateway = PrismGateway(
+                    port=urllib.parse.urlparse(target.base_url).port or PrismGateway.DEFAULT_PORT
+                )
+                cls._prism_gateways[key] = gateway
+        return gateway.ensure_started(wait_seconds=8.0)
 
     @classmethod
     def _ensure_omniroute(cls, target: ProviderTarget) -> bool:
@@ -224,7 +260,11 @@ class CloudModelRouter:
         started = time.monotonic()
         if self._cooldown_active(target):
             return ProviderResult(False, None, target.name, 0, "target temporarily cooling down after a recent failure")
-        if not self._ensure_omniroute(target):
+        if target.name.casefold() == "prism-astra":
+            if not self._ensure_prism(target):
+                self._record_failure(target)
+                return ProviderResult(False, None, target.name, int((time.monotonic() - started) * 1000), "Prism bridge is not configured or ready")
+        elif not self._ensure_omniroute(target):
             self._record_failure(target)
             return ProviderResult(False, None, target.name, int((time.monotonic() - started) * 1000), "omniroute is not reachable and could not be started")
         key = os.environ.get(target.api_key_env)
@@ -264,7 +304,13 @@ class CloudModelRouter:
     def complete_profiled(self, messages: list[dict[str, str]], profile: RequestProfile | str) -> tuple[str, str]:
         """Complete a profiled request using latency-aware target ordering."""
         selected = RequestProfile(profile)
-        targets = tuple(ProviderTarget(target.name, target.base_url, target.api_key_env, self.profile_model(selected), target.timeout_seconds) for target in self.targets)
+        targets = tuple(ProviderTarget(
+            target.name,
+            target.base_url,
+            target.api_key_env,
+            target.model if target.name.casefold() == "prism-astra" else self.profile_model(selected),
+            target.timeout_seconds,
+        ) for target in self.targets)
         errors: list[str] = []
         for target in self._ordered_targets(targets):
             result = self.try_target(target, messages)
@@ -292,7 +338,13 @@ class CloudModelRouter:
         def run_one(item: tuple[list[dict[str, str]], RequestProfile | str]) -> ProviderResult:
             messages, profile = item
             selected = RequestProfile(profile)
-            targets = tuple(ProviderTarget(target.name, target.base_url, target.api_key_env, self.profile_model(selected), target.timeout_seconds) for target in self.targets)
+            targets = tuple(ProviderTarget(
+                target.name,
+                target.base_url,
+                target.api_key_env,
+                target.model if target.name.casefold() == "prism-astra" else self.profile_model(selected),
+                target.timeout_seconds,
+            ) for target in self.targets)
             failures: list[str] = []
             started = time.monotonic()
             for target in self._ordered_targets(targets):
