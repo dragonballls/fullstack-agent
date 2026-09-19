@@ -104,7 +104,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PYTHONPATH = "$PWD\build_vendor\backtalk\source;$env:PYTHONPATH"
-          python -c "from backtalk.ears import Ears; from backtalk.mouth import Mouth; from backtalk.ptt import PTTListener; print('Fullstack voice imports OK')"
+          python -c "from backtalk.ears import Ears; from backtalk.mouth import Mouth; from backtalk.ptt import PTTListener; from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth; print('Fullstack Backtalk + ElevenLabs voice imports OK')"
           if (-not (Test-Path -LiteralPath 'build_vendor\backtalk\source')) { throw 'Backtalk source directory is missing' }
       - name: Build single-file Jarvis.exe
         shell: pwsh
@@ -149,6 +149,11 @@ jobs:
           $listed = & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --non-interactive providers list --json
           if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute provider listing failed' }
           if ($listed -match [regex]::Escape($dummy)) { throw 'Embedded OmniRoute provider listing exposed the credential' }
+
+      - name: Smoke-test ElevenLabs voice plumbing without a live key
+        shell: pwsh
+        run: |
+          python -c "from quality_of_life.elevenlabs_voice import ElevenLabsMouth; from unittest.mock import Mock, patch; import base64; m=ElevenLabsMouth(client=Mock()); m.client.synthesize.return_value=b'fake-mp3'; p=patch('quality_of_life.elevenlabs_voice.has_api_key', return_value=True); p.start(); r=m.test_speech(); p.stop(); assert r['ok'] and r['spoken']; packets=m.take_audio(); assert base64.b64decode(packets[0]['data'])==b'fake-mp3'; print('ElevenLabs offline voice plumbing OK')"
 
       - name: Verify PyInstaller toolchain version
         shell: pwsh
