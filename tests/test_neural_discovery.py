@@ -27,6 +27,52 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(world.search("Opera GX", kind="application")[0]["id"], "app:opera.gx")
         self.assertEqual(world.search("opera.exe", kind="process")[0]["id"], "process:123")
 
+
+    def test_browser_classification_avoids_substring_false_positive(self):
+        world = NeuralWorld()
+        applications = SimpleNamespace(list=lambda: [
+            SimpleNamespace(id="knowledge-base", name="Knowledge Base", publisher="", version="1", source="test"),
+            SimpleNamespace(id="microsoft-edge", name="Microsoft Edge", publisher="", version="1", source="test"),
+        ])
+        discovery = NeuralDiscovery(world, SimpleNamespace(_tool=lambda name: applications))
+
+        self.assertEqual(discovery.sync_applications(), 2)
+        self.assertEqual(world.search("Knowledge Base", kind="application")[0]["parent_id"], "jarvis.system")
+        self.assertEqual(world.search("Microsoft Edge", kind="application")[0]["parent_id"], "jarvis.browser")
+
+    def test_first_cpu_sample_is_initialized_before_publish(self):
+        from unittest.mock import patch
+        class Memory:
+            percent = 41.5
+        class Swap:
+            percent = 12.0
+        class Disk:
+            percent = 55.0
+        class Net:
+            bytes_sent = 1000000
+            bytes_recv = 2000000
+
+        calls = []
+        def cpu_percent(interval=None):
+            calls.append(interval)
+            return 0.0 if interval is None and len(calls) == 1 else 17.0
+
+        fake_psutil = SimpleNamespace(
+            cpu_percent=cpu_percent,
+            virtual_memory=lambda: Memory(),
+            swap_memory=lambda: Swap(),
+            disk_usage=lambda root: Disk(),
+            net_io_counters=lambda: Net(),
+        )
+        world = NeuralWorld()
+        discovery = NeuralDiscovery(world, SimpleNamespace())
+        with patch.dict("sys.modules", {"psutil": fake_psutil}):
+            self.assertEqual(discovery.sync_telemetry(), 6)
+
+        node = world.search("CPU Utilization", kind="performance")[0]
+        self.assertEqual(node["metadata"]["value"], 17.0)
+        self.assertEqual(calls, [None, 0.1])
+
     def test_discovery_includes_services(self):
         world = NeuralWorld()
         services = SimpleNamespace(list_services=lambda: [
