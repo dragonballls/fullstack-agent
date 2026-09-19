@@ -152,7 +152,7 @@ class ElevenLabsClient:
         *,
         body: bytes | None = None,
         headers: dict[str, str] | None = None,
-    ) -> tuple[int, bytes, dict[str, str]]:
+    ) -> tuple[int, bytes]:
         key = get_api_key()
         if not key:
             raise RuntimeError("ElevenLabs API key is not configured")
@@ -170,7 +170,7 @@ class ElevenLabsClient:
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-                return int(response.status), response.read(), dict(response.headers.items())
+                return int(response.status), response.read()
         except urllib.error.HTTPError as exc:
             payload = exc.read(512)
             detail = payload.decode("utf-8", "replace").strip()
@@ -179,11 +179,11 @@ class ElevenLabsClient:
             raise RuntimeError("ElevenLabs connection failed") from exc
 
     def test_connection(self) -> dict[str, object]:
-        status, _body, _headers = self._request("GET", "/models")
+        status, _body = self._request("GET", "/models")
         return {"ok": 200 <= status < 300, "tested": True, "message": "ElevenLabs connection passed"}
 
     def list_voices(self) -> list[dict[str, str]]:
-        status, body, _headers = self._request("GET", "/voices")
+        status, body = self._request("GET", "/voices")
         if not 200 <= status < 300:
             return []
         try:
@@ -227,7 +227,7 @@ class ElevenLabsClient:
                 },
             }
         ).encode("utf-8")
-        status, audio, _headers = self._request(
+        status, audio = self._request(
             "POST",
             f"/text-to-speech/{urllib.parse.quote(voice_id, safe='')}/stream?{query}",
             body=body,
@@ -413,7 +413,9 @@ class ElevenLabsMouth:
 
     def shutdown(self) -> None:
         self.shut_up()
-        for worker in list(self._workers):
+        with self._lock:
+            workers = list(self._workers)
+        for worker in workers:
             if worker.is_alive():
                 worker.join(timeout=0.5)
         with self._lock:
