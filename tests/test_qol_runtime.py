@@ -1,5 +1,7 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 
 from quality_of_life.account_access import AccountGrant, AccountProvider, AccountRisk, AccountScope
 from quality_of_life.gods_eye import GeoPoint, LocationSnapshot, Place
@@ -73,6 +75,63 @@ class JarvisRuntimeTests(unittest.TestCase):
                     os.environ.pop(name, None)
                 else:
                     os.environ[name] = value
+
+    def test_self_coding_runtime_never_enables_direct_main_publication(self):
+        old = {name: os.environ.get(name) for name in ("JARVIS_SELF_CODING_REPO", "JARVIS_SELF_CODING_PUBLISH_MAIN", "JARVIS_SELF_CODING_PUSH")}
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / ".git").mkdir()
+                os.environ["JARVIS_SELF_CODING_REPO"] = tmp
+                os.environ["JARVIS_SELF_CODING_PUBLISH_MAIN"] = "1"
+                os.environ["JARVIS_SELF_CODING_PUSH"] = "0"
+                runtime = JarvisRuntime(CapabilityPolicy())
+                tool = runtime._tool("self_coding")
+                self.assertFalse(tool.config.publish_main)
+                self.assertFalse(tool.config.push_branch)
+        finally:
+            for name, value in old.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    def test_self_coding_checkpoint_actions_are_explicit_runtime_operations(self):
+        class FakeSelfCoding:
+            def __init__(self):
+                self.calls = []
+
+            def run(self, goal):
+                self.calls.append(("run", goal))
+                return "checkpoint-123"
+
+            def list_checkpoints(self):
+                self.calls.append(("list",))
+                return ({"checkpoint_id": "checkpoint-123", "state": "pending"},)
+
+            def approve_checkpoint(self, checkpoint):
+                self.calls.append(("approve", checkpoint))
+                return "promoted-sha"
+
+            def undo_checkpoint(self, checkpoint):
+                self.calls.append(("undo", checkpoint))
+                return "undone"
+
+        fake = FakeSelfCoding()
+        policy = CapabilityPolicy(frozenset({Capability.REPO_WRITE}), require_confirmation=frozenset())
+        runtime = JarvisRuntime(policy, factories={"self_coding": lambda: fake})
+        self.assertEqual(runtime.dispatch(Capability.REPO_WRITE, "self_coding.run", goal="change"), "checkpoint-123")
+        self.assertEqual(runtime.dispatch(Capability.REPO_WRITE, "self_coding.checkpoints"), ({"checkpoint_id": "checkpoint-123", "state": "pending"},))
+        self.assertEqual(runtime.dispatch(Capability.REPO_WRITE, "self_coding.approve", checkpoint="checkpoint-123"), "promoted-sha")
+        self.assertEqual(runtime.dispatch(Capability.REPO_WRITE, "self_coding.undo", checkpoint="checkpoint-123"), "undone")
+        self.assertEqual(
+            fake.calls,
+            [
+                ("run", "change"),
+                ("list",),
+                ("approve", "checkpoint-123"),
+                ("undo", "checkpoint-123"),
+            ],
+        )
 
     def test_runtime_preserves_deny_by_default(self):
         runtime = JarvisRuntime(CapabilityPolicy(), factories={"gods_eye": FakeEye})
