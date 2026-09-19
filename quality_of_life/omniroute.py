@@ -88,7 +88,7 @@ class OmniRouteConnection:
                 command[0] = executable
         else:
             try:
-                command = provisioner.command_argv()
+                command = provisioner.command_argv(for_start=True)
             except RuntimeError:
                 return False
         env = provisioner.environment()
