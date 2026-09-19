@@ -256,12 +256,13 @@ class JarvisRuntime:
             configured_repo = os.environ.get("JARVIS_SELF_CODING_REPO")
             if not configured_repo:
                 raise RuntimeError("self-coding is not configured; set JARVIS_SELF_CODING_REPO")
-            publish_main = os.environ.get("JARVIS_SELF_CODING_PUBLISH_MAIN", "1").strip().lower() in {"1", "true", "yes", "on"}
+            # Direct main publication is intentionally not configurable at runtime.
+            # Self-coding always creates a pending checkpoint; only an explicit
+            # self_coding.approve action can promote it to main.
             push_branch = os.environ.get("JARVIS_SELF_CODING_PUSH", "0").strip().lower() in {"1", "true", "yes", "on"}
             return lambda: SelfCodingAgent(SelfCodingConfig(
                 repo=Path(configured_repo),
                 push_branch=push_branch,
-                publish_main=publish_main and not push_branch,
                 max_passes=max(1, int(os.environ.get("JARVIS_SELF_CODING_MAX_PASSES", "1"))),
                 backend=os.environ.get("JARVIS_SELF_CODING_BACKEND", "auto"),
             ))
@@ -396,6 +397,9 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.service_action", lambda operation, provider, account_id=None, label=None, payload=None, confirmed=False: self._service_account_action(operation, provider, account_id=account_id, label=label, payload=payload, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.ACCOUNT_WRITE, "accounts.github_fork", lambda repository, account_id="primary", organization=None: self._github_fork(repository, account_id=account_id, organization=organization)))
         self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.run", lambda goal: self._tool("self_coding").run(goal)))
+        self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.checkpoints", lambda: self._tool("self_coding").list_checkpoints()))
+        self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.approve", lambda checkpoint: self._tool("self_coding").approve_checkpoint(checkpoint)))
+        self.orchestrator.register(Action(Capability.REPO_WRITE, "self_coding.undo", lambda checkpoint: self._tool("self_coding").undo_checkpoint(checkpoint)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.search", lambda query: self._tool("gods_eye").search(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.open_place", lambda query: self._open_place(query)))
