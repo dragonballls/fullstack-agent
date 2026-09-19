@@ -994,7 +994,7 @@ class FullstackJarvisHost:
 
     def _warm_omniroute(self) -> None:
         try:
-            if self.omniroute.ensure_running(wait_seconds=30):
+            if self.omniroute.ensure_running(wait_seconds=120):
                 LOGGER.info("embedded OmniRoute warm-up passed")
             else:
                 LOGGER.warning("embedded OmniRoute warm-up did not complete before timeout")
