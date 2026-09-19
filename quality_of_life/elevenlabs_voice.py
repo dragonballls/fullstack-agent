@@ -294,10 +294,45 @@ class ElevenLabsMouth:
                 "tested": False,
                 "message": "ElevenLabs API key is not configured",
             }
-        result = self.client.test_connection()
-        with self._lock:
-            self._last_error = "" if result.get("ok") else str(result.get("message", "test failed"))
-        return result
+        try:
+            result = self.client.test_connection()
+            with self._lock:
+                self._last_error = "" if result.get("ok") else str(result.get("message", "connection test failed"))
+            return result
+        except Exception as exc:
+            with self._lock:
+                self._last_error = _redact_error(exc)
+            return {"ok": False, "configured": True, "tested": True, "message": "ElevenLabs connection test failed"}
+
+    def test_speech(self, text: str = "Voice channel confirmed.") -> dict[str, object]:
+        if not self.configured:
+            return {
+                "ok": False,
+                "configured": False,
+                "tested": False,
+                "message": "ElevenLabs API key is not configured",
+            }
+        try:
+            with self._lock:
+                self._generation += 1
+                generation = self._generation
+                voice_id, model_id = self.voice_id, self.model_id
+            audio = self.client.synthesize(text, voice_id=voice_id, model_id=model_id)
+            with self._lock:
+                if generation == self._generation:
+                    self._queue.append(
+                        VoiceAudioPacket(
+                            sequence=generation,
+                            mime="audio/mpeg",
+                            data=base64.b64encode(audio).decode("ascii"),
+                        )
+                    )
+                    self._last_error = ""
+            return {"ok": True, "configured": True, "tested": True, "spoken": True, "message": "ElevenLabs speech test passed"}
+        except Exception as exc:
+            with self._lock:
+                self._last_error = _redact_error(exc)
+            return {"ok": False, "configured": True, "tested": True, "spoken": False, "message": "ElevenLabs speech test failed"}
 
     def say(self, text: str) -> None:
         message = str(text or "").strip()
