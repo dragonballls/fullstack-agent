@@ -1,6 +1,6 @@
 # Jarvis voice
 
-Jarvis uses the embedded Backtalk voice I/O layer as its desktop speech interface. Backtalk handles microphone capture, speech recognition, push-to-talk/listening behavior, and speech output; the Jarvis runtime remains the only planner and tool-execution brain.
+Jarvis uses the embedded Backtalk input layer as its desktop voice interface. Backtalk handles microphone capture, speech recognition, and push-to-talk/listening behavior; ElevenLabs handles speech output, and the Jarvis runtime remains the only planner and tool-execution brain.
 
 ## Brain and routing
 
@@ -52,7 +52,7 @@ ElevenLabs is an output engine only. It never becomes the agent planner or tool 
 
 Before the voice listener begins live microphone work, Jarvis performs a speech-recognition preflight against the actual embedded Backtalk `warm()` path. A preflight failure disables only voice input and retries later; the Fullstack visualizer and text link remain available. This keeps ordinary STT/model/device initialization failures out of the desktop application's startup path.
 
-The embedded Backtalk mouth worker receives an explicit shutdown sentinel during Jarvis exit and is joined before the desktop host finishes cleanup. Its audio output stream is also closed on the normal exit path. This is intended to eliminate resource races that can leave PyInstaller's `_MEI...` extraction directory locked at process shutdown.
+The ElevenLabs audio workers are stopped and joined during Jarvis exit. The WebView audio queue is cleared as part of voice shutdown. This keeps the single speech-output path from racing desktop shutdown.
 
 ## Real speech test
 
