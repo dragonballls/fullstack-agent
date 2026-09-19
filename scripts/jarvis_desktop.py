@@ -812,6 +812,8 @@ async function load(){
   catch(e){runtime.textContent="STATUS ERROR";message.textContent=String(e);}
 }
 connect.addEventListener("click",async()=>{
+  const secret=key.value;
+  if(!secret){message.textContent="Enter an API key first.";return;}
   let selected=provider.value==="custom"?customInput.value.trim():provider.value;
   if(provider.value==="auto"){
     const detected=await window.pywebview.api.omniroute_detect_provider(secret);
@@ -819,8 +821,7 @@ connect.addEventListener("click",async()=>{
     if(selected==="auto"){message.textContent="Choose the provider for this key; its format is ambiguous.";return;}
     provider.value=selected;
   }
-  const secret=key.value;
-  if(!selected||!secret){message.textContent="Select a provider and enter its API key.";return;}
+  if(!selected){message.textContent="Select a provider and enter its API key.";return;}
   connect.disabled=true;message.textContent="Connecting provider through OmniRoute…";
   try{
     const result=await window.pywebview.api.omniroute_configure_provider(selected,secret);
