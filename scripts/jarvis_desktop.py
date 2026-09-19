@@ -21,6 +21,7 @@ from typing import Any
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.omniroute_setup import OmniRouteProvisioner
+from quality_of_life.elevenlabs_voice import ElevenLabsMouth
 from quality_of_life.runtime import JarvisRuntime
 from quality_of_life.self_update import SelfUpdateError, build_windows_handoff_script, fetch_latest_release, is_update_available, stage_update
 
@@ -131,11 +132,12 @@ class VisualizerAdapter:
 
 
 class VoiceAdapter:
-    """Lazy bridge to the embedded upstream backtalk ears/mouth."""
+    """Bridge Backtalk ears into Jarvis while using ElevenLabs as the sole TTS engine."""
 
     def __init__(self, controller: JarvisDesktopController) -> None:
         self.controller = controller
         self.bridge: Any | None = None
+        self.elevenlabs = ElevenLabsMouth()
         self._transcript_lock = threading.RLock()
         self._transcript_queue: deque[str] = deque(maxlen=100)
 
@@ -164,7 +166,10 @@ class VoiceAdapter:
         from backtalk.ears import Ears
         from backtalk.mouth import Mouth
         from backtalk.ptt import PTTListener
-        LOGGER.info("embedded Backtalk smoke validation passed: %s", vendor)
+        from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth
+        if not callable(getattr(ElevenLabsClient, "synthesize", None)):
+            raise RuntimeError("ElevenLabs synthesis client is incomplete")
+        LOGGER.info("embedded Backtalk + ElevenLabs voice modules validated: %s / %s", vendor, ElevenLabsMouth.__name__)
 
     def start(self) -> None:
         if self._truthy("JARVIS_SMOKE") and self._truthy("JARVIS_SMOKE_VOICE"):
@@ -174,13 +179,19 @@ class VoiceAdapter:
             LOGGER.info("voice disabled by configuration")
             return
         from scripts.jarvis_voice_bridge import JarvisVoiceBridge
-        self.bridge = JarvisVoiceBridge(self.controller, on_output=self._record_transcript)
+        self.bridge = JarvisVoiceBridge(
+            self.controller,
+            mouth=self.elevenlabs,
+            on_output=self._record_transcript,
+        )
         self.bridge.start()
 
     def stop(self) -> None:
         if self.bridge is not None:
             self.bridge.stop()
             self.bridge = None
+        else:
+            self.elevenlabs.shutdown()
 
 
 class HandsAdapter:
@@ -395,6 +406,24 @@ class JarvisWebApi:
             return {"ok": True, "messages": [str(item)[:12000] for item in drain()]}
         except Exception:
             return {"ok": True, "messages": []}
+
+    def voice_audio(self) -> dict[str, Any]:
+        try:
+            return self.host.voice_audio()
+        except Exception:
+            return {"ok": True, "items": []}
+
+    def elevenlabs_status(self) -> dict[str, Any]:
+        return self.host.elevenlabs_status()
+
+    def elevenlabs_configure(self, api_key: str, voice_id: str = "", model_id: str = "") -> dict[str, Any]:
+        return self.host.configure_elevenlabs(api_key, voice_id, model_id)
+
+    def elevenlabs_test(self) -> dict[str, Any]:
+        return self.host.test_elevenlabs()
+
+    def elevenlabs_voices(self) -> dict[str, Any]:
+        return self.host.elevenlabs_voices()
 
     def open_omniroute_settings(self) -> dict[str, Any]:
         return self.host.open_omniroute_settings()
@@ -673,7 +702,43 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020914;color:#e6f7ff;font-family:Consolas,"SFMono-Regular",monospace}#frame{width:100%;height:100%;padding:10px;border:1px solid rgba(79,188,255,.28);border-radius:16px;background:linear-gradient(145deg,rgba(5,17,12,.98),rgba(2,7,5,.96));box-shadow:0 12px 36px rgba(0,0,0,.5),inset 0 0 24px rgba(35,133,205,.05)}#bar{display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:move;user-select:none}.pywebview-drag-region{cursor:move}.dot{width:7px;height:7px;border-radius:50%;background:#4dc7ff;box-shadow:0 0 11px rgba(77,199,255,.78)}#title{flex:1;font-size:9px;letter-spacing:.22em;color:#9edbff}#hotkey{font-size:7px;letter-spacing:.09em;color:#5d7891}#close{width:24px;height:22px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:transparent;color:#789087;cursor:pointer;font:inherit}#close:hover{border-color:rgba(255,140,152,.38);color:#ff9aa5}#row{display:flex;gap:8px;align-items:center}#input{min-width:0;flex:1;height:42px;border:1px solid rgba(91,190,255,.28);border-radius:9px;outline:none;padding:0 13px;background:rgba(0,0,0,.28);color:#e8f0f2;font:inherit;font-size:13px;letter-spacing:.03em;caret-color:#7edcff}#input:focus{border-color:rgba(91,190,255,.72);box-shadow:0 0 18px rgba(41,151,224,.14)}#input::placeholder{color:#627d95}#send{width:44px;height:42px;border:1px solid rgba(91,190,255,.30);border-radius:9px;background:rgba(61,220,132,.07);color:#b9e9ff;cursor:pointer;font:inherit;font-size:17px}#send:hover{background:rgba(61,220,132,.15);border-color:rgba(143,232,184,.7)}#status{margin-top:7px;min-height:12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#799bb7;font-size:8px;letter-spacing:.09em}#status.error{color:#ff8fa8}</style>
 </head>
 <body><div id="frame"><div id="bar" class="pywebview-drag-region"><span class="dot"></span><span id="title">JARVIS NEURAL FLOATING LINK</span><span id="hotkey">CTRL+ALT+SHIFT+F12</span><button id="close" type="button" aria-label="Return Jarvis text link to the main app">×</button></div><div id="row"><input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis from anywhere on your desktop…" disabled><button id="send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div><div id="status">CONNECTING…</div></div>
-<script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn);const readyPoll=window.setInterval(function(){if(window.pywebview&&window.pywebview.api){readyFn();window.clearInterval(readyPoll)}} ,250);if(window.pywebview&&window.pywebview.api)readyFn()})();</script>
+<script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn);const readyPoll=window.setInterval(function(){if(window.pywebview&&window.pywebview.api){readyFn();window.clearInterval(readyPoll)}} ,250);if(window.pywebview&&window.pywebview.api)readyFn()})();  const jarvisVoicePlayer=(function(){
+    let current=null,lastSequence=0,pending=[],polling=false;
+    function stopCurrent(){if(current){try{current.pause();current.currentTime=0;}catch(_e){}current=null;}}
+    function playNext(){
+      if(current||!pending.length)return;
+      const packet=pending.shift();
+      if(!packet||!packet.data){playNext();return;}
+      const audio=new Audio("data:"+(packet.mime||"audio/mpeg")+";base64,"+packet.data);
+      current=audio;
+      audio.onended=()=>{current=null;playNext();};
+      audio.onerror=()=>{current=null;playNext();};
+      audio.play().catch(()=>{pending.unshift(packet);current=null;});
+    }
+    function enqueue(items){
+      if(!Array.isArray(items))return;
+      for(const item of items){
+        const seq=Number(item&&item.sequence||0);
+        if(!seq||seq<lastSequence)continue;
+        if(seq>lastSequence){lastSequence=seq;pending=[];stopCurrent();}
+        if(seq===lastSequence&&item&&item.data)pending.push(item);
+      }
+      playNext();
+    }
+    async function poll(){
+      if(polling||!(window.pywebview&&window.pywebview.api))return;
+      polling=true;
+      try{const result=await window.pywebview.api.voice_audio();enqueue(result&&result.items);}
+      catch(_e){}finally{polling=false;}
+    }
+    function resume(){playNext();}
+    document.addEventListener("pointerdown",resume,{passive:true});
+    window.jarvisVoicePlayer={enqueue,poll,resume};
+    window.setInterval(poll,180);
+    poll();
+    return window.jarvisVoicePlayer;
+  })();
+</script>
 </body></html>'''
 
 OMNIROUTE_SETTINGS_HTML = r'''<!doctype html>
@@ -681,7 +746,7 @@ OMNIROUTE_SETTINGS_HTML = r'''<!doctype html>
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Jarvis AI Providers</title>
-<style>
+<style>.voice-choice{height:30px;margin:3px 0;padding:0 10px;width:100%;text-align:left}.voice-choice{font-size:8px}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#020914;color:#dff5ff;font-family:Consolas,"SFMono-Regular",monospace}
 body{padding:18px}.panel{height:100%;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(91,190,255,.25);border-radius:18px;padding:18px;background:radial-gradient(circle at 15% 5%,rgba(78,196,255,.10),transparent 35%),linear-gradient(145deg,rgba(3,17,30,.98),rgba(1,7,13,.98));box-shadow:0 20px 70px rgba(0,0,0,.52),inset 0 0 38px rgba(56,179,247,.04)}
 h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px;line-height:1.6;color:#67879d}.status{padding:9px;border:1px solid rgba(111,199,242,.14);border-radius:10px;background:rgba(255,255,255,.018);font-size:9px;line-height:1.5}.row{display:flex;gap:8px}.field{display:flex;flex-direction:column;gap:5px;flex:1}.field label{font-size:8px;letter-spacing:.12em;color:#7698ad}select,input{width:100%;height:38px;border:1px solid rgba(111,199,242,.20);border-radius:8px;background:rgba(0,0,0,.25);color:#e8f7ff;outline:none;padding:0 10px;font:10px Consolas,"SFMono-Regular",monospace}input:focus,select:focus{border-color:rgba(151,230,255,.66);box-shadow:0 0 18px rgba(50,165,239,.12)}button{height:36px;border:1px solid rgba(111,199,242,.21);border-radius:8px;background:rgba(5,24,39,.64);color:#c7edff;cursor:pointer;font:9px Consolas,"SFMono-Regular",monospace;padding:0 13px}button:hover{border-color:rgba(151,230,255,.68);background:rgba(27,124,184,.15)}.primary{background:rgba(33,131,180,.14);border-color:rgba(106,211,255,.30)}.providers{display:flex;flex-direction:column;gap:6px;min-height:70px;overflow:auto}.provider{display:flex;justify-content:space-between;gap:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(111,199,242,.09);font-size:9px}.muted{color:#628299}.ok{color:#9ceac0}.bad{color:#ff9cab}.actions{display:flex;gap:7px;flex-wrap:wrap}
@@ -697,11 +762,24 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 <div class="actions"><button id="connect" class="primary" type="button">CONNECT & TEST</button><button id="refresh" type="button">REFRESH</button><button id="dashboard" type="button">OPEN DASHBOARD</button></div>
 <div class="sub" id="message">Provider secrets are sent directly to OmniRoute over a local process boundary.</div>
 <div><div class="sub" style="margin-bottom:6px">CONFIGURED PROVIDERS</div><div class="providers" id="providers"><div class="muted">No provider status yet.</div></div></div>
+<div style="border-top:1px solid rgba(111,199,242,.10);padding-top:12px">
+<div class="sub" style="margin-bottom:6px">VOICE ENGINE · ELEVENLABS</div>
+<div class="status" id="voiceRuntime">Checking ElevenLabs voice engine…</div>
+<div class="field"><label>ELEVENLABS API KEY</label><input id="elevenKey" type="password" autocomplete="new-password" placeholder="Paste your ElevenLabs API key once"></div>
+<div class="row">
+<div class="field"><label>VOICE ID (OPTIONAL)</label><input id="voiceId" autocomplete="off" placeholder="Leave blank for configured/default voice"></div>
+<div class="field"><label>MODEL</label><select id="voiceModel"><option value="eleven_flash_v2_5">Flash v2.5 · conversational</option><option value="eleven_v3">v3 · expressive</option></select></div>
+</div>
+<div class="actions"><button id="voiceSave" class="primary" type="button">SAVE & TEST VOICE</button><button id="voiceTest" type="button">TEST VOICE</button><button id="voiceLoad" type="button">LOAD VOICES</button></div>
+<div class="sub" id="voiceMessage">The key is stored in the OS credential store and is never shown back here.</div>
+<div class="providers" id="voiceList"><div class="muted">Available ElevenLabs voices appear here after connection.</div></div>
+</div>
 </div>
 <script>
 (function(){
 "use strict";
 const provider=document.getElementById("provider"), custom=document.getElementById("customWrap"), customInput=document.getElementById("customProvider"), key=document.getElementById("key"), connect=document.getElementById("connect"), refresh=document.getElementById("refresh"), dashboard=document.getElementById("dashboard"), runtime=document.getElementById("runtime"), message=document.getElementById("message"), providers=document.getElementById("providers");
+const elevenKey=document.getElementById("elevenKey"), voiceId=document.getElementById("voiceId"), voiceModel=document.getElementById("voiceModel"), voiceSave=document.getElementById("voiceSave"), voiceTest=document.getElementById("voiceTest"), voiceLoad=document.getElementById("voiceLoad"), voiceRuntime=document.getElementById("voiceRuntime"), voiceMessage=document.getElementById("voiceMessage"), voiceList=document.getElementById("voiceList");
 provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});
 function render(data){
   if(!data){runtime.textContent="OmniRoute status unavailable.";return;}
@@ -730,8 +808,47 @@ connect.addEventListener("click",async()=>{
 });
 refresh.addEventListener("click",load);
 dashboard.addEventListener("click",async()=>{try{await window.pywebview.api.open_omniroute_dashboard();}catch(e){message.textContent="Dashboard could not be opened.";}});
+async function loadVoice(){
+  try{
+    const data=await window.pywebview.api.elevenlabs_status();
+    voiceRuntime.textContent=(data.configured?"ELEVENLABS READY":"ELEVENLABS KEY NEEDED")+" · "+(data.model_id||"");
+    if(!voiceId.value&&data.voice_id)voiceId.value=data.voice_id;
+    if(data.model_id)voiceModel.value=data.model_id;
+    voiceMessage.textContent=data.last_error||"ElevenLabs voice path is ready.";
+  }catch(_e){voiceRuntime.textContent="ELEVENLABS STATUS ERROR";}
+}
+async function saveVoice(){
+  const secret=elevenKey.value;
+  if(!secret){voiceMessage.textContent="Paste your ElevenLabs API key.";return;}
+  voiceSave.disabled=true;voiceMessage.textContent="Saving securely and testing…";
+  try{
+    const result=await window.pywebview.api.elevenlabs_configure(secret,voiceId.value.trim(),voiceModel.value);
+    elevenKey.value="";
+    voiceMessage.textContent=result&&result.message?result.message:"ElevenLabs connected.";
+    await loadVoice();
+  }catch(_e){elevenKey.value="";voiceMessage.textContent="Voice setup failed without exposing the credential.";}
+  finally{voiceSave.disabled=false;}
+}
+async function testVoice(){
+  voiceTest.disabled=true;voiceMessage.textContent="Testing ElevenLabs…";
+  try{
+    const result=await window.pywebview.api.elevenlabs_test();
+    voiceMessage.textContent=result&&result.message?result.message:"Voice test complete.";
+  }catch(_e){voiceMessage.textContent="Voice test failed.";}
+  finally{voiceTest.disabled=false;}
+}
+async function loadVoices(){
+  voiceLoad.disabled=true;voiceMessage.textContent="Loading available voices…";
+  try{
+    const result=await window.pywebview.api.elevenlabs_voices();
+    const items=Array.isArray(result&&result.voices)?result.voices:[];
+    voiceList.innerHTML=items.length?items.slice(0,80).map(v=>'<button type="button" class="voice-choice" data-id="'+String(v.id).replace(/["<>&]/g,"")+'">'+String(v.name).replace(/[<>&]/g,"")+'</button>').join(""):'<div class="muted">No voices returned.</div>';
+    voiceList.querySelectorAll(".voice-choice").forEach(btn=>btn.addEventListener("click",()=>{voiceId.value=btn.dataset.id||"";voiceMessage.textContent="Voice selected. Save & Test Voice to apply it.";}));
+  }catch(_e){voiceMessage.textContent="Voice list could not be loaded.";}
+  finally{voiceLoad.disabled=false;}
+}
 
-function ready(){if(window.pywebview&&window.pywebview.api)load();}
+function ready(){if(window.pywebview&&window.pywebview.api){load();loadVoice();}}
 window.addEventListener("pywebviewready",ready);
 const poll=window.setInterval(()=>{if(window.pywebview&&window.pywebview.api){window.clearInterval(poll);load();}},250);
 })();
@@ -778,7 +895,8 @@ class FullstackJarvisHost:
         return status
 
     def configure_omniroute_provider(self, provider: str, api_key: str) -> dict[str, Any]:
-        self.omniroute.ensure_running(wait_seconds=15)
+        if not self.omniroute.ensure_running(wait_seconds=15):
+            raise RuntimeError("OmniRoute did not become ready; provider credential was not submitted")
         result = self.omniroute.configure_provider(provider, api_key)
         test = self.omniroute.test_provider(provider)
         result["tested"] = bool(test.get("ok"))
@@ -786,8 +904,51 @@ class FullstackJarvisHost:
         return result
 
     def test_omniroute_provider(self, provider: str) -> dict[str, Any]:
-        self.omniroute.ensure_running(wait_seconds=15)
+        if not self.omniroute.ensure_running(wait_seconds=15):
+            raise RuntimeError("OmniRoute did not become ready")
         return self.omniroute.test_provider(provider)
+
+    def voice_audio(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        take_audio = getattr(voice, "take_audio", None)
+        if not callable(take_audio):
+            return {"ok": True, "items": []}
+        try:
+            return {"ok": True, "items": take_audio()}
+        except Exception:
+            return {"ok": True, "items": []}
+
+    def elevenlabs_status(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        status = getattr(voice, "status", None)
+        return status() if callable(status) else {"ok": True, "provider": "ElevenLabs", "configured": False}
+
+    def configure_elevenlabs(self, api_key: str, voice_id: str = "", model_id: str = "") -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        configure = getattr(voice, "configure", None)
+        if not callable(configure):
+            raise RuntimeError("ElevenLabs voice engine is unavailable")
+        result = configure(api_key, voice_id=voice_id or None, model_id=model_id or None)
+        test = self.test_elevenlabs()
+        result["tested"] = bool(test.get("ok"))
+        result["message"] = "ElevenLabs voice connected and tested" if result["tested"] else "ElevenLabs key saved; connection test failed"
+        return result
+
+    def test_elevenlabs(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        test = getattr(voice, "test", None)
+        return test() if callable(test) else {"ok": False, "tested": False, "message": "ElevenLabs voice engine is unavailable"}
+
+    def elevenlabs_voices(self) -> dict[str, Any]:
+        voice = getattr(self.voice, "elevenlabs", None)
+        client = getattr(voice, "client", None)
+        list_voices = getattr(client, "list_voices", None)
+        if not callable(list_voices):
+            return {"ok": False, "voices": []}
+        try:
+            return {"ok": True, "voices": list_voices()}
+        except Exception:
+            return {"ok": False, "voices": []}
 
     def open_omniroute_dashboard(self) -> dict[str, Any]:
         import webbrowser
