@@ -7,13 +7,23 @@ bridge. It is rendered as an additive UI build and does not replace Jarvis core.
 NEURAL_MESH_BUILTIN = {
     "id": "neural-mesh",
     "name": "Neural JARVIS",
-    "version": "0.5.0",
-    "description": "Blue fully 3D JARVIS world with instanced liquid-cell neurons, lifecycle pulses, fluid grab/return, spatial windows, search, zoom, performance culling, and a camera-facing persistent neural command surface with universal procedural object shaping, reversible transforms, and persistent rotation motion.",
+    "version": "0.6.0",
+    "description": "Blue fully 3D JARVIS world with high-resolution water-droplet neurons, SPH-style particle-fluid motion, differentiated organic cells, dense ambient neural ecology, curved energy filaments, a holographic JARVIS core, lifecycle pulses, spatial windows, search, zoom, performance culling, and persistent command surfaces.",
     "protected": True,
     "css": r"""
 #jarvis-text-shell,#jarvis-workspace-shell{display:none!important}
 #jarvis-ui-build-layer.neural-mesh-root{position:fixed;inset:0;z-index:2147481000;pointer-events:none;color:#dff6ff;font-family:Inter,Segoe UI,system-ui,sans-serif;overflow:hidden;background:#000}
-#jarvis-neural-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto;cursor:grab;background:radial-gradient(circle at 50% 46%,rgba(29,150,255,.075),transparent 43%),linear-gradient(180deg,#010813,#000207)}
+#jarvis-neural-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto;cursor:grab;background:radial-gradient(circle at 50% 46%,rgba(29,150,255,.075),transparent 43%),radial-gradient(circle at 50% 52%,rgba(11,63,109,.055),transparent 57%),linear-gradient(180deg,#010813,#000207)}
+#jn-core-structure{position:absolute;left:0;top:0;width:188px;height:188px;transform:translate3d(-9999px,-9999px,0);transform-style:preserve-3d;pointer-events:none;z-index:22;opacity:.98;filter:drop-shadow(0 0 22px rgba(46,176,255,.18))}
+.jn-core-orb{position:absolute;inset:47px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(208,248,255,.95),rgba(72,200,255,.45) 19%,rgba(13,89,163,.32) 42%,rgba(6,25,52,.08) 66%,transparent 72%);box-shadow:0 0 24px rgba(62,194,255,.72),0 0 66px rgba(15,121,221,.38),inset 0 0 24px rgba(168,240,255,.32);animation:jn-core-breathe 3.8s ease-in-out infinite}
+.jn-core-ring{position:absolute;left:19px;top:19px;width:150px;height:150px;border:1px solid rgba(92,211,255,.34);border-radius:50%;box-shadow:0 0 20px rgba(55,180,255,.1),inset 0 0 22px rgba(47,159,244,.06);transform:rotateX(67deg);animation:jn-core-spin 14s linear infinite}
+.jn-core-ring.r2{left:8px;top:36px;width:172px;height:116px;transform:rotateY(63deg) rotateZ(16deg);animation-duration:19s;animation-direction:reverse}
+.jn-core-ring.r3{left:34px;top:7px;width:120px;height:173px;transform:rotateY(72deg) rotateZ(-24deg);animation-duration:23s}
+.jn-core-node{position:absolute;left:88px;top:88px;width:12px;height:12px;transform:translate(-50%,-50%);border-radius:50%;background:#dffbff;box-shadow:0 0 18px #9de8ff,0 0 44px rgba(60,190,255,.82)}
+.jn-core-cross{position:absolute;left:50%;top:50%;width:180px;height:1px;transform:translate(-50%,-50%) rotate(27deg);background:linear-gradient(90deg,transparent,rgba(116,221,255,.5),transparent);box-shadow:0 0 12px rgba(74,198,255,.32)}
+.jn-core-cross.c2{transform:translate(-50%,-50%) rotate(-27deg);opacity:.55}
+@keyframes jn-core-spin{to{transform:rotateX(67deg) rotateZ(360deg)}}
+@keyframes jn-core-breathe{0%,100%{transform:scale(.94);opacity:.86}50%{transform:scale(1.06);opacity:1}}
 #jarvis-neural-canvas.dragging{cursor:grabbing}
 #jn-hud{position:absolute;left:24px;top:20px;pointer-events:none;text-shadow:0 0 18px rgba(56,174,255,.45)}
 #jn-title{font-size:16px;letter-spacing:.34em;color:#b8e9ff}
@@ -89,6 +99,7 @@ NEURAL_MESH_BUILTIN = {
     "markup": r"""
 <div class="neural-mesh-root">
   <canvas id="jarvis-neural-canvas"></canvas>
+  <div id="jn-core-structure" aria-hidden="true"><span class="jn-core-ring"></span><span class="jn-core-ring r2"></span><span class="jn-core-ring r3"></span><span class="jn-core-cross"></span><span class="jn-core-cross c2"></span><span class="jn-core-orb"></span><span class="jn-core-node"></span></div>
   <div id="jn-surfaces"></div>
   <div id="jn-hud"><div id="jn-title">JARVIS</div><div id="jn-status">NEURAL MESH · 3D WORLD · ONLINE</div></div>
   <div id="jn-focus"></div>
@@ -146,7 +157,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 
 const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
-  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],eventSequence:0,
+  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
