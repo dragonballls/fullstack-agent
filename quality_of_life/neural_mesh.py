@@ -30,6 +30,10 @@ NEURAL_MESH_BUILTIN = {
 .jn-core-data-orbit{width:112%;height:58%;transform:translate(-50%,-50%) rotateY(64deg) rotateZ(17deg);animation:jn-core-data-orbit 10s linear infinite reverse;border-style:solid;border-color:rgba(78,198,255,.18)}
 .jn-core-module-ring{width:74%;height:74%;transform:translate(-50%,-50%) rotateY(28deg) rotateZ(-31deg);border-style:dotted;animation:jn-core-module-ring 16s linear infinite}
 .jn-core-module-ring::before{content:"";position:absolute;left:8%;top:50%;width:84%;height:1px;background:linear-gradient(90deg,transparent,rgba(121,226,255,.42),transparent);box-shadow:0 -24px 0 rgba(73,195,255,.12),0 24px 0 rgba(73,195,255,.10)}
+.jn-core-module-ring::after{content:"";position:absolute;inset:12% 4%;border-radius:50%;background:repeating-conic-gradient(from 8deg,rgba(126,225,255,.34) 0deg 1.2deg,transparent 1.2deg 13deg);mask:radial-gradient(circle,transparent 0 64%,#000 66% 71%,transparent 73%);-webkit-mask:radial-gradient(circle,transparent 0 64%,#000 66% 71%,transparent 73%);opacity:.48}
+.jn-core-heart{position:absolute;left:50%;top:50%;width:52px;height:48px;transform:translate(-50%,-45%) rotate(-45deg);border-radius:50% 50% 45% 45%;background:radial-gradient(circle at 38% 32%,rgba(239,253,255,.98),rgba(105,218,255,.78) 24%,rgba(26,124,208,.36) 54%,transparent 72%);box-shadow:0 0 22px rgba(111,224,255,.86),0 0 58px rgba(29,142,235,.44),inset 8px 8px 18px rgba(206,250,255,.22);z-index:2}
+.jn-core-heart::before,.jn-core-heart::after{content:"";position:absolute;width:26px;height:26px;border-radius:50%;background:inherit;box-shadow:inherit}
+.jn-core-heart::before{left:0;top:-13px}.jn-core-heart::after{right:-13px;top:0}
 @keyframes jn-core-sweep{to{transform:translate(-50%,-50%) rotateX(72deg) rotateZ(360deg)}}
 @keyframes jn-core-data-orbit{to{transform:translate(-50%,-50%) rotateY(64deg) rotateZ(-343deg)}}
 @keyframes jn-core-module-ring{to{transform:translate(-50%,-50%) rotateY(28deg) rotateZ(329deg)}}
@@ -125,7 +129,7 @@ NEURAL_MESH_BUILTIN = {
     "markup": r"""
 <div class="neural-mesh-root">
   <canvas id="jarvis-neural-canvas"></canvas>
-  <div id="jn-core-structure" aria-hidden="true"><span class="jn-core-ring"></span><span class="jn-core-ring r2"></span><span class="jn-core-ring r3"></span><span class="jn-core-sweep"></span><span class="jn-core-data-orbit"></span><span class="jn-core-module-ring"></span><span class="jn-core-cross"></span><span class="jn-core-cross c2"></span><span class="jn-core-orb"></span><span class="jn-core-node"></span></div>
+  <div id="jn-core-structure" aria-hidden="true"><span class="jn-core-ring"></span><span class="jn-core-ring r2"></span><span class="jn-core-ring r3"></span><span class="jn-core-sweep"></span><span class="jn-core-data-orbit"></span><span class="jn-core-module-ring"></span><span class="jn-core-heart"></span><span class="jn-core-cross"></span><span class="jn-core-cross c2"></span><span class="jn-core-orb"></span><span class="jn-core-node"></span></div>
   <div id="jn-surfaces"></div>
   <div id="jn-hud"><div id="jn-title">JARVIS</div><div id="jn-status">NEURAL MESH · 3D WORLD · ONLINE</div></div>
   <div id="jn-focus"></div>
@@ -185,7 +189,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 
 const S={
   nodes:[],links:[],windows:[],nodeMap:new Map(),selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
-  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),pulses:new Map(),particles:[],ambientNodes:[],microPositions:null,microCount:64000,pointCount:0,lastPointBuild:0,pointBuildMs:140,lodDetail:new Map(),lodStats:{near:0,far:0,culled:0,field:0},activeNodeIds:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthFollow:false,earthSun:[-.55,.68,.75],
+  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),pulses:new Map(),particles:[],ambientNodes:[],microPositions:null,microCount:64000,pointCount:0,lastPointBuild:0,pointBuildMs:140,microBuffersReady:false,lodDetail:new Map(),lodStats:{near:0,far:0,culled:0,field:0},activeNodeIds:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthFollow:false,earthSun:[-.55,.68,.75],
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,handDragLastTime:0,handDragLastDelta:[0,0,0],
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
@@ -308,11 +312,11 @@ const partProg=program(
 
 
 const fieldProg=program(
-'#version 300 es\\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aSize;layout(location=2)in float aEnergy;layout(location=3)in float aPhase;uniform mat4 uMvp;uniform mat4 uView;uniform float uTime;out float vEnergy;out float vPhase;void main(){vec4 vp=uView*vec4(aPos,1.);float depth=max(.18,-vp.z);gl_Position=uMvp*vec4(aPos,1.);gl_PointSize=clamp(aSize*(11.0/depth),1.0,7.0);vEnergy=aEnergy;vPhase=aPhase;}',
+'#version 300 es\\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aSize;layout(location=2)in float aEnergy;layout(location=3)in float aPhase;uniform mat4 uMvp;uniform mat4 uView;uniform vec3 uAnchor;uniform float uDeepField;uniform float uTime;out float vEnergy;out float vPhase;void main(){vec3 world=aPos+(uDeepField>.5?uAnchor:vec3(0.));vec4 vp=uView*vec4(world,1.);float depth=max(.18,-vp.z);float radial=length(world-uAnchor);float visibility=1.-smoothstep(124.,182.,radial);if(depth<.08||visibility<=.001)gl_PointSize=0.;else gl_PointSize=clamp(aSize*(10.5/depth)*visibility,1.0,7.0);gl_Position=uMvp*vec4(world,1.);vEnergy=aEnergy*visibility;vPhase=aPhase;}',
 '#version 300 es\\nprecision highp float;in float vEnergy;in float vPhase;uniform float uTime;out vec4 outColor;void main(){vec2 q=gl_PointCoord*2.-1.;float r=length(q);if(r>1.)discard;float core=smoothstep(.72,.02,r);float halo=smoothstep(1.,.16,r)*.38;float pulse=.78+.22*sin(uTime*.0018+vPhase*6.283);vec3 c=mix(vec3(.018,.16,.34),vec3(.32,.90,1.),core)*pulse;outColor=vec4(c,(halo+.34*core)*(.20+.80*clamp(vEnergy,0.,1.)));}'
 );
 
-const meshPos=gl.createBuffer(),meshNormal=gl.createBuffer(),meshIndex=gl.createBuffer(),centerBuf=gl.createBuffer(),scaleBuf=gl.createBuffer(),energyBuf=gl.createBuffer(),phaseBuf=gl.createBuffer(),selectedBuf=gl.createBuffer(),shapeBuf=gl.createBuffer(),birthBuf=gl.createBuffer(),rotBuf=gl.createBuffer(),angBuf=gl.createBuffer(),lineBuf=gl.createBuffer(),lineStrengthBuf=gl.createBuffer(),lineProgressBuf=gl.createBuffer(),particleBuf=gl.createBuffer(),particleLifeBuf=gl.createBuffer(),particleSizeBuf=gl.createBuffer(),fieldPosBuf=gl.createBuffer(),fieldSizeBuf=gl.createBuffer(),fieldEnergyBuf=gl.createBuffer(),fieldPhaseBuf=gl.createBuffer();
+const meshPos=gl.createBuffer(),meshNormal=gl.createBuffer(),meshIndex=gl.createBuffer(),centerBuf=gl.createBuffer(),scaleBuf=gl.createBuffer(),energyBuf=gl.createBuffer(),phaseBuf=gl.createBuffer(),selectedBuf=gl.createBuffer(),shapeBuf=gl.createBuffer(),birthBuf=gl.createBuffer(),rotBuf=gl.createBuffer(),angBuf=gl.createBuffer(),lineBuf=gl.createBuffer(),lineStrengthBuf=gl.createBuffer(),lineProgressBuf=gl.createBuffer(),particleBuf=gl.createBuffer(),particleLifeBuf=gl.createBuffer(),particleSizeBuf=gl.createBuffer(),fieldPosBuf=gl.createBuffer(),fieldSizeBuf=gl.createBuffer(),fieldEnergyBuf=gl.createBuffer(),fieldPhaseBuf=gl.createBuffer(),microPosBuf=gl.createBuffer(),microSizeBuf=gl.createBuffer(),microEnergyBuf=gl.createBuffer(),microPhaseBuf=gl.createBuffer();
 
 function buildDroplet(){
   const lat=16,lon=24,pos=[],nor=[],idx=[];
@@ -414,8 +418,9 @@ function simulateFluid(dt,nodes){
   }
 }
 function buildMicroField(){
-  const count=S.microCount;if(S.microPositions&&S.microPositions.length===count*3)return;
-  const out=new Float32Array(count*3);
+  const count=S.microCount;if(S.microPositions&&S.microPositions.length===count*3&&S.microBuffersReady)return;
+  const out=S.microPositions&&S.microPositions.length===count*3?S.microPositions:new Float32Array(count*3);
+  const sizes=new Float32Array(count),energies=new Float32Array(count),phases=new Float32Array(count);
   for(let i=0;i<count;i++){
     const a=hashUnit("micro:a:"+i)*Math.PI*2,b=(hashUnit("micro:b:"+i)-.5)*Math.PI,r=7+Math.pow(hashUnit("micro:r:"+i),.64)*118;
     const lobe=.78+.22*(.5+.5*Math.sin(a*3.0+i*.0007)),flatten=.63+.24*hashUnit("micro:f:"+i),x=Math.cos(a)*Math.cos(b)*r*1.25*lobe,y=Math.sin(b)*r*flatten,z=Math.sin(a)*Math.cos(b)*r*.98*lobe;
@@ -423,37 +428,37 @@ function buildMicroField(){
     out[i*3]=x+Math.cos(a*7.0+b*3.0)*strand*.34;
     out[i*3+1]=y+Math.sin(a*5.0-b*2.0)*strand*.22;
     out[i*3+2]=z+Math.cos(a*6.0+b*4.0)*strand*.28;
+    sizes[i]=.28+.34*hashUnit("micro:s:"+i);
+    energies[i]=.08+.30*hashUnit("micro:e:"+i);
+    phases[i]=hashUnit("micro:p:"+i);
   }
   S.microPositions=out;
+  upload(microPosBuf,out,gl.STATIC_DRAW);upload(microSizeBuf,sizes,gl.STATIC_DRAW);upload(microEnergyBuf,energies,gl.STATIC_DRAW);upload(microPhaseBuf,phases,gl.STATIC_DRAW);
+  S.microBuffersReady=true;
 }
 function renderPointField(now,c,mvp){
   buildMicroField();
   const v=new Float32Array(16);lookAt(v,c.eye,S.target);
-  if(now-S.lastPointBuild<S.pointBuildMs&&S.pointCount>0){
-    gl.useProgram(fieldProg);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uView"),false,v);gl.uniform1f(gl.getUniformLocation(fieldProg,"uTime"),now);
-    attr(fieldProg,"aPos",3,fieldPosBuf);attr(fieldProg,"aSize",1,fieldSizeBuf);attr(fieldProg,"aEnergy",1,fieldEnergyBuf);attr(fieldProg,"aPhase",1,fieldPhaseBuf);gl.drawArrays(gl.POINTS,0,S.pointCount);return;
-  }
-  const core=S.nodes.find(function(n){return n.id==="jarvis.core";}),anchor=core?nodePosition(core):[0,0,0],full=new Set(S.activeNodeIds||[]),pp=[],ss=[],ee=[],ph=[];
-  const append=function(p,size,energy,phase){pp.push(p[0],p[1],p[2]);ss.push(size);ee.push(energy);ph.push(phase);};
-  const candidates=S.nodes.concat(S.ambientNodes);
-  for(let i=0;i<candidates.length;i++){
+  const core=S.nodes.find(function(n){return n.id==="jarvis.core";}),anchor=core?nodePosition(core):[0,0,0];
+  const full=new Set(S.activeNodeIds||[]),pp=[],ss=[],ee=[],ph=[];
+  const candidates=S.nodes.concat(S.ambientNodes),candidateCap=14000;
+  for(let i=0;i<candidates.length&&pp.length/3<candidateCap;i++){
     const n=candidates[i];if(full.has(n.id))continue;
     const p=nodePosition(n),rel=sub(p,c.eye),d=Math.hypot(rel[0],rel[1],rel[2]),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];
     if(d>170||depth<-.10*d)continue;
-    append(p,Math.max(.45,(n.scale||.5)*1.4),Math.min(1,Number(n.energy)||.18),hashUnit("point|"+n.id));
-    if(pp.length/3>=14000)break;
-  }
-  const mp=S.microPositions;
-  const microLimit=S.mode==="background"?3500:S.quality==="performance"?9000:26000;
-  for(let i=0;i<S.microCount&&pp.length/3<14000+microLimit;i++){
-    const p=[anchor[0]+mp[i*3],anchor[1]+mp[i*3+1],anchor[2]+mp[i*3+2]],rel=sub(p,c.eye),d=Math.hypot(rel[0],rel[1],rel[2]),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];
-    if(d<20||d>180||depth<-.12*d)continue;
-    append(p,.24+.34*hashUnit("micro:s:"+i),.08+.30*hashUnit("micro:e:"+i),hashUnit("micro:p:"+i));
+    pp.push(p[0],p[1],p[2]);ss.push(Math.max(.45,(n.scale||.5)*1.4));ee.push(Math.min(1,Number(n.energy)||.18));ph.push(hashUnit("point|"+n.id));
   }
   S.pointCount=Math.floor(pp.length/3);S.lastPointBuild=now;
   upload(fieldPosBuf,new Float32Array(pp));upload(fieldSizeBuf,new Float32Array(ss));upload(fieldEnergyBuf,new Float32Array(ee));upload(fieldPhaseBuf,new Float32Array(ph));
   gl.useProgram(fieldProg);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uView"),false,v);gl.uniform1f(gl.getUniformLocation(fieldProg,"uTime"),now);
+  gl.uniform3fv(gl.getUniformLocation(fieldProg,"uAnchor"),new Float32Array([0,0,0]));gl.uniform1f(gl.getUniformLocation(fieldProg,"uDeepField"),0);
   attr(fieldProg,"aPos",3,fieldPosBuf);attr(fieldProg,"aSize",1,fieldSizeBuf);attr(fieldProg,"aEnergy",1,fieldEnergyBuf);attr(fieldProg,"aPhase",1,fieldPhaseBuf);gl.drawArrays(gl.POINTS,0,S.pointCount);
+  if(S.microBuffersReady){
+    gl.uniform3fv(gl.getUniformLocation(fieldProg,"uAnchor"),new Float32Array(anchor));gl.uniform1f(gl.getUniformLocation(fieldProg,"uDeepField"),1);
+    attr(fieldProg,"aPos",3,microPosBuf);attr(fieldProg,"aSize",1,microSizeBuf);attr(fieldProg,"aEnergy",1,microEnergyBuf);attr(fieldProg,"aPhase",1,microPhaseBuf);
+    gl.drawArrays(gl.POINTS,0,S.microCount);
+  }
+  S.lodStats.field=S.microCount;
 }
 function resize(){
   const dpr=Math.min(window.devicePixelRatio||1,S.quality==="maximum"?1.25:1.0),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
