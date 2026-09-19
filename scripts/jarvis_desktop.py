@@ -425,6 +425,11 @@ class JarvisWebApi:
     def elevenlabs_voices(self) -> dict[str, Any]:
         return self.host.elevenlabs_voices()
 
+    def omniroute_detect_provider(self, api_key: str) -> dict[str, Any]:
+        from quality_of_life.omniroute_setup import detect_provider_from_key
+        provider = detect_provider_from_key(api_key)
+        return {"ok": True, "provider": provider, "detected": bool(provider)}
+
     def open_omniroute_settings(self) -> dict[str, Any]:
         return self.host.open_omniroute_settings()
 
@@ -754,9 +759,9 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 </head>
 <body><div class="panel">
 <h1>JARVIS · AI PROVIDERS</h1>
-<div class="sub">OmniRoute is built into the Jarvis release. Enter provider credentials here; Jarvis does not display or store the secret itself.</div>
+<div class="sub">OmniRoute is built into the Jarvis release. Paste an API key and Jarvis safely auto-detects recognizable provider formats; ambiguous keys require an explicit provider selection.</div>
 <div class="status" id="runtime">Checking OmniRoute runtime…</div>
-<div><div class="field"><label>PROVIDER</label><select id="provider"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google AI</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="xai">xAI</option><option value="mistral">Mistral</option><option value="cerebras">Cerebras</option><option value="together">Together</option><option value="fireworks">Fireworks</option><option value="custom">Custom provider ID…</option></select></div></div>
+<div><div class="field"><label>PROVIDER</label><select id="provider"><option value="auto" selected>Auto-detect from API key</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google AI</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="xai">xAI</option><option value="mistral">Mistral</option><option value="cerebras">Cerebras</option><option value="together">Together</option><option value="fireworks">Fireworks</option><option value="custom">Custom provider ID…</option></select></div></div>
 <div class="field" id="customWrap" style="display:none"><label>CUSTOM PROVIDER ID</label><input id="customProvider" autocomplete="off" placeholder="provider-id"></div>
 <div class="field"><label>API KEY</label><input id="key" type="password" autocomplete="new-password" placeholder="Paste provider API key"></div>
 <div class="actions"><button id="connect" class="primary" type="button">CONNECT & TEST</button><button id="refresh" type="button">REFRESH</button><button id="dashboard" type="button">OPEN DASHBOARD</button></div>
@@ -780,7 +785,21 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 "use strict";
 const provider=document.getElementById("provider"), custom=document.getElementById("customWrap"), customInput=document.getElementById("customProvider"), key=document.getElementById("key"), connect=document.getElementById("connect"), refresh=document.getElementById("refresh"), dashboard=document.getElementById("dashboard"), runtime=document.getElementById("runtime"), message=document.getElementById("message"), providers=document.getElementById("providers");
 const elevenKey=document.getElementById("elevenKey"), voiceId=document.getElementById("voiceId"), voiceModel=document.getElementById("voiceModel"), voiceSave=document.getElementById("voiceSave"), voiceTest=document.getElementById("voiceTest"), voiceLoad=document.getElementById("voiceLoad"), voiceRuntime=document.getElementById("voiceRuntime"), voiceMessage=document.getElementById("voiceMessage"), voiceList=document.getElementById("voiceList");
-provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});
+provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});async function detectProvider(){
+  const secret=key.value;
+  if(!secret||!window.pywebview||!window.pywebview.api)return;
+  try{
+    const result=await window.pywebview.api.omniroute_detect_provider(secret);
+    if(result&&result.provider){
+      provider.value=result.provider;
+      message.textContent="Detected provider: "+result.provider+". Click CONNECT & TEST.";
+    }else{
+      provider.value="auto";
+      message.textContent="Provider format is ambiguous; choose the provider explicitly.";
+    }
+  }catch(_e){}
+}
+key.addEventListener("input",()=>{window.clearTimeout(key._detectTimer);key._detectTimer=window.setTimeout(detectProvider,220);});
 function render(data){
   if(!data){runtime.textContent="OmniRoute status unavailable.";return;}
   const version=data.version||"unknown", source=data.source||"unknown", ready=data.ready?"ONLINE":"STARTING";
@@ -793,7 +812,13 @@ async function load(){
   catch(e){runtime.textContent="STATUS ERROR";message.textContent=String(e);}
 }
 connect.addEventListener("click",async()=>{
-  const selected=provider.value==="custom"?customInput.value.trim():provider.value;
+  let selected=provider.value==="custom"?customInput.value.trim():provider.value;
+  if(provider.value==="auto"){
+    const detected=await window.pywebview.api.omniroute_detect_provider(secret);
+    selected=detected&&detected.provider?detected.provider:"auto";
+    if(selected==="auto"){message.textContent="Choose the provider for this key; its format is ambiguous.";return;}
+    provider.value=selected;
+  }
   const secret=key.value;
   if(!selected||!secret){message.textContent="Select a provider and enter its API key.";return;}
   connect.disabled=true;message.textContent="Connecting provider through OmniRoute…";
