@@ -15,6 +15,7 @@ from .neural_advanced import NeuralAdvancedRuntime, FEATURES
 from .neural_completeness import NeuralFeatureCompleteness, REMAINING_SCOPE
 from .manifest import ToolRegistry, ToolSpec, default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
+from .omniroute_setup import OmniRouteProvisioner, OmniRouteRuntimeStatus, OMNIROUTE_VERSION, NODE_VERSION
 from .orchestration import OrchestrationPlan, RequestProfile, SpecialistTask, build_plan, classify_request
 from .permissions import Capability, CapabilityDenied, CapabilityPolicy
 from .readiness import CheckStatus, ReadinessCheck, ReadinessReport, check_readiness, format_report
@@ -70,6 +71,10 @@ __all__ = [
     "ProviderResult",
     "ProviderTarget",
     "QoLOrchestrator",
+    "OmniRouteProvisioner",
+    "OmniRouteRuntimeStatus",
+    "OMNIROUTE_VERSION",
+    "NODE_VERSION",
     "ReadinessCheck",
     "ReadinessReport",
     "RequestProfile",
