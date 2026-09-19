@@ -34,7 +34,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
             "S.lodStats.culled", "vLocal.x-vLocal.z", "26000",
             "microPosBuf", "microSizeBuf", "microEnergyBuf", "microPhaseBuf",
             "gl.STATIC_DRAW", "microBuffersReady", "uDeepField", "uAnchor",
-            "gl.drawArrays(gl.POINTS,0,S.microCount", "jn-core-heart",
+            "gl.drawArrays(gl.POINTS,0,S.microCount", "jn-core-heart", "filter(function(x){return x.lod>=2})", "candidateCap=S.mode", "deepCount=S.mode",
         ):
             self.assertIn(token, script)
 
