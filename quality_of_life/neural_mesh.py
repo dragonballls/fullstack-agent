@@ -11,7 +11,8 @@ NEURAL_MESH_BUILTIN = {
     "description": "Blue fully 3D JARVIS world with high-resolution water-droplet neurons, SPH-style particle-fluid motion, differentiated organic cells, dense ambient neural ecology, curved energy filaments, a holographic JARVIS core, lifecycle pulses, spatial windows, search, zoom, performance culling, and persistent command surfaces.",
     "protected": True,
     "css": r"""
-#jarvis-workspace-shell{display:none!important}\n#jn-neural-console,#jn-console-tether{display:none!important}
+#jarvis-workspace-shell{display:none!important}
+#jn-neural-console,#jn-console-tether{display:none!important}
 #jarvis-ui-build-layer.neural-mesh-root{position:fixed;inset:0;z-index:2147481000;pointer-events:none;color:#dff6ff;font-family:Inter,Segoe UI,system-ui,sans-serif;overflow:hidden;background:#000}
 #jarvis-neural-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto;cursor:grab;background:radial-gradient(circle at 50% 46%,rgba(29,150,255,.075),transparent 43%),radial-gradient(circle at 50% 52%,rgba(11,63,109,.055),transparent 57%),linear-gradient(180deg,#010813,#000207)}
 #jn-core-structure{position:absolute;left:0;top:0;width:188px;height:188px;transform:translate3d(-9999px,-9999px,0);transform-style:preserve-3d;pointer-events:none;z-index:22;opacity:.98;filter:drop-shadow(0 0 22px rgba(46,176,255,.18))}
@@ -866,7 +867,8 @@ canvas.addEventListener("pointermove",function(e){
   }else if(S.orbit){S.yaw+=dx*.008;S.pitch=Math.max(-1.35,Math.min(1.35,S.pitch+dy*.006));}
   S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=true;
 });
-function release(){S.orbit=false;canvas.classList.remove("dragging");if(S.dragNode){const id=S.dragNode,v=S.velocities.get(id)||[0,0,0];S.velocities.set(id,[v[0]*.42,v[1]*.42,v[2]*.42]);S.dragNode=null;}}\ncanvas.addEventListener("pointerup",function(){S.orbit=false;release()});
+function release(){S.orbit=false;canvas.classList.remove("dragging");if(S.dragNode){const id=S.dragNode,v=S.velocities.get(id)||[0,0,0];S.velocities.set(id,[v[0]*.42,v[1]*.42,v[2]*.42]);S.dragNode=null;}}
+canvas.addEventListener("pointerup",function(){S.orbit=false;release()});
 canvas.addEventListener("pointercancel",function(){release()});
 canvas.addEventListener("wheel",function(e){e.preventDefault();S.distance=Math.max(3.5,Math.min(180,S.distance*Math.exp(e.deltaY*.001)));},{passive:false});
 canvas.addEventListener("dblclick",function(e){const n=pick(e.clientX,e.clientY);if(n)focus(n)});
