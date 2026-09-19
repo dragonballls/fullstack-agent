@@ -21,6 +21,11 @@ class ReleaseContractTests(unittest.TestCase):
         for token in required:
             self.assertIn(token, workflow, token)
 
+        self.assertIn("omniroute=3\\.8\\.50", workflow)
+        self.assertIn("version.Trim() -ne '3.8.50'", workflow)
+        self.assertNotIn("omniroute=3\\.8\\.51", workflow)
+        self.assertNotIn("3.8.51", workflow)
+
     def test_windows_build_is_windowed_and_embeds_existing_fullstack_components(self):
         workflow = Path(".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")
 
