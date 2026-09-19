@@ -506,6 +506,22 @@ def build_manager_script() -> str:
         throw error;
       }
     }
+
+    const sharedSurface = window.jarvisTextInput;
+    if (sharedSurface && sharedSurface.setBuildTheme) {
+      sharedSurface.setBuildTheme(
+        String(payload && payload.id || "default"),
+        String(payload && payload.name || "JARVIS"),
+        String(payload && payload.version || "")
+      );
+    }
+    window.dispatchEvent(new CustomEvent("jarvis:uibuildchanged", {
+      detail: {
+        id: String(payload && payload.id || ""),
+        name: String(payload && payload.name || ""),
+        version: String(payload && payload.version || "")
+      }
+    }));
   }
 
   function closeEditor() { editor.classList.remove("active"); }
