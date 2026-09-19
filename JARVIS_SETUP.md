@@ -8,7 +8,7 @@ The supported end-user product is a single verified/release-published `Jarvis.ex
 
 Download the `Jarvis.exe` asset from the verified GitHub `latest` release. Double-clicking that executable is the normal Windows launch path.
 
-The executable contains the Jarvis runtime, a pinned self-contained OmniRoute gateway (Node.js 24.21.0 + OmniRoute 3.8.51), and the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters, not a second agent brain.
+The executable contains the Jarvis runtime, a pinned self-contained OmniRoute gateway (Node.js 24.21.0 + OmniRoute 3.8.50), and the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters, not a second agent brain.
 
 ## What first launch may create
 
@@ -56,7 +56,7 @@ An update failure leaves the currently running Jarvis instance in place. Normal 
 
 Hand control, browser/device integrations, account connections, location features, and Windows maintenance remain behind their existing capability and confirmation policies. Optional capability failure must degrade the specific feature rather than take down the desktop visualizer.
 
-Hosted CI can verify source contracts, imports, routing, OmniRoute provisioning, embedded-runtime versioning, packaging, and the frozen visualizer/Backtalk startup path. It cannot certify a particular PC's microphone, speakers, camera, provider credentials, OAuth grants, or hardware-specific behavior.
+Hosted CI can verify source contracts, imports, routing, OmniRoute provisioning, embedded-runtime versioning, packaging, and the frozen visualizer/Backtalk startup path. It also verifies the self-coding checkpoint lifecycle: successful changes remain pending until explicitly approved, and approved changes can be safely undone only when main has not moved since approval. It cannot certify a particular PC's microphone, speakers, camera, provider credentials, OAuth grants, or hardware-specific behavior.
 
 ## Developer-only build path
 
