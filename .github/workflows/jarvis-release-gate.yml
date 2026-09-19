@@ -153,6 +153,7 @@ jobs:
           $env:JARVIS_SMOKE = '1'
           $env:JARVIS_SMOKE_VOICE = '1'
           $env:JARVIS_SMOKE_WEBVIEW = '1'
+          $env:JARVIS_OMNIROUTE_WARMUP = '1'
           $process = $null
           $ready = $false
           try {
@@ -177,6 +178,21 @@ jobs:
             throw
           }
           finally { if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } }
+      - name: Smoke-test embedded OmniRoute gateway
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $deadline = (Get-Date).AddSeconds(60)
+          $ready = $false
+          while ((Get-Date) -lt $deadline) {
+            $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
+            if ($tcp) { $ready = $true; break }
+            Start-Sleep -Milliseconds 500
+          }
+          if (-not $ready) { throw 'Embedded OmniRoute did not open port 20128 during packaged smoke test' }
+          & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
+
       - name: Smoke-test the packaged native Jarvis host
         shell: pwsh
         env:
