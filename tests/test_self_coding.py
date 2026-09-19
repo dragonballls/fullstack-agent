@@ -144,8 +144,10 @@ class SelfCodingTests(unittest.TestCase):
 
         self.assertEqual(agent.undo_checkpoint(checkpoint_id), "undone")
         self.assertFalse((root / "approved.txt").exists())
-        self.assertEqual(self.remote_head(root), baseline)
-        self.assertEqual(self.git(root, "rev-parse", "HEAD"), self.git(root, "rev-parse", "origin/main"))
+        remote_head = self.remote_head(root)
+        self.assertNotEqual(remote_head, baseline)
+        self.assertEqual(self.git(root, "rev-parse", "HEAD"), remote_head)
+        self.assertEqual(self.git(root, "diff", "--quiet", baseline, remote_head), "")
         self.assertEqual(agent.list_checkpoints()[0]["state"], "undone")
 
     def test_approved_checkpoint_refuses_to_undo_unrelated_main_work(self) -> None:
