@@ -236,6 +236,44 @@ jobs:
           JARVIS_ALLOW_HEADLESS_GUI: '1'
           JARVIS_UI_SMOKE: '1'
         run: ./scripts/verify_windows_gui_smoke.ps1
+      - name: Live-test packaged Prism remote route when session secret is configured
+        if: env.JARVIS_PRISM_SESSION_JSON != ''
+        env:
+          JARVIS_PRISM_SESSION_JSON: ${{ secrets.JARVIS_PRISM_SESSION }}
+          JARVIS_PRISM_ENABLED: '1'
+          JARVIS_PRISM_LIVE_SMOKE: '1'
+          JARVIS_SMOKE: '1'
+          JARVIS_SMOKE_VOICE: '1'
+          JARVIS_AUTO_UPDATE: '0'
+          JARVIS_OMNIROUTE_WARMUP: '0'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $session = Join-Path $env:RUNNER_TEMP 'jarvis-prism-session.json'
+          try {
+            Set-Content -LiteralPath $session -Encoding UTF8 -Value $env:JARVIS_PRISM_SESSION_JSON
+            if (-not (Test-Path -LiteralPath $session)) { throw 'Prism session file could not be created' }
+            $env:JARVIS_PRISM_SESSION = $session
+            $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru -WorkingDirectory (Resolve-Path '.')
+            $deadline = (Get-Date).AddSeconds(300)
+            while ((Get-Date) -lt $deadline) {
+              if ($process.HasExited) { break }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+              throw 'Packaged Jarvis.exe did not finish the live Prism smoke test within 300 seconds'
+            }
+            if ($process.ExitCode -ne 0) {
+              throw "Packaged Jarvis.exe live Prism smoke failed with exit code $($process.ExitCode)"
+            }
+            Write-Host 'Packaged Jarvis.exe live Prism remote-route smoke passed.'
+          }
+          finally {
+            Remove-Item -LiteralPath $session -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:JARVIS_PRISM_SESSION -ErrorAction SilentlyContinue
+            Remove-Item Env:JARVIS_PRISM_SESSION_JSON -ErrorAction SilentlyContinue
+          }
       - name: Generate signed Jarvis.exe build attestation
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
