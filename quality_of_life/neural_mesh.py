@@ -471,11 +471,23 @@ function renderEarthMarkers(){
 }
 function renderEarthSensor(){
   const feeds=ui.querySelector("#jn-earth-feeds"),readout=ui.querySelector("#jn-earth-readout");if(!feeds||!readout)return;
-  const current=Boolean(S.earthData.authorized_current),locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[],states=Array.isArray(S.earthData.provider_status)?S.earthData.provider_status:[];
-  readout.textContent=current?"LIVE CURRENT LOCATION AUTHORIZED · "+locators.length+" AUTHORIZED LOCATOR"+(locators.length===1?"":"S"):"NO CURRENT LOCATION FEED · "+locators.length+" AUTHORIZED LOCATOR"+(locators.length===1?"":"S");
+  const current=Boolean(S.earthData.authorized_current),locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[],states=Array.isArray(S.earthData.provider_status)?S.earthData.provider_status:[],sensorState=String(S.earthData.sensor_state||"sensor-status-unavailable");
+  const stateLabel={"current-live":"CURRENT FEED LIVE","authorized-feeds-live":"AUTHORIZED FEEDS LIVE","feeds-unavailable-or-unauthorized":"FEEDS UNAVAILABLE / NOT AUTHORIZED","sensor-status-unavailable":"SENSOR STATUS UNAVAILABLE"}[sensorState]||sensorState.toUpperCase();
+  const source=String(S.earthData.current_source||"").slice(0,42);
+  const accuracy=Number(S.earthData.current_accuracy_m);
+  const precision=Number.isFinite(accuracy)?" · ±"+Math.round(Math.max(0,accuracy))+"M":"";
+  readout.textContent=stateLabel+" · "+locators.length+" AUTHORIZED LOCATOR"+(locators.length===1?"":"S")+(source?" · "+source.toUpperCase():"")+precision;
   feeds.replaceChildren();
   if(!states.length){const x=document.createElement("div");x.className="jn-earth-feed";x.textContent="LOCATION FEEDS · UNAVAILABLE";feeds.appendChild(x);return;}
-  states.slice(0,3).forEach(function(state){const x=document.createElement("div");x.className="jn-earth-feed "+(state.live?"live":state.authorized?"auth":"");x.textContent=String(state.kind||"feed").toUpperCase()+" · "+(state.live?"LIVE":state.authorized?"AUTH":"OFF");feeds.appendChild(x);});
+  states.slice(0,3).forEach(function(state){
+    const x=document.createElement("div");
+    const active=Boolean(state.live&&state.authorized&&state.available);
+    x.className="jn-earth-feed "+(active?"live":state.authorized?"auth":"");
+    const detail=String(state.detail||"").replace(/\s+/g," ").slice(0,42);
+    x.textContent=String(state.kind||"feed").toUpperCase()+" · "+(active?"LIVE":state.authorized?"AUTH":"OFF")+(detail?" · "+detail:"");
+    x.title=detail;
+    feeds.appendChild(x);
+  });
 }
 function earthLocatorById(id){const target=String(id||"");return (Array.isArray(S.earthData.locators)?S.earthData.locators:[]).find(function(item){return String(item.id||item.label||"")===target})||null;}
 function smoothEarthFollow(){if(!S.earthFollow||!S.earthSelected)return;const item=earthLocatorById(S.earthSelected);if(!item)return;const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;const targetYaw=lon-Math.PI*.5,targetPitch=lat;let dyaw=targetYaw-S.earthYaw;while(dyaw>Math.PI)dyaw-=Math.PI*2;while(dyaw<-Math.PI)dyaw+=Math.PI*2;S.earthYaw+=dyaw*.075;S.earthPitch+=(targetPitch-S.earthPitch)*.075;S.earthDistance+=(6.8-S.earthDistance)*.045;}
