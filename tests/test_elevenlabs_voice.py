@@ -30,7 +30,7 @@ class ElevenLabsVoiceTests(unittest.TestCase):
         decorated = decorate_for_jarvis(source, EXPRESSIVE_MODEL_ID)
         self.assertTrue(decorated.startswith("[confident] "))
         self.assertTrue(decorated.endswith(source))
-        self.assertTrue(decorate_for_jarvis(source, DEFAULT_MODEL_ID).startswith("[confident] "))
+        self.assertEqual(decorate_for_jarvis(source, DEFAULT_MODEL_ID), source)
 
     def test_client_sends_key_only_as_xi_api_key_header(self):
         client = ElevenLabsClient()
