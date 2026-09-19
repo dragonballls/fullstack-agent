@@ -2,7 +2,7 @@ name: Jarvis full release gate
 
 on:
   push:
-    branches: [main, migration/jarvis-canonical-2026-09-16]
+    branches: [main, migration/jarvis-canonical-2026-09-16, feat/build2-neural-realism]
     tags: ['v*.*.*']
   pull_request:
     branches: [main]
