@@ -1,6 +1,14 @@
 name: Build 2 Neural Renderer Verification
 
 on:
+  push:
+    branches: [feat/build2-neural-realism]
+    paths:
+      - "quality_of_life/neural_mesh.py"
+      - "tests/test_neural_mesh_build.py"
+      - "scripts/jarvis_desktop.py"
+      - "scripts/jarvis_desktop.pyw"
+      - "quality_of_life/ui_builds.py"
   pull_request:
     branches: [main]
     paths:
