@@ -407,6 +407,18 @@ function render(now){
 
   const map=new Map(nodes.map(function(n){return[n.id,n]})),lp=[],ls=[],lg=[];
   const visibleRelationCap=S.mode==="background"?900:S.quality==="performance"?2600:7000;let relationCount=0;for(const r of S.links){if(relationCount>=visibleRelationCap)break;if(S.dragNode&&(r.source===S.dragNode||r.target===S.dragNode))continue;const a=map.get(r.source),b=map.get(r.target);if(!a||!b)continue;relationCount++;const ap=nodePosition(a),bp=nodePosition(b),axis=norm(sub(bp,ap)),basis=Math.abs(axis[1])<.9?[0,1,0]:[1,0,0],bend=norm(cross(axis,basis)),seed=hashUnit(String(r.source)+"|"+r.target+"|"+r.relation_type),lift=(.18+Math.min(1.35,Math.hypot(...sub(bp,ap))*.075))*(.76+seed*.48),c1=add(ap,mul3(bend,lift)),c2=add(bp,mul3(bend,lift*(.72+.28*seed))),prev=ap;for(let s=1;s<=8;s++){const t=s/8,inv=1-t,pt=add(add(add(mul3(ap,inv*inv*inv),mul3(c1,3*inv*inv*t)),mul3(c2,3*inv*t*t)),mul3(bp,t*t*t));lp.push(...prev,...pt);ls.push((r.strength||.4)*(.72+.28*(1-t)),(r.strength||.4)*(.72+.28*t));lg.push((s-1)/8,s/8);prev=pt;}}
+  const realNodes=S.nodes.filter(function(n){return !(n.metadata&&n.metadata.visual_only)});
+  const ambientCap=S.mode==="background"?120:S.quality==="performance"?220:420;
+  if(realNodes.length){
+    let ambientEdges=0;
+    for(let i=0;i<S.ambientNodes.length&&ambientEdges<ambientCap;i++){
+      if(i%3!==0)continue;
+      const ambient=S.ambientNodes[i],target=realNodes[Math.floor(hashUnit(ambient.id)*realNodes.length)];
+      if(!target)continue;
+      const ap=nodePosition(ambient),bp=nodePosition(target),axis=norm(sub(bp,ap)),basis=Math.abs(axis[1])<.9?[0,1,0]:[1,0,0],bend=norm(cross(axis,basis)),lift=.10+.18*hashUnit("ambient-lift|"+ambient.id),mid=add(add(ap,mul3(axis,.5)),mul3(bend,lift));
+      lp.push(...ap,...mid,...mid,...bp);const str=.028+.07*hashUnit("ambient-strength|"+ambient.id);ls.push(str,str*.88,str*.88,str);lg.push(0,.5,.5,1);ambientEdges++;
+    }
+  }
   upload(lineBuf,new Float32Array(lp));upload(lineStrengthBuf,new Float32Array(ls));upload(lineProgressBuf,new Float32Array(lg));
   gl.useProgram(lineProg);gl.uniformMatrix4fv(gl.getUniformLocation(lineProg,"uMvp"),false,mvp);gl.uniform1f(gl.getUniformLocation(lineProg,"uTime"),nowMs);attr(lineProg,"aPos",3,lineBuf);attr(lineProg,"aStrength",1,lineStrengthBuf);attr(lineProg,"aProgress",1,lineProgressBuf);gl.drawArrays(gl.LINES,0,lp.length/3);
 
