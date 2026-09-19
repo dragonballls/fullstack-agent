@@ -117,7 +117,7 @@ def clear_api_key() -> None:
 def decorate_for_jarvis(text: str, model_id: str) -> str:
     """Add sparse delivery guidance without changing the user's words."""
     message = str(text or "").strip()
-    if not message or model_id not in {EXPRESSIVE_MODEL_ID, DEFAULT_MODEL_ID}:
+    if not message or model_id != EXPRESSIVE_MODEL_ID:
         return message
     lowered = message.lower()
     if message.endswith("?"):
