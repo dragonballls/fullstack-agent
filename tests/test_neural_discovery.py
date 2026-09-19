@@ -21,7 +21,7 @@ class DiscoveryTests(unittest.TestCase):
             }[name]
         )
         result = NeuralDiscovery(world, runtime).sync()
-        self.assertEqual(result, {"applications": 1, "processes": 1})
+        self.assertEqual(result["applications"], 1)\n        self.assertEqual(result["processes"], 1)\n        self.assertEqual(result["telemetry"], 6)
         self.assertEqual(world.search("Opera GX", kind="application")[0]["id"], "app:opera.gx")
         self.assertEqual(world.search("opera.exe", kind="process")[0]["id"], "process:123")
 
