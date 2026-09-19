@@ -759,6 +759,7 @@ class FullstackJarvisHost:
         self._update_stop = threading.Event()
         self.updater = AutoUpdateController(self._update_stop, self._exit_for_update)
         self.floating_hotkey = FloatingTextHotkey(self._toggle_text_link_from_hotkey)
+        self._omniroute_warmup_thread: threading.Thread | None = None
 
     @property
     def web_api(self) -> JarvisWebApi:
@@ -792,6 +793,15 @@ class FullstackJarvisHost:
         import webbrowser
         webbrowser.open("http://127.0.0.1:20128")
         return {"ok": True}
+
+    def _warm_omniroute(self) -> None:
+        try:
+            if self.omniroute.ensure_running(wait_seconds=30):
+                LOGGER.info("embedded OmniRoute warm-up passed")
+            else:
+                LOGGER.warning("embedded OmniRoute warm-up did not complete before timeout")
+        except Exception:
+            LOGGER.exception("embedded OmniRoute warm-up failed; routing remains retryable")
 
     def open_omniroute_settings(self) -> dict[str, Any]:
         try:
@@ -829,11 +839,14 @@ class FullstackJarvisHost:
         if self.started:
             return
         self.visualizer.start()
-        try:
-            self.omniroute.ensure_running(wait_seconds=15)
-            LOGGER.info("embedded OmniRoute is ready at %s", self.omniroute.base_url)
-        except Exception:
-            LOGGER.exception("embedded OmniRoute could not start; cloud routing remains lazy")
+        warm_enabled = (
+            bool(getattr(sys, "frozen", False))
+            and os.environ.get("JARVIS_OMNIROUTE_WARMUP", "1").strip().lower() not in {"0", "false", "no", "off"}
+            and os.environ.get("JARVIS_SMOKE", "0").strip().lower() not in {"1", "true", "yes", "on"}
+        )
+        if warm_enabled:
+            self._omniroute_warmup_thread = threading.Thread(target=self._warm_omniroute, name="jarvis-omniroute-warmup", daemon=True)
+            self._omniroute_warmup_thread.start()
         try:
             self.voice.start()
         except Exception:
@@ -870,6 +883,9 @@ class FullstackJarvisHost:
                     LOGGER.exception("floating command bar failed to close cleanly")
                 self._floating_window = None
         self.updater.stop()
+        if self._omniroute_warmup_thread is not None and self._omniroute_warmup_thread.is_alive() and threading.current_thread() is not self._omniroute_warmup_thread:
+            self._omniroute_warmup_thread.join(timeout=2)
+        self._omniroute_warmup_thread = None
         try:
             save = getattr(self._web_api, "neural_world_save", None)
             if callable(save):
