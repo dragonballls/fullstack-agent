@@ -5,12 +5,16 @@
 ## What it does
 
 1. Requires a real Git repository and a clean working tree.
-2. Creates an isolated `agent/self-code/<timestamp>` branch.
+2. Creates an isolated named `agent/checkpoint/<name>` branch.
 3. Sends the coding goal to an installed cloud coding CLI (`claude`, `codex`, or `gemini`).
 4. Runs verification commands after the agent changes code.
 5. Commits only after verification succeeds.
-6. Optionally pushes the verified branch with `--push`.
-7. If anything fails, restores the exact starting commit and removes newly-created untracked files.
+6. Saves durable checkpoint metadata under `.git/jarvis-checkpoints/`.
+7. Optionally pushes the verified checkpoint branch with `--push`; this never publishes `main`.
+8. If anything fails, restores the exact starting commit and removes newly-created untracked files.
+9. A checkpoint remains pending until an explicit `--approve CHECKPOINT` action promotes it to `main`.
+10. `--undo CHECKPOINT` discards a pending checkpoint or creates a safe revert for an approved checkpoint.
+11. Undo refuses to touch `main) when unrelated work has landed since approval.
 
 The coding agent is explicitly instructed to stay inside the repository and never access or expose credentials, private keys, browser profiles, or files outside the repository.
 
