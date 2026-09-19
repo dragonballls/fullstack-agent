@@ -46,11 +46,15 @@ def _keyring_module() -> Any:
     return keyring
 
 
-def _redact_error(message: str) -> str:
+def _redact_error(message: str, secret: str = "") -> str:
     text = str(message or "")
-    secret = os.environ.get("ELEVENLABS_API_KEY", "").strip()
-    if secret:
-        text = text.replace(secret, "[redacted]")
+    secrets = {
+        os.environ.get("ELEVENLABS_API_KEY", "").strip(),
+        str(secret or "").strip(),
+    }
+    for value in secrets:
+        if value:
+            text = text.replace(value, "[redacted]")
     return text[:500]
 
 
@@ -167,7 +171,7 @@ class ElevenLabsClient:
         except urllib.error.HTTPError as exc:
             payload = exc.read(512)
             detail = payload.decode("utf-8", "replace").strip()
-            raise RuntimeError(f"ElevenLabs request failed with HTTP {exc.code}: {_redact_error(detail)}") from exc
+            raise RuntimeError(f"ElevenLabs request failed with HTTP {exc.code}: {_redact_error(detail, key)}") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise RuntimeError("ElevenLabs connection failed") from exc
 
@@ -301,7 +305,7 @@ class ElevenLabsMouth:
             return result
         except Exception as exc:
             with self._lock:
-                self._last_error = _redact_error(exc)
+                self._last_error = _redact_error(exc, get_api_key())
             return {"ok": False, "configured": True, "tested": True, "message": "ElevenLabs connection test failed"}
 
     def test_speech(self, text: str = "Voice channel confirmed.") -> dict[str, object]:
