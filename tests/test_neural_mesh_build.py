@@ -55,7 +55,11 @@ class NeuralMeshBuildTests(unittest.TestCase):
         self.assertIn("entity.retired", script)
         self.assertNotIn("S.localOffsets.delete(id)", script)
         self.assertIn("function release()", script)
-        self.assertIn("SPH-style", NEURAL_MESH_BUILTIN["description"] if "SPH-style" in NEURAL_MESH_BUILTIN["description"] else "SPH-style")
+        self.assertIn("SPH-style", NEURAL_MESH_BUILTIN["description"])
+        self.assertIn("renderCoreStructure();", script)
+        self.assertIn("S.velocities.set(n.id,[delta[0]/dragDt*.12", script)
+        self.assertIn("renderEarthMarkers();", script)
+        self.assertIn('const current=Boolean(S.earthData.authorized_current);', script)
 
     def test_embedded_script_compiles_as_ui_build_script(self):
         import shutil
