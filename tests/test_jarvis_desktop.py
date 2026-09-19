@@ -108,7 +108,7 @@ class JarvisDesktopTests(unittest.TestCase):
         self.assertTrue(hasattr(jarvis_desktop, "OMNIROUTE_SETTINGS_HTML"))
         self.assertIn("open_omniroute_settings", dir(jarvis_desktop.JarvisWebApi))
         self.assertIn("omniroute_configure_provider", dir(jarvis_desktop.JarvisWebApi))
-        self.assertIn("type="password"", jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
+        self.assertIn('type="password"', jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
         self.assertIn("CONNECT & TEST", jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
 
     def test_omniroute_status_uses_secret_free_summary(self):
