@@ -158,7 +158,8 @@ jobs:
           $preview = $dummy | & 'build_vendor/omniroute_runtime/node.exe' $cli providers add openai --credential-stdin --yes --dry-run --json
           if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute credential-stdin dry-run failed' }
           if ($preview -match [regex]::Escape($dummy)) { throw 'Embedded OmniRoute dry-run exposed the credential' }
-          try { $previewJson = $preview | ConvertFrom-Json } catch { throw 'Embedded OmniRoute dry-run did not return valid JSON' }
+          $previewText = ($preview -join "`n").Trim()
+          try { $previewJson = $previewText | ConvertFrom-Json } catch { throw 'Embedded OmniRoute dry-run did not return valid JSON' }
           if ($null -eq $previewJson) { throw 'Embedded OmniRoute dry-run returned an empty JSON payload' }
 
       - name: Smoke-test ElevenLabs voice plumbing without a live key
