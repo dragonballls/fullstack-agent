@@ -86,7 +86,7 @@ class SelfCodingTests(unittest.TestCase):
 
     def test_propose_tool_extension_is_machine_readable(self) -> None:
         root = self.make_repo()
-        agent = SelfCodingAgent(SelfCodingConfig(repo=root))
+        agent = SelfCodingAgent(SelfCodingConfig(repo=root, state_dir=self.state_dir()))
         gap = agent.inspect_tool_gap("the requested tool returned an unsupported operation because no adapter is registered")
         proposal = agent.propose_tool_extension("connect the missing provider", gap)
         self.assertEqual(proposal["kind"], "tool_extension")
