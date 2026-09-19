@@ -102,6 +102,7 @@ physics/search/capture/performance benchmark scenarios.
 The advanced subsystem is dependency-light and covered by tests/test_neural_advanced.py.
 The existing full regression matrix, packaged Windows release gate, protected Build #1,
 capability policy and provider authorization boundaries remain in force.
+The Build 2 visual verification gate in `.github/workflows/build2-neural-renderer.yml` runs the protected neural renderer test on Linux and Windows pull-request runners and compiles the embedded WebGL2 script with Node.
 ## Remaining-scope completeness gate
 
 `quality_of_life/neural_completeness.py::REMAINING_SCOPE` is the one-to-one registry for the capabilities previously marked not added. `NeuralFeatureCompleteness.status()` must report `100%_added`, with all **89** requested entries present and zero missing or extra entries. The companion `smoke_all()` executes every registered capability through its bound runtime path, using deterministic fixtures for history, remote-control authorization, XR devices, displays, streaming, and the simulation sandbox.
