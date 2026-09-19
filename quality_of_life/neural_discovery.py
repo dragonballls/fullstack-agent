@@ -41,6 +41,14 @@ class NeuralDiscovery:
                 source="windows.applications",
                 status="installed",
                 lifecycle=LifecycleState.MATURE,
+            folded = str(getattr(app, "name", "")).casefold()
+            subsystem = "jarvis.browser" if any(token in folded for token in ("opera", "edge", "chrome", "firefox", "browser")) else "jarvis.system"
+            node = self.world.upsert(
+                app_id, EntityKind.APPLICATION,
+                label,
+                source="windows.applications",
+                status="installed",
+                lifecycle=LifecycleState.MATURE,
                 energy=0.35, scale=0.9,
                 parent_id=subsystem,
                 metadata={
@@ -50,8 +58,6 @@ class NeuralDiscovery:
                     "auto_layout": True,
                 },
             )
-            folded = str(getattr(app, "name", "")).casefold()
-            subsystem = "jarvis.browser" if any(token in folded for token in ("opera", "edge", "chrome", "firefox", "browser")) else "jarvis.system"
             try:
                 self.world.relate(subsystem, node.id, "installed_application", 0.45)
             except KeyError:
