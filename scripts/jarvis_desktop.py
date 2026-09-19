@@ -396,132 +396,44 @@ TEXT_INPUT_SCRIPT = r'''
   const style = document.createElement("style");
   style.id = "jarvis-text-input-style";
   style.textContent = `
-    #jarvis-text-shell {
-      position: fixed;
-      z-index: 2147483647;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: min(320px, calc(100vw - 36px));
-      padding: 10px;
-      border: 1px solid rgba(61,220,132,.20);
-      border-radius: 14px;
-      background: rgba(2,7,5,.46);
-      box-shadow: 0 0 24px rgba(61,220,132,.08), inset 0 0 18px rgba(61,220,132,.03);
-      backdrop-filter: blur(8px);
-      opacity: .42;
-      transition: width .22s ease, opacity .22s ease, border-color .22s ease, box-shadow .22s ease;
-      pointer-events: auto;
-      font-family: var(--mono, Consolas, monospace);
-      color: #e8f0f2;
-    }
-    #jarvis-text-shell:hover,
-    #jarvis-text-shell.jarvis-active {
-      width: min(640px, calc(100vw - 36px));
-      opacity: 1;
-      border-color: rgba(61,220,132,.56);
-      box-shadow: 0 0 34px rgba(61,220,132,.18), inset 0 0 22px rgba(35,133,205,.05);
-    }
-    #jarvis-text-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 3px 7px;
-      font-size: 9px;
-      letter-spacing: .28em;
-      color: #9edbff;
-      user-select: none;
-    }
-    #jarvis-text-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #4dc7ff;
-      box-shadow: 0 0 10px rgba(61,220,132,.55);
-      flex: 0 0 auto;
-    }
-    #jarvis-text-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    #jarvis-text-input {
-      min-width: 0;
-      flex: 1;
-      border: 1px solid rgba(143,232,184,.22);
-      outline: none;
-      border-radius: 9px;
-      padding: 12px 13px;
-      color: #e8f0f2;
-      background: rgba(0,0,0,.28);
-      font: inherit;
-      font-size: 13px;
-      letter-spacing: .04em;
-      cursor: text;
-      caret-color: #7edcff;
-    }
-    #jarvis-text-input::placeholder { color: #6d8580; }
-    #jarvis-text-input:focus { border-color: rgba(143,232,184,.58); box-shadow: 0 0 18px rgba(61,220,132,.10); }
-    #jarvis-text-send {
-      flex: 0 0 auto;
-      width: 42px;
-      height: 42px;
-      border: 1px solid rgba(91,190,255,.28);
-      border-radius: 9px;
-      color: #b9e9ff;
-      background: rgba(61,220,132,.06);
-      cursor: pointer;
-      font: inherit;
-      font-size: 16px;
-    }
-    #jarvis-text-send:hover { border-color: rgba(143,232,184,.68); background: rgba(41,151,224,.14); }
-    #jarvis-text-float {
-      flex: 0 0 auto;
-      width: 32px;
-      height: 42px;
-      border: 1px solid rgba(143,232,184,.17);
-      border-radius: 9px;
-      color: #7ea698;
-      background: rgba(143,232,184,.025);
-      cursor: pointer;
-      font: inherit;
-      font-size: 14px;
-    }
-    #jarvis-text-float:hover { border-color: rgba(143,232,184,.58); color: #d8ffe8; background: rgba(61,220,132,.08); }
-    #jarvis-text-float:disabled { opacity: .4; cursor: default; }
-    #jarvis-text-status {
-      margin: 7px 3px 0;
-      min-height: 14px;
-      max-height: 44px;
-      overflow: hidden;
-      font-size: 9px;
-      line-height: 1.45;
-      letter-spacing: .10em;
-      color: #839b94;
-      white-space: pre-wrap;
-    }
-    #jarvis-text-status.jarvis-error { color: #ff8fa8; }
-    #jarvis-text-hint {
-      margin: 7px 3px 0;
-      font-size: 8px;
-      letter-spacing: .17em;
-      color: #536b83;
-      user-select: none;
-    }
+    #jarvis-text-shell{position:fixed;z-index:2147483647;left:24px;top:24px;width:min(760px,calc(100vw - 48px));height:min(420px,calc(100vh - 48px));min-width:320px;min-height:170px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;padding:12px;border:1px solid var(--jarvis-text-accent,rgba(91,190,255,.34));border-radius:16px;background:radial-gradient(circle at 15% 5%,rgba(78,196,255,.10),transparent 35%),linear-gradient(145deg,rgba(2,14,28,.94),rgba(1,6,13,.92));box-shadow:0 24px 78px rgba(0,0,0,.52),0 0 46px var(--jarvis-text-glow,rgba(35,150,238,.20)),inset 0 0 34px rgba(56,179,247,.045);backdrop-filter:blur(15px);overflow:hidden;resize:both;pointer-events:auto;color:#e8f5fb;font-family:var(--mono,Consolas,monospace);opacity:.96}
+    #jarvis-text-shell:hover,#jarvis-text-shell.jarvis-active{opacity:1;box-shadow:0 28px 96px rgba(0,0,0,.58),0 0 58px var(--jarvis-text-glow,rgba(35,150,238,.28)),inset 0 0 36px rgba(56,179,247,.06)}
+    #jarvis-text-header{height:28px;display:flex;align-items:center;gap:9px;cursor:move;user-select:none}
+    #jarvis-text-dot{width:8px;height:8px;border-radius:50%;background:#83ddff;box-shadow:0 0 14px rgba(131,221,255,.86);flex:0 0 auto}
+    #jarvis-text-label{font-size:9px;letter-spacing:.28em;color:var(--jarvis-text-label-color,#c6efff);white-space:nowrap}
+    #jarvis-text-build{font-size:7px;letter-spacing:.11em;color:#5c86a2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #jarvis-text-actions{margin-left:auto;display:flex;gap:5px}
+    .jarvis-text-btn{width:28px;height:24px;border:1px solid rgba(111,199,242,.18);border-radius:7px;background:rgba(4,18,32,.60);color:#86c9eb;cursor:pointer;font:9px var(--mono,Consolas,monospace)}
+    .jarvis-text-btn:hover{border-color:rgba(152,231,255,.65);color:#ecfbff}
+    #jarvis-text-history{height:calc(100% - 100px);min-height:48px;overflow:auto;padding:7px 3px 5px;display:flex;flex-direction:column;gap:7px;scrollbar-width:thin;scroll-behavior:smooth}
+    .jarvis-text-message{max-width:94%;padding:8px 10px;border:1px solid rgba(111,199,242,.10);border-radius:9px;background:rgba(255,255,255,.018);font-size:10px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#84aec7}
+    .jarvis-text-message.user{align-self:flex-end;border-color:rgba(85,194,255,.21);background:rgba(25,117,176,.09);color:#cbf0ff}
+    .jarvis-text-message.jarvis{align-self:flex-start;border-color:rgba(100,211,255,.15);color:#e0f6ff;background:rgba(20,96,144,.055)}
+    .jarvis-text-message.error{align-self:flex-start;border-color:rgba(255,120,145,.22);color:#ff9dad;background:rgba(150,35,55,.06)}
+    #jarvis-text-row{display:flex;gap:8px;align-items:flex-end;padding-top:7px}
+    #jarvis-text-input{min-width:0;min-height:42px;max-height:130px;flex:1;resize:none;overflow:auto;border:1px solid rgba(111,199,242,.20);outline:none;border-radius:10px;padding:11px 12px;box-sizing:border-box;color:#e9f7fd;background:rgba(0,0,0,.28);font:11px/1.4 var(--mono,Consolas,monospace);caret-color:#8be2ff}
+    #jarvis-text-input:focus{border-color:rgba(151,230,255,.66);box-shadow:0 0 20px rgba(50,165,239,.12)}
+    #jarvis-text-input::placeholder{color:#60809a}
+    #jarvis-text-float,#jarvis-text-send{flex:0 0 auto;width:42px;height:42px;border:1px solid rgba(111,199,242,.21);border-radius:10px;background:rgba(5,24,39,.64);color:#c7edff;cursor:pointer;font:15px var(--mono,Consolas,monospace)}
+    #jarvis-text-float:hover,#jarvis-text-send:hover{border-color:rgba(151,230,255,.68);background:rgba(27,124,184,.15)}
+    #jarvis-text-status{height:16px;margin-top:5px;font-size:8px;line-height:1.4;letter-spacing:.10em;color:#668ba5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #jarvis-text-status.jarvis-error{color:#ff8fa8}
+    #jarvis-text-hint{font-size:7px;letter-spacing:.12em;color:#466a82;user-select:none}
+    #jarvis-text-shell.history-collapsed{height:48px;min-height:48px}
+    #jarvis-text-shell.history-collapsed #jarvis-text-history,#jarvis-text-shell.history-collapsed #jarvis-text-row,#jarvis-text-shell.history-collapsed #jarvis-text-status,#jarvis-text-shell.history-collapsed #jarvis-text-hint{display:none}
+    #jarvis-text-shell[data-theme="neural"]{--jarvis-text-accent:rgba(76,199,255,.46);--jarvis-text-glow:rgba(39,151,239,.26);--jarvis-text-label-color:#d0f3ff}
+    #jarvis-text-shell[data-theme="classic"]{--jarvis-text-accent:rgba(123,218,177,.40);--jarvis-text-glow:rgba(44,177,127,.18);--jarvis-text-label-color:#d4f5e4}
   `;
   document.head.appendChild(style);
 
   const shell = document.createElement("div");
   shell.id = "jarvis-text-shell";
   shell.innerHTML = `
-    <div id="jarvis-text-label"><span id="jarvis-text-dot"></span>JARVIS TEXT LINK</div>
-    <div id="jarvis-text-row">
-      <input id="jarvis-text-input" type="text" autocomplete="off" spellcheck="false" placeholder="Hover here and type to talk to Jarvis..." aria-label="Talk to Jarvis by text" disabled />
-      <button id="jarvis-text-float" type="button" aria-label="Detach Jarvis text link into a floating desktop window" title="Detach the neural command surface into a movable desktop window" disabled>↗</button>
-      <button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button>
-    </div>
+    <div id="jarvis-text-header"><span id="jarvis-text-dot"></span><span id="jarvis-text-label">JARVIS COMMAND</span><span id="jarvis-text-build"></span><span id="jarvis-text-actions"><button class="jarvis-text-btn" id="jarvis-text-min" type="button" title="Collapse command transcript">—</button><button class="jarvis-text-btn" id="jarvis-text-float" type="button" title="Detach command surface">↗</button></span></div>
+    <div id="jarvis-text-history" aria-live="polite"><div class="jarvis-text-message jarvis">Command surface online. Jarvis responses will remain visible here.</div></div>
+    <div id="jarvis-text-row"><textarea id="jarvis-text-input" rows="1" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…" aria-label="Talk to Jarvis by text" disabled></textarea><button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div>
     <div id="jarvis-text-status"></div>
-    <div id="jarvis-text-hint">ENTER — SEND &nbsp;&nbsp; ESC — CLEAR</div>
+    <div id="jarvis-text-hint">ENTER — SEND · SHIFT+ENTER — NEW LINE · DRAG HEADER — MOVE · RESIZE CORNER — ANY SIZE</div>
   `;
   document.body.appendChild(shell);
 
@@ -529,104 +441,158 @@ TEXT_INPUT_SCRIPT = r'''
   const floatButton = shell.querySelector("#jarvis-text-float");
   const send = shell.querySelector("#jarvis-text-send");
   const status = shell.querySelector("#jarvis-text-status");
+  const history = shell.querySelector("#jarvis-text-history");
+  const buildLabel = shell.querySelector("#jarvis-text-build");
+  const minButton = shell.querySelector("#jarvis-text-min");
+  const header = shell.querySelector("#jarvis-text-header");
   let apiReady = false;
+  let historyCollapsed = false;
+  let dragState = null;
 
-  function setActive(active) {
-    if (active) shell.classList.add("jarvis-active");
-    else if (document.activeElement !== input) shell.classList.remove("jarvis-active");
+  function persistGeometry(){
+    try{
+      const rect=shell.getBoundingClientRect();
+      localStorage.setItem("jarvis.textSurface.geometry",JSON.stringify({x:Math.round(rect.left),y:Math.round(rect.top),width:Math.round(rect.width),height:Math.round(rect.height)}));
+    }catch(_){}
   }
+  function restoreGeometry(){
+    try{
+      const g=JSON.parse(localStorage.getItem("jarvis.textSurface.geometry")||"null");
+      if(g&&Number.isFinite(g.x)&&Number.isFinite(g.y)&&Number.isFinite(g.width)&&Number.isFinite(g.height)){
+        shell.style.width=Math.max(320,Math.min(window.innerWidth-16,g.width))+"px";
+        shell.style.height=Math.max(170,Math.min(window.innerHeight-16,g.height))+"px";
+        shell.style.left=Math.max(8,Math.min(window.innerWidth-shell.offsetWidth-8,g.x))+"px";
+        shell.style.top=Math.max(8,Math.min(window.innerHeight-shell.offsetHeight-8,g.y))+"px";
+        return;
+      }
+    }catch(_){}
+    shell.style.left=Math.max(8,Math.round((window.innerWidth-shell.offsetWidth)/2))+"px";
+    shell.style.top=Math.max(8,Math.round((window.innerHeight-shell.offsetHeight)/2))+"px";
+  }
+  function addMessage(kind,text){
+    const value=String(text||"").slice(0,12000);
+    if(!value)return;
+    const row=document.createElement("div");
+    row.className="jarvis-text-message "+(kind==="user"?"user":kind==="error"?"error":"jarvis");
+    row.textContent=value;
+    history.appendChild(row);
+    while(history.children.length>100)history.removeChild(history.firstChild);
+    if(!historyCollapsed)history.scrollTop=history.scrollHeight;
+  }
+  function setTheme(id,name,version){
+    const key=String(id||"").toLowerCase().includes("neural")?"neural":"classic";
+    shell.dataset.theme=key;
+    buildLabel.textContent=(name||id||"JARVIS")+" · v"+String(version||"");
+  }
+  function setCollapsed(collapsed){
+    historyCollapsed=!!collapsed;
+    shell.classList.toggle("history-collapsed",historyCollapsed);
+    minButton.textContent=historyCollapsed?"+":"—";
+    if(!historyCollapsed)window.setTimeout(()=>history.scrollTop=history.scrollHeight,0);
+    try{localStorage.setItem("jarvis.textSurface.collapsed",historyCollapsed?"1":"0");}catch(_){}
+  }
+  function startDrag(event){
+    if(event.button!==undefined&&event.button!==0)return;
+    dragState={x:event.clientX,y:event.clientY,left:parseFloat(shell.style.left)||0,top:parseFloat(shell.style.top)||0};
+    try{header.setPointerCapture(event.pointerId);}catch(_){}
+  }
+  function moveDrag(event){
+    if(!dragState)return;
+    const dx=event.clientX-dragState.x,dy=event.clientY-dragState.y;
+    shell.style.left=Math.max(8,Math.min(window.innerWidth-shell.offsetWidth-8,dragState.left+dx))+"px";
+    shell.style.top=Math.max(8,Math.min(window.innerHeight-shell.offsetHeight-8,dragState.top+dy))+"px";
+  }
+  function stopDrag(){if(dragState){dragState=null;persistGeometry();}}
 
-  async function submit(confirmed) {
-    const text = input.value.trim();
-    if (!text || !apiReady) return;
+  async function submit(confirmed){
+    const textValue=input.value.trim();
+    if(!textValue||!apiReady)return;
     setActive(true);
-    input.disabled = true;
-    send.disabled = true;
-    status.classList.remove("jarvis-error");
-    status.textContent = "PROCESSING...";
-    try {
-      let result = await window.pywebview.api.submit_text(text, !!confirmed);
-      if (result && result.needs_confirmation && !confirmed) {
-        status.textContent = result.text || "Confirmation required.";
-        const accepted = window.confirm(result.text || "Jarvis requires confirmation for this action.");
-        if (accepted) {
-          result = await window.pywebview.api.submit_text(text, true);
-        } else {
-          status.textContent = "CANCELLED";
-          result = null;
+    addMessage("user",textValue);
+    input.disabled=true;send.disabled=true;
+    status.classList.remove("jarvis-error");status.textContent="PROCESSING · JARVIS LINK ACTIVE";
+    try{
+      let result=await window.pywebview.api.submit_text(textValue,!!confirmed);
+      if(result&&result.needs_confirmation&&!confirmed){
+        addMessage("jarvis",result.text||"Confirmation required.");
+        status.textContent="AWAITING CONFIRMATION";
+        const accepted=window.confirm(result.text||"Jarvis requires confirmation for this action.");
+        if(accepted)result=await window.pywebview.api.submit_text(textValue,true);
+        else{addMessage("jarvis","Command cancelled.");result=null;}
+      }
+      if(result){
+        if(result.ok){
+          const response=result.text||"DONE";
+          addMessage("jarvis",response);
+          status.textContent="RESPONSE RECEIVED · "+response.replace(/\s+/g," ").slice(0,90);
+          input.value="";
+        }else{
+          const error=result.error||"Jarvis request failed.";
+          addMessage("error",error);status.classList.add("jarvis-error");status.textContent=error.slice(0,180);
         }
       }
-      if (result) {
-        if (result.ok) {
-          status.textContent = result.text || "DONE";
-          input.value = "";
-        } else {
-          status.classList.add("jarvis-error");
-          status.textContent = result.error || "Jarvis request failed.";
-        }
-      }
-    } catch (error) {
-      status.classList.add("jarvis-error");
-      status.textContent = "TEXT LINK ERROR: " + String(error);
-    } finally {
-      input.disabled = false;
-      send.disabled = false;
-      input.focus();
+    }catch(error){
+      const message="TEXT LINK ERROR: "+String(error);
+      addMessage("error",message);status.classList.add("jarvis-error");status.textContent=message.slice(0,180);
+    }finally{
+      input.disabled=false;send.disabled=false;input.focus();persistGeometry();
     }
   }
 
-  shell.addEventListener("mouseenter", function () { setActive(true); });
-  shell.addEventListener("mouseleave", function () { setActive(false); });
-  shell.addEventListener("focusin", function () { setActive(true); });
-  shell.addEventListener("focusout", function () { setTimeout(function () { setActive(false); }, 0); });
-  input.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      submit(false);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      input.value = "";
-      status.textContent = "";
-      input.blur();
-    }
-  });
-  send.addEventListener("click", function () { submit(false); });
-  floatButton.addEventListener("click", async function () {
-    if (!apiReady || !window.pywebview.api.toggle_text_link) return;
-    try {
-      await window.pywebview.api.toggle_text_link(true);
-      shell.style.display = "none";
-    } catch (error) {
-      status.classList.add("jarvis-error");
-      status.textContent = "FLOAT LINK ERROR: " + String(error);
-    }
-  });
-
-  function markReady() {
-    apiReady = !!(window.pywebview && window.pywebview.api);
-    input.disabled = !apiReady;
-    floatButton.disabled = !apiReady;
-    send.disabled = !apiReady;
-    if (apiReady) {
-      status.textContent = "READY — TEXT LINK ONLINE";
-    }
+  function setActive(active){
+    if(active)shell.classList.add("jarvis-active");
+    else if(document.activeElement!==input)shell.classList.remove("jarvis-active");
   }
 
-  window.addEventListener("pywebviewready", markReady, { once: true });
-  if (window.pywebview && window.pywebview.api) markReady();
+  shell.addEventListener("mouseenter",()=>setActive(true));
+  shell.addEventListener("mouseleave",()=>setActive(false));
+  shell.addEventListener("focusin",()=>setActive(true));
+  shell.addEventListener("focusout",()=>window.setTimeout(()=>setActive(false),0));
+  input.addEventListener("keydown",event=>{
+    if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();submit(false);}
+    else if(event.key==="Escape"){event.preventDefault();input.value="";status.textContent="";input.blur();}
+  });
+  send.addEventListener("click",()=>submit(false));
+  minButton.addEventListener("click",()=>setCollapsed(!historyCollapsed));
+  header.addEventListener("pointerdown",startDrag);
+  header.addEventListener("pointermove",moveDrag);
+  header.addEventListener("pointerup",stopDrag);
+  header.addEventListener("pointercancel",stopDrag);
+  shell.addEventListener("mouseup",persistGeometry);
+  floatButton.addEventListener("click",async()=>{
+    if(!apiReady||!window.pywebview.api.toggle_text_link)return;
+    try{await window.pywebview.api.toggle_text_link(true);shell.style.display="none";}
+    catch(error){const message="FLOAT LINK ERROR: "+String(error);addMessage("error",message);status.classList.add("jarvis-error");status.textContent=message;}
+  });
+  window.addEventListener("resize",()=>{
+    const rect=shell.getBoundingClientRect();
+    shell.style.left=Math.max(8,Math.min(window.innerWidth-rect.width-8,rect.left))+"px";
+    shell.style.top=Math.max(8,Math.min(window.innerHeight-rect.height-8,rect.top))+"px";
+    persistGeometry();
+  });
 
-  window.jarvisTextInput = {
-    setVisible: function (visible) {
-      shell.style.display = visible ? "" : "none";
-      if (!visible) setActive(false);
-    },
-    focus: function () {
-      if (apiReady) input.focus();
-    }
+  function markReady(){
+    apiReady=!!(window.pywebview&&window.pywebview.api);
+    input.disabled=!apiReady;floatButton.disabled=!apiReady;send.disabled=!apiReady;
+    if(apiReady)status.textContent="READY — TEXT LINK ONLINE";
+  }
+  restoreGeometry();
+  try{historyCollapsed=localStorage.getItem("jarvis.textSurface.collapsed")==="1";}catch(_){}
+  setCollapsed(historyCollapsed);
+  setTheme("default","JARVIS","unified");
+
+  window.addEventListener("pywebviewready",markReady,{once:true});
+  if(window.pywebview&&window.pywebview.api)markReady();
+
+  window.jarvisTextInput={
+    setVisible:function(visible){shell.style.display=visible?"":"none";if(!visible)setActive(false);},
+    focus:function(){if(apiReady)input.focus();},
+    setBuildTheme:function(id,name,version){setTheme(id,name,version);},
+    appendOutput:function(text){addMessage("jarvis",text);},
+    geometry:function(){const rect=shell.getBoundingClientRect();return{x:rect.left,y:rect.top,width:rect.width,height:rect.height};}
   };
 })();
 '''
-
 
 
 
