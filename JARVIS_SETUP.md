@@ -8,7 +8,7 @@ The supported end-user product is a single verified/release-published `Jarvis.ex
 
 Download the `Jarvis.exe` asset from the verified GitHub `latest` release. Double-clicking that executable is the normal Windows launch path.
 
-The executable contains the Jarvis runtime, a pinned self-contained OmniRoute gateway (Node.js 24.21.0 + OmniRoute 3.8.51), and the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters, not a second agent brain.
+The executable contains the Jarvis runtime, a pinned self-contained OmniRoute gateway (Node.js 24.21.0 + OmniRoute 3.8.50), the optional embedded Prism/free-astra compatibility bridge, and the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. The Prism bridge contains no local LLM: its inference remains remote. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters.
 
 ## What first launch may create
 
@@ -24,13 +24,17 @@ These files are runtime state and are not source dependencies for the applicatio
 
 ## Runtime and cloud configuration
 
-The supported agent brain is **OmniRoute only**. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
+The default agent routing layer is **OmniRoute**. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
 
-Jarvis uses OmniRoute as its conversational/agent routing layer. Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
+When a Prism session is explicitly configured, Jarvis also enables the optional remote Prism/Astra provider target. That target runs only as a local compatibility process; it does not run an LLM on the PC. Prism/Astra remains an unsupported external integration whose model availability can change, so OmniRoute remains the automatic fallback.
 
 Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor.
 
 Live cloud requests still require at least one configured provider credential. On first launch, Jarvis starts the embedded OmniRoute gateway automatically; open AI Provider Settings from the command surface, select a provider, paste its API key, and use CONNECT & TEST. Jarvis passes the secret directly to OmniRoute and clears its own input; credentials are stored by OmniRoute in its local credential store and never enter tracked configuration. The gateway's local routing endpoint is fixed to `http://127.0.0.1:20128/v1`.
+
+### Optional Prism/Astra bridge
+
+The embedded Prism bridge is disabled in practice until a Prism session file exists. The default Windows location is `%LOCALAPPDATA%\\Jarvis\\Prism\\session.json`; `JARVIS_PRISM_SESSION` can point to a different file and `JARVIS_PRISM_ENABLED=0` disables the bridge. Jarvis never scrapes browser cookies or silently collects credentials. When a valid session is present, the bridge listens only on `http://127.0.0.1:8319/v1` and exposes an OpenAI-compatible surface. The bridge's own Prism/Astra model availability is checked by the upstream service at request time; an unsupported Astra request can fall back to a Prism model that is still accepted.
 
 ## Voice
 
