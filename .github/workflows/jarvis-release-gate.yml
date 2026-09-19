@@ -64,6 +64,9 @@ jobs:
       - name: Fetch pinned Fullstack Agent components
         shell: pwsh
         run: python scripts/fetch-fullstack-components.py build_vendor
+      - name: Prepare pinned embedded OmniRoute runtime
+        shell: pwsh
+        run: python scripts/prepare_omniroute_runtime.py build_vendor/omniroute_runtime
       - name: Install runtime and fullstack voice dependencies
         shell: pwsh
         run: |
@@ -113,6 +116,9 @@ jobs:
             '--add-data', 'build_vendor\ai-visualizer\source;ai-visualizer/source',
             '--add-data', 'build_vendor\barehands\source;barehands/source',
             '--add-data', 'build_vendor\ai-memory-vault\source;ai-memory-vault/source',
+            '--add-binary', 'build_vendor\omniroute_runtime\node.exe;omniroute_runtime',
+            '--add-data', 'build_vendor\omniroute_runtime\node_modules;omniroute_runtime/node_modules',
+            '--add-data', 'build_vendor\omniroute_runtime\runtime-manifest.txt;omniroute_runtime',
             '--collect-submodules', 'quality_of_life', '--collect-submodules', 'self_coding',
             '--collect-submodules', 'windows_maintenance', '--collect-submodules', 'backtalk',
             '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-submodules', 'webrtcvad',
@@ -124,6 +130,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path -LiteralPath 'dist/Jarvis.exe')) { throw 'Jarvis.exe was not produced' }
           if ((Get-Item -LiteralPath 'dist/Jarvis.exe').Length -lt 5000000) { throw 'Jarvis.exe is unexpectedly small' }
+      - name: Verify embedded OmniRoute package
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -LiteralPath 'build_vendor/omniroute_runtime/runtime-manifest.txt' -Raw
+          if ($manifest -notmatch 'node=24\.21\.0') { throw 'Embedded Node runtime version mismatch' }
+          if ($manifest -notmatch 'omniroute=3\.8\.51') { throw 'Embedded OmniRoute version mismatch' }
+          if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node.exe')) { throw 'Embedded node.exe is missing' }
+          if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs')) { throw 'Embedded OmniRoute CLI is missing' }
+          & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute CLI did not start' }
+
       - name: Verify PyInstaller toolchain version
         shell: pwsh
         run: |
