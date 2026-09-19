@@ -136,6 +136,7 @@ jobs:
           $manifest = Get-Content -LiteralPath 'build_vendor/omniroute_runtime/runtime-manifest.txt' -Raw
           if ($manifest -notmatch 'node=24\.21\.0') { throw 'Embedded Node runtime version mismatch' }
           if ($manifest -notmatch 'omniroute=3\.8\.51') { throw 'Embedded OmniRoute version mismatch' }
+          if ($manifest -notmatch 'commit=c0f92ec98a981cc13c25e44048a04b33c62a3112') { throw 'Embedded OmniRoute source revision mismatch' }
           if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node.exe')) { throw 'Embedded node.exe is missing' }
           if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs')) { throw 'Embedded OmniRoute CLI is missing' }
           & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
