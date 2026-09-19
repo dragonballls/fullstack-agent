@@ -35,6 +35,32 @@ def _is_windows() -> bool:
     return sys.platform == "win32"
 
 
+# Only unambiguous public key formats are auto-detected. Ambiguous keys are
+# never sent to multiple providers merely to discover which one accepts them.
+_KEY_PREFIX_PROVIDERS: tuple[tuple[str, str], ...] = (
+    ("sk-ant-", "anthropic"),
+    ("sk-or-v1-", "openrouter"),
+    ("gsk_", "groq"),
+    ("xai-", "xai"),
+    ("AIza", "gemini"),
+    ("csk-", "cerebras"),
+    ("sk-proj-", "openai"),
+    ("sk-svcacct-", "openai"),
+)
+
+
+def detect_provider_from_key(api_key: str) -> str | None:
+    key = str(api_key or "").strip()
+    if not key:
+        return None
+    lowered = key.lower()
+    for prefix, provider in _KEY_PREFIX_PROVIDERS:
+        if lowered.startswith(prefix.lower()):
+            return provider
+    return None
+
+
+
 def default_data_dir() -> Path:
     override = os.environ.get("JARVIS_OMNIROUTE_DATA_DIR")
     if override:
@@ -305,6 +331,13 @@ class OmniRouteProvisioner:
     def configure_provider(self, provider: str, api_key: str) -> dict[str, object]:
         normalized = provider.strip().lower()
         key = api_key.strip()
+        if normalized in {"", "auto", "detect"}:
+            normalized = detect_provider_from_key(key) or ""
+            if not normalized:
+                raise ValueError(
+                    "This API key format cannot be safely auto-detected. "
+                    "Choose its OmniRoute provider explicitly."
+                )
         if not normalized or any(ch not in "abcdefghijklmnopqrstuvwxyz0123456789_-." for ch in normalized):
             raise ValueError("provider must contain only letters, numbers, underscore, hyphen, or dot")
         if len(key) < 8:
