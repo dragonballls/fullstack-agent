@@ -1,4 +1,5 @@
 import os
+import tempfile
 import unittest
 
 from quality_of_life.account_access import AccountGrant, AccountProvider, AccountRisk, AccountScope
@@ -78,22 +79,24 @@ class JarvisRuntimeTests(unittest.TestCase):
 
     def test_runtime_adds_prism_target_when_explicitly_enabled(self):
         old = {name: os.environ.get(name) for name in (
-            "JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED", "JARVIS_PRISM_ENABLED"
+            "JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED", "JARVIS_PRISM_ENABLED", "JARVIS_PRISM_SESSION"
         )}
-        try:
-            for name in old:
-                os.environ.pop(name, None)
-            os.environ["JARVIS_PRISM_ENABLED"] = "1"
-            runtime = JarvisRuntime(CapabilityPolicy())
-            router = runtime._tool("cloud_router")
-            self.assertEqual([target.name for target in router.targets], ["prism-astra", "omniroute"])
-            self.assertEqual(router.targets[0].base_url, "http://127.0.0.1:8319/v1")
-        finally:
-            for name, value in old.items():
-                if value is None:
+        with tempfile.NamedTemporaryFile(suffix=".json") as session:
+            try:
+                for name in old:
                     os.environ.pop(name, None)
-                else:
-                    os.environ[name] = value
+                os.environ["JARVIS_PRISM_ENABLED"] = "1"
+                os.environ["JARVIS_PRISM_SESSION"] = session.name
+                runtime = JarvisRuntime(CapabilityPolicy())
+                router = runtime._tool("cloud_router")
+                self.assertEqual([target.name for target in router.targets], ["prism-astra", "omniroute"])
+                self.assertEqual(router.targets[0].base_url, "http://127.0.0.1:8319/v1")
+            finally:
+                for name, value in old.items():
+                    if value is None:
+                        os.environ.pop(name, None)
+                    else:
+                        os.environ[name] = value
     def test_runtime_preserves_deny_by_default(self):
         runtime = JarvisRuntime(CapabilityPolicy(), factories={"gods_eye": FakeEye})
         with self.assertRaises(CapabilityDenied):
