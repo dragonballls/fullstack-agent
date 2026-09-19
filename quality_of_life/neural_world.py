@@ -204,26 +204,45 @@ class NeuralWorld:
             "jarvis.core", EntityKind.CORE, "JARVIS CORE", source="jarvis",
             energy=1.0, scale=2.0, position=(0.0, 0.0, 0.0),
         )
-        for entity_id, label in (
-            ("jarvis.browser", "Browser"), ("jarvis.coding", "Coding"),
-            ("jarvis.system", "System"), ("jarvis.gods-eye", "God's Eye"),
-            ("jarvis.workflows", "Workflows"), ("jarvis.memory", "Memory"),
-            ("jarvis.agents", "Agents"), ("jarvis.devices", "Devices"),
-            ("jarvis.neural-command", "Neural Command"),
-        ):
-            is_command = entity_id == "jarvis.neural-command"
+        subsystems = (
+            ("jarvis.browser", "Browser"),
+            ("jarvis.coding", "Coding"),
+            ("jarvis.system", "System"),
+            ("jarvis.gods-eye", "God's Eye"),
+            ("jarvis.workflows", "Workflows"),
+            ("jarvis.memory", "Memory"),
+            ("jarvis.agents", "Agents"),
+            ("jarvis.devices", "Devices"),
+        )
+        for index, (entity_id, label) in enumerate(subsystems):
+            theta = (index / len(subsystems)) * math.tau - math.pi / 2
+            position = (
+                math.cos(theta) * 4.7,
+                0.75 * math.sin(theta * 2.0),
+                math.sin(theta) * 4.7,
+            )
             node = self.upsert(
                 entity_id,
                 EntityKind.SUBSYSTEM,
                 label,
                 source="jarvis",
                 parent_id=core.id,
-                energy=0.96 if is_command else 0.6,
-                scale=0.62 if is_command else 1.35,
-                position=(0.0, -2.15, 0.85) if is_command else None,
-                shape="orbital" if is_command else _UNSET,
-                metadata={"ui_surface": "neural_command", "always_visible": True} if is_command else None,
+                energy=0.6,
+                scale=1.35,
+                position=position,
             )
+        node = self.upsert(
+            "jarvis.neural-command",
+            EntityKind.SUBSYSTEM,
+            "Neural Command",
+            source="jarvis",
+            parent_id=core.id,
+            energy=0.96,
+            scale=0.62,
+            position=(0.0, -2.15, 0.85),
+            shape="orbital",
+            metadata={"ui_surface": "neural_command", "always_visible": True},
+        )
             self.relate(core.id, node.id, "neural-command-surface" if is_command else "subsystem", 0.98 if is_command else 0.95)
 
     def upsert(
