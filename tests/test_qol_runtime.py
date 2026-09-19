@@ -97,6 +97,33 @@ class JarvisRuntimeTests(unittest.TestCase):
                         os.environ.pop(name, None)
                     else:
                         os.environ[name] = value
+    def test_runtime_self_coding_defaults_to_preview_only(self) -> None:
+        with tempfile.TemporaryDirectory() as root_dir, tempfile.TemporaryDirectory() as state_dir:
+            root = os.path.abspath(root_dir)
+            subprocess = __import__("subprocess")
+            subprocess.run(("git", "init", "-b", "main"), cwd=root, check=True, capture_output=True, text=True)
+            subprocess.run(("git", "config", "user.name", "Runtime Test"), cwd=root, check=True)
+            subprocess.run(("git", "config", "user.email", "runtime-test@example.invalid"), cwd=root, check=True)
+            open(os.path.join(root, "README.md"), "w", encoding="utf-8").write("seed\\n")
+            subprocess.run(("git", "add", "README.md"), cwd=root, check=True, capture_output=True, text=True)
+            subprocess.run(("git", "commit", "-m", "seed"), cwd=root, check=True, capture_output=True, text=True)
+            old = {name: os.environ.get(name) for name in ("JARVIS_SELF_CODING_REPO", "JARVIS_SELF_CODING_PUBLISH_MAIN", "JARVIS_SELF_CODING_STATE_DIR")}
+            try:
+                os.environ["JARVIS_SELF_CODING_REPO"] = root
+                os.environ.pop("JARVIS_SELF_CODING_PUBLISH_MAIN", None)
+                os.environ["JARVIS_SELF_CODING_STATE_DIR"] = state_dir
+                runtime = JarvisRuntime(CapabilityPolicy())
+                agent = runtime._tool("self_coding")
+                self.assertFalse(agent.config.publish_main)
+                self.assertFalse(agent.config.push_branch)
+                self.assertEqual(runtime._tool("self_coding").status()["state"], "clean")
+            finally:
+                for name, value in old.items():
+                    if value is None:
+                        os.environ.pop(name, None)
+                    else:
+                        os.environ[name] = value
+
     def test_runtime_preserves_deny_by_default(self):
         runtime = JarvisRuntime(CapabilityPolicy(), factories={"gods_eye": FakeEye})
         with self.assertRaises(CapabilityDenied):
