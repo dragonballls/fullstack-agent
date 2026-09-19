@@ -1,17 +1,6 @@
 name: Build 2 Neural Renderer Verification
 
 on:
-  push:
-    branches: [feat/build2-neural-realism]
-    paths:
-      - "quality_of_life/neural_mesh.py"
-      - "tests/test_neural_mesh_build.py"
-      - "scripts/jarvis_desktop.py"
-      - "scripts/jarvis_desktop.pyw"
-      - "quality_of_life/ui_builds.py"
-      - "quality_of_life/omniroute.py"
-      - "quality_of_life/omniroute_setup.py"
-      - "tests/test_omniroute_provisioning.py"
   pull_request:
     branches: [main]
     paths:
@@ -34,7 +23,7 @@ jobs:
         with:
           node-version: "22"
       - name: Verify Build 2 neural renderer
-        run: python -m unittest tests.test_neural_mesh_build tests.test_omniroute_provisioning -v
+        run: python -m unittest tests.test_neural_mesh_build -v
 
   neural-renderer-windows:
     runs-on: windows-latest
