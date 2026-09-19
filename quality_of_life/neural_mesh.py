@@ -29,7 +29,23 @@ NEURAL_MESH_BUILTIN = {
 #jn-hud{position:absolute;left:24px;top:20px;pointer-events:none;text-shadow:0 0 18px rgba(56,174,255,.45)}
 #jn-title{font-size:16px;letter-spacing:.34em;color:#b8e9ff}
 #jn-status{margin-top:5px;font-size:9px;letter-spacing:.15em;color:#58a8d7;text-transform:uppercase}
-#jn-focus{position:absolute;left:24px;top:86px;max-width:420px;font-size:10px;color:#78b9dc;pointer-events:none}
+#jn-earth-sensor{position:absolute;left:24px;top:108px;width:min(340px,calc(100vw - 48px));padding:11px;border:1px solid rgba(84,188,255,.20);border-radius:12px;background:linear-gradient(145deg,rgba(2,15,28,.72),rgba(1,7,15,.58));box-shadow:0 16px 48px rgba(0,0,0,.32),inset 0 0 26px rgba(41,160,239,.035);backdrop-filter:blur(10px);pointer-events:none}
+.jn-earth-sensor-title{font-size:8px;letter-spacing:.18em;color:#b9ebff}
+#jn-earth-readout{margin-top:6px;font-size:8px;line-height:1.45;color:#6faed0}
+#jn-earth-feeds{margin-top:7px;display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.jn-earth-feed{padding:5px 6px;border:1px solid rgba(111,199,242,.11);border-radius:7px;font-size:7px;line-height:1.25;color:#5e8da8;text-transform:uppercase}
+.jn-earth-feed.live{border-color:rgba(91,224,172,.24);color:#7bdcb9}
+.jn-earth-feed.auth{border-color:rgba(108,195,255,.22);color:#7fcfff}
+#jn-earth-marker-layer{position:absolute;inset:0;pointer-events:none;z-index:24}
+.jn-earth-marker{position:absolute;left:0;top:0;transform:translate(-50%,-50%);min-width:18px;height:18px;border:1px solid rgba(114,222,255,.7);border-radius:50%;box-shadow:0 0 0 1px rgba(71,181,255,.12),0 0 18px rgba(57,184,255,.48);background:rgba(3,30,53,.22)}
+.jn-earth-marker::before{content:"";position:absolute;inset:3px;border-radius:50%;background:radial-gradient(circle,#dffbff 0 18%,#5fcfff 19% 46%,transparent 47%);box-shadow:0 0 12px rgba(120,226,255,.82)}
+.jn-earth-marker::after{content:"";position:absolute;inset:-6px;border:1px solid rgba(103,210,255,.24);border-radius:50%;animation:jn-earth-pulse 1.7s ease-out infinite}
+.jn-earth-marker.current{border-color:rgba(216,250,255,.96);box-shadow:0 0 0 1px rgba(156,233,255,.28),0 0 24px rgba(100,210,255,.78)}
+.jn-earth-marker.family::before{background:radial-gradient(circle,#efffff 0 18%,#7fcfff 19% 44%,transparent 45%)}
+.jn-earth-marker.saved{border-style:dashed}
+.jn-earth-marker.selected{box-shadow:0 0 0 3px rgba(105,216,255,.18),0 0 30px rgba(105,216,255,.78)}
+@keyframes jn-earth-pulse{0%{transform:scale(.58);opacity:.9}100%{transform:scale(1.75);opacity:0}}
+\n#jn-focus{position:absolute;left:24px;top:86px;max-width:420px;font-size:10px;color:#78b9dc;pointer-events:none}
 #jn-search{position:absolute;right:24px;top:20px;width:min(340px,36vw);box-sizing:border-box;pointer-events:auto;border:1px solid rgba(91,190,255,.28);border-radius:12px;padding:11px 13px;outline:none;color:#dff6ff;background:rgba(2,12,24,.72);box-shadow:0 0 28px rgba(20,130,220,.1);backdrop-filter:blur(10px)}
 #jn-kind,#jn-life{position:absolute;top:63px;width:145px;box-sizing:border-box;padding:7px 8px;border:1px solid rgba(91,190,255,.18);border-radius:9px;color:#88cfff;background:rgba(2,12,24,.68);font:8px Inter,Segoe UI,sans-serif;letter-spacing:.1em;pointer-events:auto;text-transform:uppercase}
 #jn-kind{right:322px}#jn-life{right:165px}
@@ -104,6 +120,8 @@ NEURAL_MESH_BUILTIN = {
   <div id="jn-surfaces"></div>
   <div id="jn-hud"><div id="jn-title">JARVIS</div><div id="jn-status">NEURAL MESH · 3D WORLD · ONLINE</div></div>
   <div id="jn-focus"></div>
+  <div id="jn-earth-sensor" aria-live="polite"><div class="jn-earth-sensor-title">GOD'S EYE SENSOR</div><div id="jn-earth-readout">INITIALIZING PLANETARY FEED</div><div id="jn-earth-feeds"></div></div>
+  <div id="jn-earth-marker-layer"></div>
   <input id="jn-search" autocomplete="off" spellcheck="false" placeholder="Search the neural world…" />
   <input id="jn-connected" autocomplete="off" spellcheck="false" placeholder="Connected to…" />
   <input id="jn-source" autocomplete="off" spellcheck="false" placeholder="Source…" />
@@ -158,7 +176,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 
 const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
-  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],
+  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthSun:[-.55,.68,.75],
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
@@ -218,27 +236,53 @@ const earthProg=program(
 `#version 300 es
 precision highp float;
 layout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;
-uniform mat4 uMvp;uniform mat4 uModel;out vec3 vPos;out vec3 vNormal;
-void main(){vPos=aPos;vNormal=mat3(uModel)*aNormal;gl_Position=uMvp*uModel*vec4(aPos,1.);}`,
+uniform mat4 uMvp;uniform mat4 uModel;uniform float uTime;uniform vec3 uSun;
+out vec3 vPos;out vec3 vNormal;out float vSun;
+void main(){vec4 world=uModel*vec4(aPos,1.);vPos=aPos;vNormal=normalize(mat3(uModel)*aNormal);vSun=dot(vNormal,normalize(uSun));gl_Position=uMvp*world;}`,
 `#version 300 es
 precision highp float;
-in vec3 vPos;in vec3 vNormal;out vec4 outColor;
+in vec3 vPos;in vec3 vNormal;in float vSun;out vec4 outColor;
+float hash21(vec2 p){p=fract(p*vec2(123.34,345.45));p+=dot(p,p+34.345);return fract(p.x*p.y);}
+float noise2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);float a=hash21(i),b=hash21(i+vec2(1.,0.)),c=hash21(i+vec2(0.,1.)),d=hash21(i+vec2(1.,1.));return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);}
 void main(){
-  vec3 n=normalize(vNormal),light=normalize(vec3(-.55,.68,.75));
-  float lit=.32+.68*max(0.,dot(n,light));
-  float lat=asin(clamp(vPos.y,-1.,1.)),lon=atan(vPos.z,vPos.x);
-  float noise=sin(lon*4.2+sin(lat*5.0))*sin(lat*7.1)+.34*sin(lon*9.2-lat*2.7);
-  float land=smoothstep(.18,.56,noise);
-  float polar=smoothstep(.69,.93,abs(vPos.y));
-  vec3 c=mix(vec3(.012,.20,.46),vec3(.08,.42,.25),land);
-  c=mix(c,vec3(.72,.90,.98),polar*.76);
-  float gridLat=pow(1.-abs(sin(lat*18.)),18.);
-  float gridLon=pow(1.-abs(sin(lon*36.)),24.);
-  c+=vec3(.16,.52,.86)*(gridLat+gridLon)*.038;
-  float rim=pow(1.-max(0.,dot(n,vec3(0.,0.,1.))),2.);
-  c+=vec3(.10,.43,.94)*rim*.34;
-  outColor=vec4(c*lit,1.);
+  vec3 n=normalize(vNormal),sun=normalize(vec3(-.55,.68,.75)),view=normalize(vec3(0.,0.,1.));
+  float day=smoothstep(-.10,.16,vSun),twilight=smoothstep(-.18,.04,vSun)*smoothstep(.20,.03,vSun);
+  vec2 uv=vec2(atan(vPos.z,vPos.x)/6.2831853+.5,asin(clamp(vPos.y,-1.,1.))/3.14159265+.5);
+  float continent=noise2(uv*5.2)+.35*noise2(uv*11.0)+.14*noise2(uv*24.0);
+  float land=smoothstep(.53,.66,continent);
+  float oceanNoise=noise2(uv*17.0);
+  float cloud=noise2(uv*8.0+vec2(uTime*.000012,-uTime*.000007))*.62+noise2(uv*17.0-vec2(uTime*.000021,uTime*.000011))*.38;
+  cloud=smoothstep(.56,.76,cloud);
+  float coast=smoothstep(.46,.58,continent)-smoothstep(.60,.68,continent);
+  float night=1.-day;
+  float cityNoise=noise2(uv*92.0)+.55*noise2(uv*180.0);
+  float city=night*smoothstep(.60,.82,cityNoise)*land;
+  vec3 ocean=vec3(.008,.055,.14);
+  ocean+=vec3(.01,.10,.22)*oceanNoise*.34;
+  vec3 landCol=mix(vec3(.028,.18,.10),vec3(.075,.34,.16),smoothstep(.55,.8,continent));
+  landCol+=vec3(.20,.26,.12)*smoothstep(.76,.92,continent);
+  vec3 c=mix(ocean,landCol,land);
+  c=mix(c,vec3(.82,.93,.98),cloud*.18*day);
+  c+=vec3(1.0,.46,.12)*city*.72;
+  c+=vec3(.08,.24,.46)*coast*.10;
+  c*=.16+.84*day;
+  c+=vec3(.85,.24,.07)*twilight*.055;
+  float ice=smoothstep(.68,.94,abs(vPos.y));c=mix(c,vec3(.70,.84,.91),ice*.72);
+  float fres=pow(1.-max(0.,dot(n,view)),3.5);c+=vec3(.05,.38,.95)*fres*.48;
+  outColor=vec4(c,1.);
 }`
+);
+const earthAtmosProg=program(
+`#version 300 es
+precision highp float;
+layout(location=0)in vec3 aPos;layout(location=1)in vec3 aNormal;
+uniform mat4 uMvp;uniform mat4 uModel;
+out vec3 vNormal;
+void main(){vNormal=normalize(mat3(uModel)*aNormal);gl_Position=uMvp*uModel*vec4(aPos,1.);}`,
+`#version 300 es
+precision highp float;
+in vec3 vNormal;out vec4 outColor;
+void main(){vec3 n=normalize(vNormal);float rim=pow(1.-max(0.,dot(n,vec3(0.,0.,1.))),3.0);float edge=pow(1.-abs(dot(n,vec3(0.,1.,0.))),1.7);float a=.18*rim+.07*edge;outColor=vec4(.12,.57,1.0,a);}`
 );
 const lineProg=program(
 '#version 300 es\nprecision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aStrength;layout(location=2)in float aProgress;uniform mat4 uMvp;uniform float uTime;out float vStrength;out float vProgress;void main(){gl_Position=uMvp*vec4(aPos,1.);vStrength=aStrength;vProgress=aProgress;}',
@@ -392,6 +436,30 @@ function renderEarthLabels(){
   const locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
   if(S.view==="earth"&&locators.length)box.textContent="GOD'S EYE · "+locators.map(function(x){return String(x.label||"Locator").slice(0,36)}).slice(0,5).join(" · ");
 }
+function renderEarthMarkers(){
+  const layer=ui.querySelector("#jn-earth-marker-layer"),locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
+  if(!layer)return;
+  const keep=new Set();
+  for(const item of locators){
+    const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180,r=1.075,rr=Math.cos(lat)*r;
+    const p=[rr*Math.cos(lon),Math.sin(lat)*r,rr*Math.sin(lon)],s=worldToScreen(p);
+    if(!s)continue;
+    const id=String(item.id||item.label||"locator"),key="earth-marker-"+id.replace(/[^a-zA-Z0-9_-]/g,"_");keep.add(key);
+    let el=layer.querySelector('[data-key="'+key.replace(/"/g,"")+'"]');
+    if(!el){el=document.createElement("div");el.className="jn-earth-marker";el.dataset.key=key;el.title=String(item.label||"Locator");layer.appendChild(el);}
+    el.classList.toggle("current",item.kind==="current");el.classList.toggle("family",item.kind==="family");el.classList.toggle("saved",item.kind==="saved");el.classList.toggle("selected",id===String(S.earthSelected||""));
+    el.style.transform="translate3d("+Math.round(s[0])+"px,"+Math.round(s[1])+"px,0) translate(-50%,-50%)";
+  }
+  Array.from(layer.children).forEach(function(el){if(!keep.has(el.dataset.key))el.remove();});
+}
+function renderEarthSensor(){
+  const feeds=ui.querySelector("#jn-earth-feeds"),readout=ui.querySelector("#jn-earth-readout");if(!feeds||!readout)return;
+  const current=Boolean(S.earthData.authorized_current),locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[],states=Array.isArray(S.earthData.provider_status)?S.earthData.provider_status:[];
+  readout.textContent=current?"LIVE CURRENT LOCATION AUTHORIZED · "+locators.length+" AUTHORIZED LOCATOR"+(locators.length===1?"":"S"):"NO CURRENT LOCATION FEED · "+locators.length+" AUTHORIZED LOCATOR"+(locators.length===1?"":"S");
+  feeds.replaceChildren();
+  if(!states.length){const x=document.createElement("div");x.className="jn-earth-feed";x.textContent="LOCATION FEEDS · UNAVAILABLE";feeds.appendChild(x);return;}
+  states.slice(0,3).forEach(function(state){const x=document.createElement("div");x.className="jn-earth-feed "+(state.live?"live":state.authorized?"auth":"");x.textContent=String(state.kind||"feed").toUpperCase()+" · "+(state.live?"LIVE":state.authorized?"AUTH":"OFF");feeds.appendChild(x);});
+}
 function renderEarth(now){
   const oldYaw=S.yaw,oldPitch=S.pitch,oldDistance=S.distance,oldTarget=S.target.slice();
   S.yaw=S.earthYaw;S.pitch=S.earthPitch;S.distance=S.earthDistance;S.target=[0,0,0];
@@ -400,35 +468,28 @@ function renderEarth(now){
   lookAt(view,c.eye,S.target);multiply(mvp,proj,view);
   gl.clearColor(.001,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.disable(gl.BLEND);
-  gl.useProgram(earthProg);
-  gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uMvp"),false,mvp);
   const model=new Float32Array(16);model[0]=model[5]=model[10]=model[15]=1;
-  gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uModel"),false,model);
-  attr(earthProg,"aPos",3,earthPos);attr(earthProg,"aNormal",3,earthNormal);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,earthIndex);gl.drawElements(gl.TRIANGLES,earthIndexCount,gl.UNSIGNED_SHORT,0);
-
+  const sunDay=(performance.now()*.000003)%6.2831853;S.earthSun=[Math.cos(sunDay)*.62,.68,Math.sin(sunDay)*.62];
+  gl.useProgram(earthProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(earthProg,"uModel"),false,model);gl.uniform1f(gl.getUniformLocation(earthProg,"uTime"),now);gl.uniform3fv(gl.getUniformLocation(earthProg,"uSun"),new Float32Array(S.earthSun));
+  attr(earthProg,"aPos",3,earthPos);attr(earthProg,"aNormal",3,earthNormal);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,earthIndex);gl.drawElements(gl.TRIANGLES,earthIndexCount,gl.UNSIGNED_SHORT,0);
+  const atModel=new Float32Array([1.025,0,0,0,0,1.025,0,0,0,0,1.025,0,0,0,0,1]);
+  gl.enable(gl.BLEND);gl.depthMask(false);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.useProgram(earthAtmosProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(earthAtmosProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(earthAtmosProg,"uModel"),false,atModel);
+  attr(earthAtmosProg,"aPos",3,earthPos);attr(earthAtmosProg,"aNormal",3,earthNormal);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,earthIndex);gl.drawElements(gl.TRIANGLES,earthIndexCount,gl.UNSIGNED_SHORT,0);
   const locators=Array.isArray(S.earthData.locators)?S.earthData.locators:[];
   if(locators.length){
     const cp=new Float32Array(locators.length*3),cs=new Float32Array(locators.length),ce=new Float32Array(locators.length),ph=new Float32Array(locators.length),sel=new Float32Array(locators.length),sh=new Float32Array(locators.length),bi=new Float32Array(locators.length);
-    locators.forEach(function(item,i){
-      const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;
-      const r=1.075,rr=Math.cos(lat)*r;
-      cp.set([rr*Math.cos(lon),Math.sin(lat)*r,rr*Math.sin(lon)],i*3);
-      cs[i]=.10;ce[i]=1;ph[i]=i*.91;sel[i]=0;sh[i]=1;bi[i]=now-1700;
-    });
-    gl.enable(gl.BLEND);gl.depthMask(false);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
-    upload(earthCenterBuf,cp);upload(earthScaleBuf,cs);upload(earthEnergyBuf,ce);upload(earthPhaseBuf,ph);upload(earthSelectedBuf,sel);upload(earthShapeBuf,sh);upload(earthBirthBuf,bi);
-    gl.useProgram(droplet);
-    gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);
-    gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);
-    gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),now);
-    attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,earthCenterBuf,1);attr(droplet,"aScale",1,earthScaleBuf,1);attr(droplet,"aEnergy",1,earthEnergyBuf,1);attr(droplet,"aPhase",1,earthPhaseBuf,1);attr(droplet,"aSelected",1,earthSelectedBuf,1);attr(droplet,"aShape",1,earthShapeBuf,1);attr(droplet,"aBirth",1,earthBirthBuf,1);upload(rotBuf,new Float32Array(locators.length*3));upload(angBuf,new Float32Array(locators.length*3));attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,locators.length);
+    locators.forEach(function(item,i){const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180,r=1.075,rr=Math.cos(lat)*r;cp.set([rr*Math.cos(lon),Math.sin(lat)*r,rr*Math.sin(lon)],i*3);cs[i]=item.kind==="current"?.12:item.kind==="family"?.105:.09;ce[i]=1;ph[i]=i*.91;sel[i]=String(item.id)===String(S.earthSelected||"")?1:0;sh[i]=2;bi[i]=now-1700;});
+    gl.depthMask(false);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+    upload(earthCenterBuf,cp);upload(earthScaleBuf,cs);upload(earthEnergyBuf,ce);upload(earthPhaseBuf,ph);upload(earthSelectedBuf,sel);upload(earthShapeBuf,sh);upload(earthBirthBuf,bi);upload(rotBuf,new Float32Array(locators.length*3));upload(angBuf,new Float32Array(locators.length*3));
+    gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),now);
+    attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,earthCenterBuf,1);attr(droplet,"aScale",1,earthScaleBuf,1);attr(droplet,"aEnergy",1,earthEnergyBuf,1);attr(droplet,"aPhase",1,earthPhaseBuf,1);attr(droplet,"aSelected",1,earthSelectedBuf,1);attr(droplet,"aShape",1,earthShapeBuf,1);attr(droplet,"aBirth",1,earthBirthBuf,1);attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,locators.length);
   }
   S.yaw=oldYaw;S.pitch=oldPitch;S.distance=oldDistance;S.target=oldTarget;
   ui.querySelector("#jn-title").textContent="GOD'S EYE";
-  renderEarthLabels();
-  ui.querySelector("#jn-status").textContent="3D EARTH · "+locators.length+" LOCATORS · "+(S.earthData.authorized_current?"CURRENT LOCATION AUTHORIZED":"CURRENT LOCATION UNAVAILABLE");
+  renderEarthLabels();renderEarthMarkers();renderEarthSensor();
+  ui.querySelector("#jn-status").textContent="PLANETARY SENSOR · "+locators.length+" AUTHORIZED TARGETS · "+(current?"CURRENT FEED LIVE":"CURRENT FEED OFFLINE");
 }
 async function pollEarth(){
   const a=api();if(!a||!a.gods_eye_globe)return;
@@ -856,7 +917,7 @@ window.jarvisNeuralCommandSurface={
   focus:function(){const surface=window.jarvisTextInput;if(surface&&surface.focus)surface.focus();}
 };
 canvas.addEventListener("pointerdown",function(e){
-  if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
+  if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){S.earthSelected=String(locator.id||locator.label||"");ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
   const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;S.dragLastTime=performance.now();S.dragLastDelta=[0,0,0];
   if(n){S.dragNode=n.id;setSelected(n.id);canvas.setPointerCapture(e.pointerId);return;}
   S.orbit=true;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);
@@ -884,7 +945,7 @@ ui.querySelector("#jn-follow").addEventListener("click",function(){S.follow=!S.f
 ui.querySelector("#jn-map").addEventListener("click",function(){S.minimap=!S.minimap;ui.querySelector("#jn-map").textContent=S.minimap?"MAP ON":"MAP";renderMinimap();});
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
-ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
+ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";S.earthSelected=null;if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
 ui.querySelector("#jn-mode").addEventListener("click",function(){setSurfaceMode(S.surfaceMode==="3d"?"2d":"3d")});
 ui.querySelector("#jn-windows").addEventListener("click",function(){S.showWindows=!S.showWindows;ui.querySelector("#jn-windows").textContent=S.showWindows?"WINDOWS":"WINDOWS OFF";renderSpatialWindows()});
 ui.querySelector("#jn-giant").addEventListener("click",function(){S.giant=!S.giant;ui.querySelector("#jn-giant").textContent=S.giant?"NORMAL":"GIANT";renderSpatialWindows()});
