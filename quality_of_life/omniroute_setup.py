@@ -92,7 +92,7 @@ class OmniRouteProvisioner:
         root = _packaged_runtime_root()
         if root is None:
             return None
-        node = root / ("node.exe" if _is_windows() else "bin" / "node")
+        node = root / ("node.exe" if _is_windows() else Path("bin") / "node")
         if not node.is_file():
             return None
         entry = root / "node_modules" / "omniroute" / "bin" / "omniroute.mjs"
