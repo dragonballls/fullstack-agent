@@ -20,6 +20,7 @@ from collections import deque
 from typing import Any
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
+from quality_of_life.omniroute_setup import OmniRouteProvisioner
 from quality_of_life.runtime import JarvisRuntime
 from quality_of_life.self_update import SelfUpdateError, build_windows_handoff_script, fetch_latest_release, is_update_available, stage_update
 
@@ -395,6 +396,21 @@ class JarvisWebApi:
         except Exception:
             return {"ok": True, "messages": []}
 
+    def open_omniroute_settings(self) -> dict[str, Any]:
+        return self.host.open_omniroute_settings()
+
+    def omniroute_status(self) -> dict[str, Any]:
+        return self.host.omniroute_status()
+
+    def omniroute_configure_provider(self, provider: str, api_key: str) -> dict[str, Any]:
+        return self.host.configure_omniroute_provider(provider, api_key)
+
+    def omniroute_test_provider(self, provider: str) -> dict[str, Any]:
+        return self.host.test_omniroute_provider(provider)
+
+    def open_omniroute_dashboard(self) -> dict[str, Any]:
+        return self.host.open_omniroute_dashboard()
+
     def submit_text(self, text: str, confirmed: bool = False) -> dict[str, Any]:
         normalized = str(text or "").strip()
         if not normalized:
@@ -455,7 +471,7 @@ TEXT_INPUT_SCRIPT = r'''
   const shell = document.createElement("div");
   shell.id = "jarvis-text-shell";
   shell.innerHTML = `
-    <div id="jarvis-text-header"><span id="jarvis-text-dot"></span><span id="jarvis-text-label">JARVIS COMMAND</span><span id="jarvis-text-build"></span><span id="jarvis-text-actions"><button class="jarvis-text-btn" id="jarvis-text-min" type="button" title="Collapse command transcript">—</button><button class="jarvis-text-btn" id="jarvis-text-float" type="button" title="Detach command surface">↗</button></span></div>
+    <div id="jarvis-text-header"><span id="jarvis-text-dot"></span><span id="jarvis-text-label">JARVIS COMMAND</span><span id="jarvis-text-build"></span><span id="jarvis-text-actions"><button class="jarvis-text-btn" id="jarvis-text-settings" type="button" title="Open AI provider settings">⚙</button><button class="jarvis-text-btn" id="jarvis-text-min" type="button" title="Collapse command transcript">—</button><button class="jarvis-text-btn" id="jarvis-text-float" type="button" title="Detach command surface">↗</button></span></div>
     <div id="jarvis-text-history" aria-live="polite"><div class="jarvis-text-message jarvis">Command surface online. Jarvis responses will remain visible here.</div></div>
     <div id="jarvis-text-row"><textarea id="jarvis-text-input" rows="1" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis…" aria-label="Talk to Jarvis by text" disabled></textarea><button id="jarvis-text-send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div>
     <div id="jarvis-text-status"></div>
@@ -470,6 +486,7 @@ TEXT_INPUT_SCRIPT = r'''
   const history = shell.querySelector("#jarvis-text-history");
   const buildLabel = shell.querySelector("#jarvis-text-build");
   const minButton = shell.querySelector("#jarvis-text-min");
+  const settingsButton = shell.querySelector("#jarvis-text-settings");
   const header = shell.querySelector("#jarvis-text-header");
   let apiReady = false;
   let historyCollapsed = false;
@@ -587,6 +604,11 @@ TEXT_INPUT_SCRIPT = r'''
   });
   send.addEventListener("click",()=>submit(false));
   minButton.addEventListener("click",()=>setCollapsed(!historyCollapsed));
+  settingsButton.addEventListener("click",async()=>{
+    if(!apiReady||!window.pywebview.api.open_omniroute_settings)return;
+    try{await window.pywebview.api.open_omniroute_settings();}
+    catch(error){const message="AI PROVIDER SETTINGS ERROR: "+String(error);addMessage("error",message);status.classList.add("jarvis-error");status.textContent=message.slice(0,180);}
+  });
   header.addEventListener("pointerdown",startDrag);
   header.addEventListener("pointermove",moveDrag);
   header.addEventListener("pointerup",stopDrag);
@@ -654,6 +676,67 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
 <script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn);const readyPoll=window.setInterval(function(){if(window.pywebview&&window.pywebview.api){readyFn();window.clearInterval(readyPoll)}} ,250);if(window.pywebview&&window.pywebview.api)readyFn()})();</script>
 </body></html>'''
 
+OMNIROUTE_SETTINGS_HTML = r'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis AI Providers</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#020914;color:#dff5ff;font-family:Consolas,"SFMono-Regular",monospace}
+body{padding:18px}.panel{height:100%;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(91,190,255,.25);border-radius:18px;padding:18px;background:radial-gradient(circle at 15% 5%,rgba(78,196,255,.10),transparent 35%),linear-gradient(145deg,rgba(3,17,30,.98),rgba(1,7,13,.98));box-shadow:0 20px 70px rgba(0,0,0,.52),inset 0 0 38px rgba(56,179,247,.04)}
+h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px;line-height:1.6;color:#67879d}.status{padding:9px;border:1px solid rgba(111,199,242,.14);border-radius:10px;background:rgba(255,255,255,.018);font-size:9px;line-height:1.5}.row{display:flex;gap:8px}.field{display:flex;flex-direction:column;gap:5px;flex:1}.field label{font-size:8px;letter-spacing:.12em;color:#7698ad}select,input{width:100%;height:38px;border:1px solid rgba(111,199,242,.20);border-radius:8px;background:rgba(0,0,0,.25);color:#e8f7ff;outline:none;padding:0 10px;font:10px Consolas,"SFMono-Regular",monospace}input:focus,select:focus{border-color:rgba(151,230,255,.66);box-shadow:0 0 18px rgba(50,165,239,.12)}button{height:36px;border:1px solid rgba(111,199,242,.21);border-radius:8px;background:rgba(5,24,39,.64);color:#c7edff;cursor:pointer;font:9px Consolas,"SFMono-Regular",monospace;padding:0 13px}button:hover{border-color:rgba(151,230,255,.68);background:rgba(27,124,184,.15)}.primary{background:rgba(33,131,180,.14);border-color:rgba(106,211,255,.30)}.providers{display:flex;flex-direction:column;gap:6px;min-height:70px;overflow:auto}.provider{display:flex;justify-content:space-between;gap:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(111,199,242,.09);font-size:9px}.muted{color:#628299}.ok{color:#9ceac0}.bad{color:#ff9cab}.actions{display:flex;gap:7px;flex-wrap:wrap}
+</style>
+</head>
+<body><div class="panel">
+<h1>JARVIS · AI PROVIDERS</h1>
+<div class="sub">OmniRoute is built into the Jarvis release. Enter provider credentials here; Jarvis does not display or store the secret itself.</div>
+<div class="status" id="runtime">Checking OmniRoute runtime…</div>
+<div><div class="field"><label>PROVIDER</label><select id="provider"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google AI</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="xai">xAI</option><option value="mistral">Mistral</option><option value="cerebras">Cerebras</option><option value="together">Together</option><option value="fireworks">Fireworks</option><option value="custom">Custom provider ID…</option></select></div></div>
+<div class="field" id="customWrap" style="display:none"><label>CUSTOM PROVIDER ID</label><input id="customProvider" autocomplete="off" placeholder="provider-id"></div>
+<div class="field"><label>API KEY</label><input id="key" type="password" autocomplete="new-password" placeholder="Paste provider API key"></div>
+<div class="actions"><button id="connect" class="primary" type="button">CONNECT & TEST</button><button id="refresh" type="button">REFRESH</button><button id="dashboard" type="button">OPEN DASHBOARD</button></div>
+<div class="sub" id="message">Provider secrets are sent directly to OmniRoute over a local process boundary.</div>
+<div><div class="sub" style="margin-bottom:6px">CONFIGURED PROVIDERS</div><div class="providers" id="providers"><div class="muted">No provider status yet.</div></div></div>
+</div>
+<script>
+(function(){
+"use strict";
+const provider=document.getElementById("provider"), custom=document.getElementById("customWrap"), customInput=document.getElementById("customProvider"), key=document.getElementById("key"), connect=document.getElementById("connect"), refresh=document.getElementById("refresh"), dashboard=document.getElementById("dashboard"), runtime=document.getElementById("runtime"), message=document.getElementById("message"), providers=document.getElementById("providers");
+provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});
+function render(data){
+  if(!data){runtime.textContent="OmniRoute status unavailable.";return;}
+  const version=data.version||"unknown", source=data.source||"unknown", ready=data.ready?"ONLINE":"STARTING";
+  runtime.textContent="OMNIROUTE "+ready+" · v"+version+" · "+source+" · "+(data.base_url||"");
+  const items=Array.isArray(data.providers)?data.providers:[];
+  providers.innerHTML=items.length?items.map(item=>'<div class="provider"><span>'+String(item.name).replace(/[<>&]/g,"")+'</span><span class="'+(String(item.status||"").toLowerCase().includes("fail")?"bad":"ok")+'">'+String(item.status||"configured").replace(/[<>&]/g,"")+'</span></div>').join(""):'<div class="muted">No providers configured yet.</div>';
+}
+async function load(){
+  try{const data=await window.pywebview.api.omniroute_status();render(data);}
+  catch(e){runtime.textContent="STATUS ERROR";message.textContent=String(e);}
+}
+connect.addEventListener("click",async()=>{
+  const selected=provider.value==="custom"?customInput.value.trim():provider.value;
+  const secret=key.value;
+  if(!selected||!secret){message.textContent="Select a provider and enter its API key.";return;}
+  connect.disabled=true;message.textContent="Connecting provider through OmniRoute…";
+  try{
+    const result=await window.pywebview.api.omniroute_configure_provider(selected,secret);
+    key.value="";
+    if(result&&result.tested===false){message.textContent="Credential saved; provider test could not complete."}
+    else message.textContent=result&&result.message?result.message:"Provider connected and tested.";
+    await load();
+  }catch(e){key.value="";message.textContent="Provider setup failed without exposing the credential.";runtime.className="status bad";}
+  finally{connect.disabled=false;}
+});
+refresh.addEventListener("click",load);
+dashboard.addEventListener("click",async()=>{try{await window.pywebview.api.open_omniroute_dashboard();}catch(e){message.textContent="Dashboard could not be opened.";}});
+
+function ready(){if(window.pywebview&&window.pywebview.api)load();}
+window.addEventListener("pywebviewready",ready);
+const poll=window.setInterval(()=>{if(window.pywebview&&window.pywebview.api){window.clearInterval(poll);load();}},250);
+})();
+</script>
+</body></html>'''
 
 class FullstackJarvisHost:
     """Lifecycle supervisor for the complete Jarvis Fullstack presentation."""
@@ -668,6 +751,8 @@ class FullstackJarvisHost:
         self._window: Any | None = None
         self._floating_window: Any | None = None
         self._floating_visible = False
+        self._omniroute_settings_window: Any | None = None
+        self.omniroute = OmniRouteProvisioner()
         self._floating_lock = threading.RLock()
         self._shutting_down = False
         self._web_api = JarvisWebApi(self)
@@ -679,6 +764,62 @@ class FullstackJarvisHost:
     def web_api(self) -> JarvisWebApi:
         return self._web_api
 
+    def omniroute_status(self) -> dict[str, Any]:
+        status = self.omniroute.status().as_dict()
+        try:
+            status["ready"] = bool(self.omniroute.ensure_running(wait_seconds=0.5))
+        except Exception:
+            status["ready"] = False
+        try:
+            status["providers"] = self.omniroute.list_providers()
+        except Exception:
+            status["providers"] = []
+        return status
+
+    def configure_omniroute_provider(self, provider: str, api_key: str) -> dict[str, Any]:
+        self.omniroute.ensure_running(wait_seconds=15)
+        result = self.omniroute.configure_provider(provider, api_key)
+        test = self.omniroute.test_provider(provider)
+        result["tested"] = bool(test.get("ok"))
+        result["message"] = "Provider connected and tested" if result["tested"] else "Credential saved but provider test failed"
+        return result
+
+    def test_omniroute_provider(self, provider: str) -> dict[str, Any]:
+        self.omniroute.ensure_running(wait_seconds=15)
+        return self.omniroute.test_provider(provider)
+
+    def open_omniroute_dashboard(self) -> dict[str, Any]:
+        import webbrowser
+        webbrowser.open("http://127.0.0.1:20128")
+        return {"ok": True}
+
+    def open_omniroute_settings(self) -> dict[str, Any]:
+        try:
+            import webview
+            with self._floating_lock:
+                if self._omniroute_settings_window is not None:
+                    try:
+                        self._omniroute_settings_window.restore()
+                        self._omniroute_settings_window.show()
+                    except Exception:
+                        pass
+                    return {"ok": True}
+                self._omniroute_settings_window = webview.create_window(
+                    "Jarvis AI Providers",
+                    html=OMNIROUTE_SETTINGS_HTML,
+                    js_api=self._web_api,
+                    width=560,
+                    height=640,
+                    resizable=True,
+                    frameless=False,
+                    easy_drag=True,
+                    on_top=False,
+                )
+            return {"ok": True}
+        except Exception as exc:
+            LOGGER.exception("OmniRoute settings window could not open")
+            raise RuntimeError("AI provider settings could not be opened") from exc
+
     @staticmethod
     def _exit_for_update() -> None:
         logging.shutdown()
@@ -688,6 +829,11 @@ class FullstackJarvisHost:
         if self.started:
             return
         self.visualizer.start()
+        try:
+            self.omniroute.ensure_running(wait_seconds=15)
+            LOGGER.info("embedded OmniRoute is ready at %s", self.omniroute.base_url)
+        except Exception:
+            LOGGER.exception("embedded OmniRoute could not start; cloud routing remains lazy")
         try:
             self.voice.start()
         except Exception:
@@ -708,6 +854,13 @@ class FullstackJarvisHost:
             return
         self._shutting_down = True
         self.floating_hotkey.stop()
+        with self._floating_lock:
+            if self._omniroute_settings_window is not None:
+                try:
+                    self._omniroute_settings_window.destroy()
+                except Exception:
+                    LOGGER.exception("OmniRoute settings window failed to close cleanly")
+                self._omniroute_settings_window = None
         with self._floating_lock:
             self._save_floating_position()
             if self._floating_window is not None:
