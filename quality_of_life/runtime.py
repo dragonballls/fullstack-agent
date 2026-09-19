@@ -250,7 +250,7 @@ class JarvisRuntime:
                 return lambda: CloudModelRouter((target_config,))
             if os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}:
                 targets = [CloudModelRouter.omniroute_target()]
-                if PrismGateway.enabled():
+                if PrismGateway.enabled() and PrismGateway().configured:
                     targets.insert(0, CloudModelRouter.prism_target())
                 return lambda: CloudModelRouter(tuple(targets))
             raise RuntimeError("cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
