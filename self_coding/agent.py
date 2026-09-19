@@ -1,8 +1,8 @@
 """Safe, provider-agnostic autonomous coding loop.
 
-The module limits an agent to a clean Git repository, requires verification
-after every coding pass, and restores the exact starting commit on failure.
-It never executes commands through a shell.
+The module limits an agent to a clean Git repository, verifies every coding
+pass, keeps successful work on a reversible preview branch, and never promotes
+to the original branch unless explicitly requested.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
+
+from .checkpoints import CheckpointRecord, CheckpointStore
 
 
 class SelfCodingError(RuntimeError):
@@ -38,16 +40,18 @@ class SelfCodingConfig:
     publish_main: bool = False
     max_passes: int = 1
     backend: str = "auto"
+    state_dir: Path | None = None
 
 
 class SelfCodingAgent:
-    """Run a cloud coding agent against this repository with Git guardrails."""
+    """Run a cloud coding agent with technical rollback and user-controlled promotion."""
 
     def __init__(self, config: SelfCodingConfig) -> None:
         self.config = config
         self.repo = config.repo.resolve()
         if not self.repo.is_dir():
             raise SelfCodingError(f"Repository does not exist: {self.repo}")
+        self.checkpoints = CheckpointStore(config.state_dir)
 
     def _run(self, args: Sequence[str], *, timeout: int | None = None) -> subprocess.CompletedProcess[str]:
         try:
@@ -109,19 +113,32 @@ class SelfCodingAgent:
             "activation_requires": ("declared capability", "policy approval", "passing tests"),
         }
 
-    def _new_branch(self) -> tuple[str, str]:
+    def _current_branch(self) -> str:
+        result = self._git("symbolic-ref", "--quiet", "--short", "HEAD")
+        if result.returncode != 0 or not result.stdout.strip():
+            raise SelfCodingError("Self-coding requires a named Git branch; detached HEAD is not supported.")
+        return result.stdout.strip()
+
+    def _new_branch(self) -> tuple[str, str, str]:
+        original = self._current_branch()
         head = self._git("rev-parse", "HEAD")
         if head.returncode != 0:
             raise SelfCodingError("Unable to read the current Git commit.")
         baseline = head.stdout.strip()
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         branch = f"agent/self-code/{stamp}"
+        checkpoint_tag = f"agent/self-code/checkpoint/{stamp}"
         created = self._git("switch", "-c", branch)
         if created.returncode != 0:
             raise SelfCodingError(created.stderr.strip() or "Unable to create self-coding branch.")
-        return branch, baseline
+        tagged = self._git("tag", checkpoint_tag, baseline)
+        if tagged.returncode != 0:
+            self._git("switch", original)
+            self._git("branch", "-D", branch)
+            raise SelfCodingError(tagged.stderr.strip() or "Unable to create the self-coding checkpoint tag.")
+        return branch, baseline, original
 
-    def _publish_main(self, baseline: str, branch: str) -> None:
+    def _publish_main(self, baseline: str, branch: str, original_branch: str) -> str:
         fetched = self._git("fetch", "origin", "main")
         if fetched.returncode != 0:
             raise SelfCodingError(fetched.stderr.strip() or "Unable to fetch remote main")
@@ -130,6 +147,8 @@ class SelfCodingAgent:
             raise SelfCodingError(remote.stderr.strip() or "Unable to inspect remote main")
         if remote.stdout.strip() != baseline:
             raise SelfCodingError("remote main changed after self-coding started; refusing to publish")
+        if original_branch != "main":
+            raise SelfCodingError("Automatic publication is restricted to the main branch.")
         switched = self._git("switch", "main")
         if switched.returncode != 0:
             raise SelfCodingError(switched.stderr.strip() or "Unable to switch to main")
@@ -139,6 +158,7 @@ class SelfCodingAgent:
         pushed = self._git("push", "origin", "main")
         if pushed.returncode != 0:
             raise SelfCodingError(pushed.stderr.strip() or "Unable to publish verified self-coding change to main")
+        return self._git("rev-parse", "HEAD").stdout.strip()
 
     @staticmethod
     def _prompt(goal: str) -> str:
@@ -153,12 +173,13 @@ Rules:
 - Do not access, print, copy, or modify credentials, tokens, private keys, browser profiles, or files outside the repository.
 - Do not weaken authentication, permissions, safety checks, tests, or rollback logic.
 - Prefer small, reversible changes.
+- Treat a passing test suite as technical verification, not proof that the user will like a visual or behavioral change.
 - Add or update tests for every behavioral change.
 - Run the repository's relevant tests before declaring success.
 - Never claim success when tests fail.
 - Do not commit generated secrets or machine-specific configuration.
 
-Implement the goal directly, then leave the repository in a clean, testable state."""
+Implement the goal directly, then leave the repository clean and testable."""
 
     def _find_backend(self) -> str:
         requested = self.config.backend.lower()
@@ -190,7 +211,6 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             if result.returncode != 0:
                 output = (result.stdout + "\n" + result.stderr).strip()
                 raise SelfCodingError(f"Verification failed for {' '.join(command)}.\n{output[-12000:]}")
-
         status = self._git("status", "--porcelain")
         if status.returncode != 0:
             raise SelfCodingError("Unable to verify the post-test Git state.")
@@ -199,28 +219,51 @@ Implement the goal directly, then leave the repository in a clean, testable stat
         reset = self._git("reset", "--hard", baseline)
         if reset.returncode != 0:
             raise SelfCodingError(reset.stderr.strip() or "Rollback failed while resetting the repository.")
-
         clean = self._git("clean", "-fd")
         if clean.returncode != 0:
             raise SelfCodingError(clean.stderr.strip() or "Rollback failed while cleaning untracked files.")
-
         status = self._git("status", "--porcelain")
         if status.returncode != 0:
             raise SelfCodingError(status.stderr.strip() or "Rollback verification failed while checking Git status.")
         if status.stdout.strip():
             raise SelfCodingError("Rollback verification failed: repository is still dirty.")
 
+    def _cleanup_failed_run(self, baseline: str, branch: str, original_branch: str, checkpoint_tag: str) -> None:
+        self._rollback(baseline)
+        switched = self._git("switch", original_branch)
+        if switched.returncode != 0:
+            raise SelfCodingError(switched.stderr.strip() or "Rollback succeeded but original branch could not be restored.")
+        deleted = self._git("branch", "-D", branch)
+        if deleted.returncode != 0:
+            raise SelfCodingError(deleted.stderr.strip() or "Rollback succeeded but preview branch could not be removed.")
+        self._git("tag", "-d", checkpoint_tag)
+
     def run(self, goal: str) -> str:
-        """Implement one or more safe passes and optionally publish to main."""
+        """Create a verified preview; publication is intentionally a separate action."""
         if not goal.strip():
             raise SelfCodingError("A non-empty coding goal is required.")
         if self.config.max_passes < 1:
             raise SelfCodingError("max_passes must be at least 1.")
-        if self.config.publish_main and self.config.push_branch:
-            raise SelfCodingError("publish_main and push_branch cannot be combined")
+        if self.config.publish_main:
+            raise SelfCodingError("Direct main publication is disabled; create the preview and use self_coding.approve instead.")
 
         self.validate_repo()
-        branch, baseline = self._new_branch()
+        if self.checkpoints.active_preview(self.repo) is not None:
+            raise SelfCodingError("An unapproved self-coding preview already exists; approve or undo it before starting another.")
+
+        branch, baseline, original_branch = self._new_branch()
+        checkpoint_tag = f"agent/self-code/checkpoint/{branch.rsplit('/', 1)[-1]}"
+        checkpoint_id = branch.rsplit("/", 1)[-1]
+        record = CheckpointRecord(
+            checkpoint_id=checkpoint_id,
+            repo=str(self.repo),
+            original_branch=original_branch,
+            baseline_commit=baseline,
+            preview_branch=branch,
+            checkpoint_tag=checkpoint_tag,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
 
         try:
             for _ in range(self.config.max_passes):
@@ -235,15 +278,154 @@ Implement the goal directly, then leave the repository in a clean, testable stat
                 committed = self._git("commit", "-m", "agent: verified self-coding change")
                 if committed.returncode != 0:
                     raise SelfCodingError(committed.stderr.strip() or "Unable to commit verified changes.")
+                commit = self._git("rev-parse", "HEAD")
+                if commit.returncode != 0:
+                    raise SelfCodingError(commit.stderr.strip() or "Unable to record verified self-coding commit.")
+                record.commits.append(commit.stdout.strip())
 
             if self.config.publish_main:
-                self._publish_main(baseline, branch)
-                return "main"
+                published_head = self._publish_main(baseline, branch, original_branch)
+                record.status = "published"
+                record.published_head = published_head
+                self.checkpoints.add(record)
+                self._git("branch", "-D", branch)
+                return original_branch
+
             if self.config.push_branch:
                 pushed = self._git("push", "-u", "origin", branch)
                 if pushed.returncode != 0:
                     raise SelfCodingError(pushed.stderr.strip() or "Unable to push self-coding branch")
+            self.checkpoints.add(record)
             return branch
         except Exception:
-            self._rollback(baseline)
+            self._cleanup_failed_run(baseline, branch, original_branch, checkpoint_tag)
             raise
+
+    def approve(self, *, push: bool = True) -> str:
+        """Promote the active preview to main only after an explicit approval."""
+        self.validate_repo()
+        record = self.checkpoints.active_preview(self.repo)
+        if record is None:
+            raise SelfCodingError("There is no active self-coding preview to approve.")
+        if self._current_branch() != record.preview_branch:
+            raise SelfCodingError("The active self-coding preview is not the current branch.")
+        self._verify()
+        status = self._git("status", "--porcelain")
+        if status.stdout.strip():
+            raise SelfCodingError("The preview changed after verification; refusing to promote dirty work.")
+
+        if record.original_branch != "main":
+            raise SelfCodingError("Preview promotion is restricted to the main branch for the desktop product.")
+        fetched = self._git("fetch", "origin", "main")
+        if fetched.returncode != 0:
+            raise SelfCodingError(fetched.stderr.strip() or "Unable to refresh remote main before approval.")
+        remote = self._git("rev-parse", "refs/remotes/origin/main")
+        if remote.returncode != 0 or remote.stdout.strip() != record.baseline_commit:
+            raise SelfCodingError("main changed since the preview checkpoint; refusing to promote it.")
+        local_main = self._git("rev-parse", "refs/heads/main")
+        if local_main.returncode != 0 or local_main.stdout.strip() != record.baseline_commit:
+            raise SelfCodingError("local main changed since the preview checkpoint; refusing to promote it.")
+
+        switched = self._git("switch", "main")
+        if switched.returncode != 0:
+            raise SelfCodingError(switched.stderr.strip() or "Unable to switch back to main for approval.")
+        merged = self._git("merge", "--ff-only", record.preview_branch)
+        if merged.returncode != 0:
+            raise SelfCodingError(merged.stderr.strip() or "Unable to promote the verified preview.")
+        published_head = self._git("rev-parse", "HEAD")
+        if published_head.returncode != 0:
+            raise SelfCodingError("Unable to record the promoted commit.")
+        published = published_head.stdout.strip()
+        self.checkpoints.update(record.checkpoint_id, status="published", published_head=published)
+        self._git("branch", "-D", record.preview_branch)
+        if push:
+            pushed = self._git("push", "origin", "main")
+            if pushed.returncode != 0:
+                raise SelfCodingError("Preview was promoted locally, but pushing main failed; local checkpoint state remains published.")
+        return "main"
+
+    def undo(self, *, push: bool = True) -> str:
+        """Undo the active preview or the latest published self-coding checkpoint."""
+        self.validate_repo()
+        preview = self.checkpoints.active_preview(self.repo)
+        if preview is not None:
+            if self._current_branch() != preview.preview_branch:
+                raise SelfCodingError("The active self-coding preview is not the current branch.")
+            switched = self._git("switch", preview.original_branch)
+            if switched.returncode != 0:
+                raise SelfCodingError(switched.stderr.strip() or "Unable to restore the original branch.")
+            deleted = self._git("branch", "-D", preview.preview_branch)
+            if deleted.returncode != 0:
+                raise SelfCodingError(deleted.stderr.strip() or "Unable to remove the self-coding preview branch.")
+            self._git("tag", "-d", preview.checkpoint_tag)
+            self.checkpoints.update(preview.checkpoint_id, status="reverted")
+            return preview.original_branch
+
+        published = self.checkpoints.latest_published(self.repo)
+        if published is None:
+            raise SelfCodingError("There is no self-coding checkpoint available to undo.")
+        if published.original_branch != "main" or self._current_branch() != "main":
+            raise SelfCodingError("Published self-coding undo is restricted to main.")
+        status = self._git("status", "--porcelain")
+        if status.stdout.strip():
+            raise SelfCodingError("main must be clean before undoing a self-coding checkpoint.")
+        head = self._git("rev-parse", "HEAD")
+        if head.returncode != 0:
+            raise SelfCodingError(head.stderr.strip() or "Unable to inspect main before undo.")
+        original_head = head.stdout.strip()
+
+        commits = list(reversed(published.commits))
+        if not commits:
+            raise SelfCodingError("The checkpoint contains no self-coding commits to undo.")
+        for commit in commits:
+            reverted = self._git("revert", "--no-edit", "--no-commit", commit)
+            if reverted.returncode != 0:
+                self._git("reset", "--hard", original_head)
+                raise SelfCodingError(reverted.stderr.strip() or "Unable to construct a safe undo.")
+        committed = self._git("commit", "-m", f"agent: undo self-coding checkpoint {published.checkpoint_id}")
+        if committed.returncode != 0:
+            self._git("reset", "--hard", original_head)
+            raise SelfCodingError(committed.stderr.strip() or "Unable to commit the self-coding undo.")
+        undo_head = self._git("rev-parse", "HEAD")
+        if undo_head.returncode != 0:
+            self._git("reset", "--hard", original_head)
+            raise SelfCodingError("Unable to record the undo commit.")
+        try:
+            self._verify()
+        except Exception:
+            self._git("reset", "--hard", original_head)
+            raise
+        clean_after_undo = self._git("status", "--porcelain")
+        if clean_after_undo.returncode != 0 or clean_after_undo.stdout.strip():
+            self._git("reset", "--hard", original_head)
+            raise SelfCodingError("Undo verification left the repository dirty; the undo was discarded.")
+        self.checkpoints.update(published.checkpoint_id, status="reverted", revert_commit=undo_head.stdout.strip())
+        if push:
+            pushed = self._git("push", "origin", "main")
+            if pushed.returncode != 0:
+                raise SelfCodingError("Undo committed locally, but pushing main failed; local checkpoint state remains reverted.")
+        return "main"
+
+    def status(self) -> dict[str, object]:
+        """Return the user's reversible self-coding state without touching the repository."""
+        preview = self.checkpoints.active_preview(self.repo)
+        if preview is not None:
+            return {
+                "state": "preview",
+                "checkpoint_id": preview.checkpoint_id,
+                "branch": preview.preview_branch,
+                "baseline": preview.baseline_commit,
+                "commits": list(preview.commits),
+            }
+        published = self.checkpoints.latest_published(self.repo)
+        if published is not None:
+            return {
+                "state": "published",
+                "checkpoint_id": published.checkpoint_id,
+                "branch": published.original_branch,
+                "published_head": published.published_head,
+                "commits": list(published.commits),
+                "revert_commit": published.revert_commit,
+            }
+        return {"state": "clean"}
+

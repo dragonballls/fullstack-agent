@@ -8,7 +8,7 @@ The supported end-user product is a single verified/release-published `Jarvis.ex
 
 Download the `Jarvis.exe` asset from the verified GitHub `latest` release. Double-clicking that executable is the normal Windows launch path.
 
-The executable contains the Jarvis runtime, a pinned self-contained OmniRoute gateway (Node.js 24.21.0 + OmniRoute 3.8.51), and the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters, not a second agent brain.
+The executable contains the Jarvis runtime, a pinned self-contained OmniRoute gateway (Node.js 24.21.0 + OmniRoute 3.8.50), the optional embedded Prism/free-astra compatibility bridge, and the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. The Prism bridge contains no local LLM: its inference remains remote. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters.
 
 ## What first launch may create
 
@@ -24,13 +24,17 @@ These files are runtime state and are not source dependencies for the applicatio
 
 ## Runtime and cloud configuration
 
-The supported agent brain is **OmniRoute only**. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
+The **OmniRoute only** default routing layer is the normal Jarvis path. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
 
-Jarvis uses OmniRoute as its conversational/agent routing layer. Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
+When a Prism session is explicitly configured, Jarvis also enables the optional remote Prism/Astra provider target. That target runs only as a local compatibility process; it does not run an LLM on the PC. Prism/Astra remains an unsupported external integration whose model availability can change, so OmniRoute remains the automatic fallback.
 
 Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor.
 
 Live cloud requests still require at least one configured provider credential. On first launch, Jarvis starts the embedded OmniRoute gateway automatically; open AI Provider Settings from the command surface, select a provider, paste its API key, and use CONNECT & TEST. Jarvis passes the secret directly to OmniRoute and clears its own input; credentials are stored by OmniRoute in its local credential store and never enter tracked configuration. The gateway's local routing endpoint is fixed to `http://127.0.0.1:20128/v1`.
+
+### Optional Prism/Astra bridge
+
+The embedded Prism bridge is disabled in practice until a Prism session file exists. The default Windows location is `%LOCALAPPDATA%\\Jarvis\\Prism\\session.json`; `JARVIS_PRISM_SESSION` can point to a different file and `JARVIS_PRISM_ENABLED=0` disables the bridge. Jarvis never scrapes browser cookies or silently collects credentials. When a valid session is present, the bridge listens only on `http://127.0.0.1:8319/v1` and exposes an OpenAI-compatible surface. The bridge's own Prism/Astra model availability is checked by the upstream service at request time; an unsupported Astra request can fall back to a Prism model that is still accepted.
 
 ## Voice
 
@@ -45,6 +49,14 @@ See `JARVIS_VOICE.md` for the current voice/I/O contract and the real speech tes
 At startup Jarvis brings up the embedded Fullstack visualizer on loopback port `8790` and opens it in the native pywebview window. The old 640-by-118 Tk chat bar is not the Jarvis product UI.
 
 The visualizer is started before heavier Jarvis initialization so the presentation surface can become available even when core/cloud initialization takes longer on first launch.
+
+## Self-coding safety
+
+Jarvis treats autonomous coding as a reversible preview workflow rather than an automatic main-branch publisher. A coding request starts a dedicated `agent/self-code/...` preview branch and creates a local checkpoint tag at the exact pre-change commit. Every coding pass must pass the configured verification suite before it is committed.
+
+Passing tests means the change is technically verified; it does not mean the user will necessarily prefer the resulting UI or behavior. The verified preview therefore remains unpromoted until an explicit approval action is issued. Jarvis exposes `self_coding.status`, `self_coding.approve`, and `self_coding.undo` actions. Saying to undo the current change restores the original branch for an unapproved preview. After an approved publication, undo creates a tested Git revert commit rather than rewriting history.
+
+The default runtime setting is `JARVIS_SELF_CODING_PUBLISH_MAIN=0`. Remote pushing is also explicit. Checkpoint metadata is stored outside the repository under the platform's local application-state directory, so it does not dirty the working tree or become part of source control.
 
 ## Self-update
 

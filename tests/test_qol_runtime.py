@@ -1,4 +1,6 @@
 import os
+import subprocess
+import tempfile
 import unittest
 
 from quality_of_life.account_access import AccountGrant, AccountProvider, AccountRisk, AccountScope
@@ -56,7 +58,9 @@ class JarvisRuntimeTests(unittest.TestCase):
         self.assertEqual(places[0].name, "Tokyo")
 
     def test_runtime_defaults_cloud_router_to_omniroute(self):
-        old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED")}
+        old = {name: os.environ.get(name) for name in (
+            "JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED", "JARVIS_PRISM_ENABLED"
+        )}
         try:
             for name in old:
                 os.environ.pop(name, None)
@@ -73,6 +77,52 @@ class JarvisRuntimeTests(unittest.TestCase):
                     os.environ.pop(name, None)
                 else:
                     os.environ[name] = value
+
+    def test_runtime_adds_prism_target_when_explicitly_enabled(self):
+        old = {name: os.environ.get(name) for name in (
+            "JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED", "JARVIS_PRISM_ENABLED", "JARVIS_PRISM_SESSION"
+        )}
+        with tempfile.NamedTemporaryFile(suffix=".json") as session:
+            try:
+                for name in old:
+                    os.environ.pop(name, None)
+                os.environ["JARVIS_PRISM_ENABLED"] = "1"
+                os.environ["JARVIS_PRISM_SESSION"] = session.name
+                runtime = JarvisRuntime(CapabilityPolicy())
+                router = runtime._tool("cloud_router")
+                self.assertEqual([target.name for target in router.targets], ["prism-astra", "omniroute"])
+                self.assertEqual(router.targets[0].base_url, "http://127.0.0.1:8319/v1")
+            finally:
+                for name, value in old.items():
+                    if value is None:
+                        os.environ.pop(name, None)
+                    else:
+                        os.environ[name] = value
+    def test_runtime_self_coding_defaults_to_preview_only(self) -> None:
+        with tempfile.TemporaryDirectory() as root_dir, tempfile.TemporaryDirectory() as state_dir:
+            root = os.path.abspath(root_dir)
+            subprocess.run(("git", "init", "-b", "main"), cwd=root, check=True, capture_output=True, text=True)
+            subprocess.run(("git", "config", "user.name", "Runtime Test"), cwd=root, check=True)
+            subprocess.run(("git", "config", "user.email", "runtime-test@example.invalid"), cwd=root, check=True)
+            open(os.path.join(root, "README.md"), "w", encoding="utf-8").write("seed\\n")
+            subprocess.run(("git", "add", "README.md"), cwd=root, check=True, capture_output=True, text=True)
+            subprocess.run(("git", "commit", "-m", "seed"), cwd=root, check=True, capture_output=True, text=True)
+            old = {name: os.environ.get(name) for name in ("JARVIS_SELF_CODING_REPO", "JARVIS_SELF_CODING_PUBLISH_MAIN", "JARVIS_SELF_CODING_STATE_DIR")}
+            try:
+                os.environ["JARVIS_SELF_CODING_REPO"] = root
+                os.environ.pop("JARVIS_SELF_CODING_PUBLISH_MAIN", None)
+                os.environ["JARVIS_SELF_CODING_STATE_DIR"] = state_dir
+                runtime = JarvisRuntime(CapabilityPolicy())
+                agent = runtime._tool("self_coding")
+                self.assertFalse(agent.config.publish_main)
+                self.assertFalse(agent.config.push_branch)
+                self.assertEqual(runtime._tool("self_coding").status()["state"], "clean")
+            finally:
+                for name, value in old.items():
+                    if value is None:
+                        os.environ.pop(name, None)
+                    else:
+                        os.environ[name] = value
 
     def test_runtime_preserves_deny_by_default(self):
         runtime = JarvisRuntime(CapabilityPolicy(), factories={"gods_eye": FakeEye})

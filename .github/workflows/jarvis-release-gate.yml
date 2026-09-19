@@ -42,7 +42,7 @@ jobs:
       - name: Verify installed dependency consistency
         run: python -m pip check
       - name: Compile every Python module
-        run: python -m compileall quality_of_life self_coding windows_maintenance scripts tests readiness.py
+        run: python -m compileall quality_of_life self_coding windows_maintenance scripts tests third_party/free_astra readiness.py
       - name: Run complete unittest suite
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Run Windows-maintenance unit tests
@@ -123,12 +123,13 @@ jobs:
             '--add-data', 'build_vendor\ai-visualizer\source;ai-visualizer/source',
             '--add-data', 'build_vendor\barehands\source;barehands/source',
             '--add-data', 'build_vendor\ai-memory-vault\source;ai-memory-vault/source',
+            '--add-data', 'third_party\free_astra;free_astra',
             '--add-binary', 'build_vendor\omniroute_runtime\node.exe;omniroute_runtime',
             '--add-data', 'build_vendor\omniroute_runtime\node_modules;omniroute_runtime/node_modules',
             '--add-data', 'build_vendor\omniroute_runtime\runtime-manifest.txt;omniroute_runtime',
             '--collect-submodules', 'quality_of_life', '--collect-submodules', 'self_coding',
             '--collect-submodules', 'windows_maintenance', '--collect-submodules', 'backtalk',
-            '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-submodules', 'webrtcvad',
+            '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-all', 'zstandard', '--collect-submodules', 'webrtcvad',
             '--hidden-import', 'sounddevice', '--hidden-import', 'soundfile', '--hidden-import', 'pynput'
           )
           foreach ($dll in Get-Content -LiteralPath 'build_runtime_dlls.txt') { $args += @('--add-binary', ("{0};." -f $dll)) }
@@ -165,6 +166,10 @@ jobs:
         run: |
           python -c "from quality_of_life.elevenlabs_voice import ElevenLabsMouth; from unittest.mock import Mock, patch; import base64; m=ElevenLabsMouth(client=Mock()); m.client.synthesize.return_value=b'fake-mp3'; p=patch('quality_of_life.elevenlabs_voice.has_api_key', return_value=True); p.start(); r=m.test_speech(); p.stop(); assert r['ok'] and r['spoken']; packets=m.take_audio(); assert base64.b64decode(packets[0]['data'])==b'fake-mp3'; print('ElevenLabs offline voice plumbing OK')"
 
+      - name: Verify embedded Prism bridge plumbing
+        shell: pwsh
+        run: |
+          python -c "from quality_of_life.prism_gateway import PrismGateway; p=PrismGateway(); assert p._vendor_path().is_file(), 'Embedded free-astra source is missing'; assert p.base_url == 'http://127.0.0.1:8319/v1'; assert p.status()['inference'] == 'remote'; print('Embedded Prism bridge plumbing OK')"
       - name: Verify PyInstaller toolchain version
         shell: pwsh
         run: |
@@ -231,6 +236,44 @@ jobs:
           JARVIS_ALLOW_HEADLESS_GUI: '1'
           JARVIS_UI_SMOKE: '1'
         run: ./scripts/verify_windows_gui_smoke.ps1
+      - name: Live-test packaged Prism remote route when session secret is configured
+        if: env.JARVIS_PRISM_SESSION_JSON != ''
+        env:
+          JARVIS_PRISM_SESSION_JSON: ${{ secrets.JARVIS_PRISM_SESSION }}
+          JARVIS_PRISM_ENABLED: '1'
+          JARVIS_PRISM_LIVE_SMOKE: '1'
+          JARVIS_SMOKE: '1'
+          JARVIS_SMOKE_VOICE: '1'
+          JARVIS_AUTO_UPDATE: '0'
+          JARVIS_OMNIROUTE_WARMUP: '0'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $session = Join-Path $env:RUNNER_TEMP 'jarvis-prism-session.json'
+          try {
+            Set-Content -LiteralPath $session -Encoding UTF8 -Value $env:JARVIS_PRISM_SESSION_JSON
+            if (-not (Test-Path -LiteralPath $session)) { throw 'Prism session file could not be created' }
+            $env:JARVIS_PRISM_SESSION = $session
+            $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru -WorkingDirectory (Resolve-Path '.')
+            $deadline = (Get-Date).AddSeconds(300)
+            while ((Get-Date) -lt $deadline) {
+              if ($process.HasExited) { break }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+              throw 'Packaged Jarvis.exe did not finish the live Prism smoke test within 300 seconds'
+            }
+            if ($process.ExitCode -ne 0) {
+              throw "Packaged Jarvis.exe live Prism smoke failed with exit code $($process.ExitCode)"
+            }
+            Write-Host 'Packaged Jarvis.exe live Prism remote-route smoke passed.'
+          }
+          finally {
+            Remove-Item -LiteralPath $session -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:JARVIS_PRISM_SESSION -ErrorAction SilentlyContinue
+            Remove-Item Env:JARVIS_PRISM_SESSION_JSON -ErrorAction SilentlyContinue
+          }
       - name: Generate signed Jarvis.exe build attestation
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
