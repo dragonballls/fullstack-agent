@@ -243,7 +243,7 @@ class NeuralWorld:
             shape="orbital",
             metadata={"ui_surface": "neural_command", "always_visible": True},
         )
-            self.relate(core.id, node.id, "neural-command-surface" if is_command else "subsystem", 0.98 if is_command else 0.95)
+        self.relate(core.id, node.id, "neural-command-surface", 0.98)
 
     def upsert(
         self, entity_id: str, kind: EntityKind | str, label: str, *,
