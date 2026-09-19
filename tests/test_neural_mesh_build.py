@@ -40,8 +40,10 @@ class NeuralMeshBuildTests(unittest.TestCase):
         ):
             self.assertIn(token, markup)
         self.assertIn('e.key==="Enter"&&!e.shiftKey', script)
-        for token in ("transform-style:preserve-3d", "translate3d", "pointer-events:auto", "resize:both"):
+        for token in ("transform-style:preserve-3d", "translate3d", "pointer-events:auto"):
             self.assertIn(token, css)
+        desktop = Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8")
+        self.assertIn("resize:both", desktop)
         for token in ("jarvis.core", "camera()", "worldToScreen", "clampNumber", "F13", "setConsoleCollapsed"):
             self.assertIn(token, script)
 
