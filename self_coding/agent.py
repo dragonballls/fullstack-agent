@@ -253,7 +253,15 @@ Rules:
 - Never claim success when tests fail.
 - Do not commit generated secrets or machine-specific configuration.
 
-Implement the goal directly, then leave the repository in a clean, testable state."""
+System-coherence mandate:
+- Treat this repository as one integrated assistant, not a collection of unrelated features.
+- Before editing, inspect the relevant architecture, capability registry, runtime dispatch paths, shared contracts, startup/packaging paths, and existing tests so the change fits the system.
+- When a change touches a capability, inspect its callers, providers, UI/voice surfaces, persistence/state, permissions, and packaging implications; update integration points rather than creating parallel one-off behavior.
+- Prefer existing shared abstractions, adapters, events, and contracts over duplicating logic.
+- After implementing, test the changed feature and the integration paths it can affect. Check for broken imports, stale APIs, contradictory configuration, missing packaging assets, and inconsistent user-facing behavior.
+- Do not declare a feature complete merely because its local unit test passes; verify that it is wired into the surrounding Jarvis workflow where applicable.
+
+Implement the goal directly, then leave the repository in a clean, testable, coherently integrated state."""
 
     def _find_backend(self) -> str:
         requested = self.config.backend.lower()
