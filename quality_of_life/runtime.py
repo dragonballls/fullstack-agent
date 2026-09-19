@@ -19,6 +19,7 @@ from .manifest import default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
 from .permissions import Capability, CapabilityPolicy
 from .router import CloudModelRouter, ProviderTarget
+from .prism_gateway import PrismGateway
 from .account_access import AccountAccessRegistry
 from .account_integrations import ServiceProvider
 
@@ -246,11 +247,13 @@ class JarvisRuntime:
                 if not model:
                     raise RuntimeError("cloud router is not configured; set JARVIS_CLOUD_MODEL")
                 target_config = ProviderTarget("primary", explicit_base_url, key_env, model)
-            elif os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}:
-                target_config = CloudModelRouter.omniroute_target()
-            else:
-                raise RuntimeError("cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
-            return lambda: CloudModelRouter((target_config,))
+                return lambda: CloudModelRouter((target_config,))
+            if os.environ.get("JARVIS_OMNIROUTE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}:
+                targets = [CloudModelRouter.omniroute_target()]
+                if PrismGateway.enabled():
+                    targets.insert(0, CloudModelRouter.prism_target())
+                return lambda: CloudModelRouter(tuple(targets))
+            raise RuntimeError("cloud router is not configured; enable OmniRoute or set JARVIS_CLOUD_BASE_URL and JARVIS_CLOUD_MODEL")
         if name == "self_coding":
             from self_coding import SelfCodingAgent, SelfCodingConfig
             configured_repo = os.environ.get("JARVIS_SELF_CODING_REPO")
