@@ -33,6 +33,23 @@ class SelfCodingTests(unittest.TestCase):
         result = subprocess.run(("git", *args), cwd=root, check=True, capture_output=True, text=True)
         return result.stdout.strip()
 
+    @staticmethod
+    def remote_head(root: Path) -> str:
+        remote = subprocess.run(
+            ("git", "config", "--get", "remote.origin.url"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        result = subprocess.run(
+            ("git", "--git-dir", remote, "rev-parse", "refs/heads/main"),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
     def test_dirty_repository_is_rejected(self) -> None:
         root = self.make_repo()
         (root / "dirty.txt").write_text("existing work\n", encoding="utf-8")
@@ -122,12 +139,12 @@ class SelfCodingTests(unittest.TestCase):
 
         self.assertEqual(self.git(root, "branch", "--show-current"), "main")
         self.assertTrue((root / "approved.txt").exists())
-        self.assertEqual(self.git(root, "rev-parse", "origin/main"), promoted)
+        self.assertEqual(self.remote_head(root), promoted)
         self.assertEqual(agent.list_checkpoints()[0]["state"], "approved")
 
         self.assertEqual(agent.undo_checkpoint(checkpoint_id), "undone")
         self.assertFalse((root / "approved.txt").exists())
-        self.assertEqual(self.git(root, "rev-parse", "origin/main"), baseline)
+        self.assertEqual(self.remote_head(root), baseline)
         self.assertEqual(self.git(root, "rev-parse", "HEAD"), self.git(root, "rev-parse", "origin/main"))
         self.assertEqual(agent.list_checkpoints()[0]["state"], "undone")
 
