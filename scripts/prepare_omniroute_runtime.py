@@ -137,16 +137,15 @@ def prepare(destination: Path) -> None:
                 "--ignore-scripts",
                 str(tarball),
             ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=None,
+            stderr=None,
             timeout=900,
             env={**os.environ, "NODE_ENV": "production"},
             check=False,
         )
         if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "").strip()
+            detail = "npm install returned a non-zero exit status"
             raise RuntimeError(f"OmniRoute package installation failed in the release build: {detail[-5000:]}")
 
         # Install without lifecycle scripts, then run only OmniRoute's own native/runtime
