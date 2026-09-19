@@ -51,6 +51,56 @@ class GlobeTests(unittest.TestCase):
         self.assertEqual(len(payload["locators"]), 1)
         self.assertEqual(payload["locators"][0]["kind"], "phone")
 
+
+    def test_sensor_state_explains_when_current_feed_is_unavailable(self):
+        class Runtime:
+            def dispatch(self, capability, operation):
+                if operation == "locations.current":
+                    return LocationSnapshot(None, None, False, "windows-location")
+                if operation == "locations.list":
+                    return []
+                raise AssertionError(operation)
+
+        payload = globe_payload(Runtime())
+
+        self.assertEqual(payload["sensor_state"], "feeds-unavailable-or-unauthorized")
+        self.assertEqual(payload["current_source"], "windows-location")
+        self.assertIsNone(payload["current_accuracy_m"])
+
+    def test_sensor_state_reports_live_authorized_provider(self):
+        class Registry:
+            def status(self, kind):
+                return SimpleNamespace(as_dict=lambda: {
+                    "kind": kind,
+                    "available": kind == "phone",
+                    "authorized": kind == "phone",
+                    "live": kind == "phone",
+                    "source": "phone",
+                    "detail": "connected",
+                })
+
+        class Eye:
+            provider_registry = Registry()
+            def provider_locations(self, kind):
+                return []
+
+        class Runtime:
+            def dispatch(self, capability, operation):
+                if operation == "locations.current":
+                    return LocationSnapshot(None, None, False, "")
+                if operation == "locations.list":
+                    return []
+                raise AssertionError(operation)
+            def _tool(self, name):
+                if name == "gods_eye":
+                    return Eye()
+                raise AssertionError(name)
+
+        payload = globe_payload(Runtime())
+
+        self.assertEqual(payload["sensor_state"], "authorized-feeds-live")
+        self.assertEqual(payload["provider_status"][1]["kind"], "phone")
+
     def test_unpermitted_current_is_hidden(self):
         class Runtime:
             def dispatch(self, capability, operation):
