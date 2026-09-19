@@ -104,6 +104,32 @@ class JarvisDesktopTests(unittest.TestCase):
         fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
         self.assertIsNotNone(host._window)
 
+    def test_omniroute_provider_api_is_exposed(self):
+        self.assertTrue(hasattr(jarvis_desktop, "OMNIROUTE_SETTINGS_HTML"))
+        self.assertIn("open_omniroute_settings", dir(jarvis_desktop.JarvisWebApi))
+        self.assertIn("omniroute_configure_provider", dir(jarvis_desktop.JarvisWebApi))
+        self.assertIn("type="password"", jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
+        self.assertIn("CONNECT & TEST", jarvis_desktop.OMNIROUTE_SETTINGS_HTML)
+
+    def test_omniroute_status_uses_secret_free_summary(self):
+        controller = Mock()
+        controller.runtime = Mock()
+        host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
+        host.omniroute = Mock()
+        host.omniroute.status.return_value.as_dict.return_value = {
+            "available": True,
+            "source": "bundled",
+            "version": "3.8.51",
+            "base_url": "http://127.0.0.1:20128/v1",
+            "data_dir": "/safe",
+        }
+        host.omniroute.ensure_running.return_value = True
+        host.omniroute.list_providers.return_value = [{"name": "openai", "status": "connected"}]
+        result = host.omniroute_status()
+        self.assertEqual(result["version"], "3.8.51")
+        self.assertEqual(result["providers"], [{"name": "openai", "status": "connected"}])
+        self.assertNotIn("api_key", repr(result))
+
     def test_text_input_api_is_exposed_to_native_window(self):
         self.assertTrue(hasattr(jarvis_desktop, "JarvisWebApi"))
         self.assertTrue(hasattr(jarvis_desktop, "TEXT_INPUT_SCRIPT"))
