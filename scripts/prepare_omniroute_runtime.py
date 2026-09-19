@@ -133,6 +133,9 @@ def prepare(destination: Path) -> None:
                 "--no-fund",
                 "--no-audit",
                 "--omit=dev",
+                # Keep OmniRoute dependencies nested so its postinstall resolves
+                # native modules relative to the installed package root.
+                "--install-strategy=nested",
                 "--ignore-scripts=false",
                 "--prefer-offline",
                 "--fetch-retries=2",
