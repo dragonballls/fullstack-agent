@@ -97,6 +97,19 @@ class ElevenLabsVoiceTests(unittest.TestCase):
                 worker.join(timeout=2)
         self.assertEqual(mouth.take_audio(), [])
 
+    def test_first_setup_prefers_current_british_voice_when_available(self):
+        client = Mock()
+        client.list_voices.return_value = [{"id": "current-british-id", "name": "Eldrin"}]
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp) / "elevenlabs.json"
+            fake_keyring = Mock()
+            with patch("quality_of_life.elevenlabs_voice._keyring_module", return_value=fake_keyring), patch(
+                "quality_of_life.elevenlabs_voice.CONFIG_FILE", config
+            ), patch("quality_of_life.elevenlabs_voice.CONFIG_DIR", Path(temp)):
+                mouth = ElevenLabsMouth(client=client)
+                result = mouth.configure("test-secret-123456")
+        self.assertEqual(result["voice_id"], "current-british-id")
+
     def test_configure_uses_credential_store_and_writes_only_nonsecret_settings(self):
         with tempfile.TemporaryDirectory() as temp:
             config = Path(temp) / "elevenlabs.json"
