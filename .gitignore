@@ -1,3 +1,8 @@
 .DS_Store
 __pycache__/
 *.pyc
+build_vendor/
+dist/
+build/
+quality_of_life/build_info.py
+*.spec
