@@ -24,7 +24,7 @@ These files are runtime state and are not source dependencies for the applicatio
 
 ## Runtime and cloud configuration
 
-The default agent routing layer is **OmniRoute**. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
+The **OmniRoute only** default routing layer is the normal Jarvis path. Claude Code and a Claude subscription are not required for Jarvis. Direct Claude routing is not a Jarvis fallback, and the supported disabled-override state is `JARVIS_ALLOW_CLAUDE=false`.
 
 When a Prism session is explicitly configured, Jarvis also enables the optional remote Prism/Astra provider target. That target runs only as a local compatibility process; it does not run an LLM on the PC. Prism/Astra remains an unsupported external integration whose model availability can change, so OmniRoute remains the automatic fallback.
 
