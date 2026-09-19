@@ -133,6 +133,8 @@ def prepare(destination: Path) -> None:
                 "--no-fund",
                 "--no-audit",
                 "--omit=dev",
+                "--include=optional",
+                "--ignore-scripts",
                 str(tarball),
             ],
             capture_output=True,
@@ -146,6 +148,23 @@ def prepare(destination: Path) -> None:
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()
             raise RuntimeError(f"OmniRoute package installation failed in the release build: {detail[-5000:]}")
+
+        # Install without lifecycle scripts, then run only OmniRoute's own native/runtime
+        # repair hook. This avoids spending the release gate executing every dependency
+        # postinstall while npm is still constructing the production dependency tree.
+        postinstall = staging / "node_modules" / "omniroute" / "scripts" / "build" / "postinstall.mjs"
+        if not postinstall.is_file():
+            raise RuntimeError("Installed OmniRoute package is missing its required postinstall repair script")
+        repair = subprocess.run(
+            [str(bundled_node), str(postinstall)],
+            cwd=staging / "node_modules" / "omniroute",
+            capture_output=False,
+            timeout=420,
+            env={**os.environ, "NODE_ENV": "production"},
+            check=False,
+        )
+        if repair.returncode != 0:
+            raise RuntimeError("OmniRoute native/runtime postinstall repair failed")
 
         shutil.copy2(bundled_node, staging / "node.exe")
         installed_entry = staging / "node_modules" / "omniroute" / "bin" / "omniroute.mjs"
