@@ -225,7 +225,7 @@ class JarvisDesktopTests(unittest.TestCase):
             (jarvis_desktop.TEXT_INPUT_SCRIPT, "text-input"),
             (jarvis_desktop.OMNIROUTE_SETTINGS_HTML, "settings"),
         ):
-            scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.DOTALL | re.IGNORECASE)
+            scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.DOTALL | re.IGNORECASE)
             self.assertTrue(scripts, label)
             with tempfile.NamedTemporaryFile("w",suffix=".js",encoding="utf-8",delete=False) as handle:
                 handle.write("\n".join(scripts))
