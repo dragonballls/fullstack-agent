@@ -172,12 +172,23 @@ jobs:
           # storage, stdin-only credential handling, and response redaction are covered
           # by the full regression suite; this step validates the packaged CLI contract.
           $dummy = 'ci-redacted-credential-12345678'
-          $preview = $dummy | & 'build_vendor/omniroute_runtime/node.exe' $cli providers add openai --credential-stdin --yes --dry-run --json
-          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute credential-stdin dry-run failed' }
-          if ($preview -match [regex]::Escape($dummy)) { throw 'Embedded OmniRoute dry-run exposed the credential' }
-          $previewText = ($preview -join "`n").Trim()
-          try { $previewJson = $previewText | ConvertFrom-Json } catch { throw 'Embedded OmniRoute dry-run did not return valid JSON' }
-          if ($null -eq $previewJson) { throw 'Embedded OmniRoute dry-run returned an empty JSON payload' }
+          $previewPath = Join-Path $env:RUNNER_TEMP 'omniroute-preview.json'
+          $dummy | & 'build_vendor/omniroute_runtime/node.exe' $cli providers add openai --credential-stdin --yes --dry-run --json *> $previewPath
+          $exitCode = $LASTEXITCODE
+          $previewText = (Get-Content -LiteralPath $previewPath -Raw -ErrorAction Stop).Trim()
+          if ($exitCode -ne 0) {
+            Remove-Item -LiteralPath $previewPath -Force -ErrorAction SilentlyContinue
+            throw "Embedded OmniRoute credential-stdin dry-run failed (exit code $exitCode): $previewText"
+          }
+          if ($previewText -match [regex]::Escape($dummy)) {
+            Remove-Item -LiteralPath $previewPath -Force -ErrorAction SilentlyContinue
+            throw 'Embedded OmniRoute dry-run exposed the credential'
+          }
+          $previewText = $previewText.TrimStart([char]0xFEFF).Trim()
+          $jsonCheck = & 'build_vendor/omniroute_runtime/node.exe' -e "const fs=require('fs'); const raw=fs.readFileSync(process.argv[1],'utf8').replace(/^﻿/,'').trim(); const value=JSON.parse(raw); if (!value || typeof value !== 'object') process.exit(2);" $previewPath 2>&1
+          $jsonExit = $LASTEXITCODE
+          Remove-Item -LiteralPath $previewPath -Force -ErrorAction SilentlyContinue
+          if ($jsonExit -ne 0) { throw "Embedded OmniRoute dry-run did not return valid JSON: $jsonCheck" }
 
       - name: Smoke-test ElevenLabs voice plumbing without a live key
         shell: pwsh
