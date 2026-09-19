@@ -140,7 +140,7 @@ class NeuralDiscovery:
             entity_id = "service:" + service_name.casefold()
             seen.add(entity_id)
             state = str(getattr(service, "state", "unknown"))
-            active = "RUNNING" in state.casefold()
+            active = "running" in state.casefold()
             node = self.world.upsert(
                 entity_id,
                 EntityKind.SERVICE,
