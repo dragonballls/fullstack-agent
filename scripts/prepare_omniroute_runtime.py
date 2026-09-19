@@ -133,7 +133,6 @@ def prepare(destination: Path) -> None:
                 "--no-fund",
                 "--no-audit",
                 "--omit=dev",
-                "--omit=optional",
                 "--ignore-scripts",
                 "--prefer-offline",
                 "--fetch-retries=2",
