@@ -63,7 +63,7 @@ def prepare(destination: Path) -> None:
             return
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="jarvis-omniroute-") as temp_name:
+    with tempfile.TemporaryDirectory(prefix="jarvis-omniroute-", ignore_cleanup_errors=True) as temp_name:
         temp = Path(temp_name)
 
         node_archive = temp / NODE_ZIP_NAME
@@ -133,8 +133,10 @@ def prepare(destination: Path) -> None:
                 "--no-fund",
                 "--no-audit",
                 "--omit=dev",
-                "--include=optional",
+                "--omit=optional",
                 "--ignore-scripts",
+                "--prefer-offline",
+                "--fetch-retries=2",
                 str(tarball),
             ],
             stdin=subprocess.DEVNULL,
