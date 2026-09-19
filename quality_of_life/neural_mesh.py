@@ -371,7 +371,7 @@ function buildAmbientField(realNodes){
 }
 function visualNodes(){return S.nodes.concat(S.ambientNodes);}
 function activeNodes(cam){
-  const max=S.mode==="background"?650:S.quality==="performance"?1250:2200,c=cam||camera(),now=performance.now();
+  const max=S.mode==="background"?720:S.quality==="performance"?1600:2800,c=cam||camera(),now=performance.now();
   S.lodDetail.clear();S.lodStats={near:0,far:0,culled:0,field:S.microCount};
   const ranked=[];
   const score=function(n){
@@ -388,7 +388,7 @@ function activeNodes(cam){
   };
   S.nodes.concat(S.ambientNodes).forEach(score);
   ranked.sort(function(a,b){return b.score-a.score});
-  return ranked.filter(function(x){return x.lod>0}).slice(0,max).map(function(x){return x.n});
+  return ranked.filter(function(x){return x.lod>=2}).slice(0,max).map(function(x){return x.n});
 }
 function simulateFluid(dt,nodes){
   if(S.mode==="background"||S.quality==="minimal")return;
@@ -443,7 +443,7 @@ function renderPointField(now,c,mvp){
   gl.useProgram(fieldProg);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(fieldProg,"uView"),false,v);gl.uniform1f(gl.getUniformLocation(fieldProg,"uTime"),now);
   if(now-S.lastPointBuild>=S.pointBuildMs){
     const full=new Set(S.activeNodeIds||[]),pp=[],ss=[],ee=[],ph=[];
-    const candidates=S.nodes.concat(S.ambientNodes),candidateCap=14000;
+    const candidates=S.nodes.concat(S.ambientNodes),candidateCap=S.mode==="background"?7000:S.quality==="performance"?12000:20000;
     for(let i=0;i<candidates.length&&pp.length/3<candidateCap;i++){
       const n=candidates[i];if(full.has(n.id))continue;
       const p=nodePosition(n),rel=sub(p,c.eye),d=Math.hypot(rel[0],rel[1],rel[2]),depth=rel[0]*c.forward[0]+rel[1]*c.forward[1]+rel[2]*c.forward[2];
