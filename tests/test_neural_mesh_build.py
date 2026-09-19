@@ -34,7 +34,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
             "S.lodStats.culled", "vLocal.x-vLocal.z", "26000",
             "microPosBuf", "microSizeBuf", "microEnergyBuf", "microPhaseBuf",
             "gl.STATIC_DRAW", "microBuffersReady", "uDeepField", "uAnchor",
-            "gl.drawArrays(gl.POINTS,0,deepCount", "jn-core-heart", "filter(function(x){return x.lod>=2})", "candidateCap=S.mode", "deepCount=S.mode",
+            "gl.drawArrays(gl.POINTS,0,deepCount", "filter(function(x){return x.lod>=2})", "candidateCap=S.mode", "deepCount=S.mode",
         ):
             self.assertIn(token, script)
 
@@ -54,6 +54,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
             "jn-console-hotkey",
             "data-command=",
             "FLOAT",
+            "jn-core-heart",
         ):
             self.assertIn(token, markup)
         self.assertIn('e.key==="Enter"&&!e.shiftKey', script)
