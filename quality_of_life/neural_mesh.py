@@ -11,7 +11,7 @@ NEURAL_MESH_BUILTIN = {
     "description": "Blue fully 3D JARVIS world with high-resolution water-droplet neurons, SPH-style particle-fluid motion, differentiated organic cells, dense ambient neural ecology, curved energy filaments, a holographic JARVIS core, lifecycle pulses, spatial windows, search, zoom, performance culling, and persistent command surfaces.",
     "protected": True,
     "css": r"""
-#jarvis-text-shell,#jarvis-workspace-shell{display:none!important}
+#jarvis-workspace-shell{display:none!important}\n#jn-neural-console,#jn-console-tether{display:none!important}
 #jarvis-ui-build-layer.neural-mesh-root{position:fixed;inset:0;z-index:2147481000;pointer-events:none;color:#dff6ff;font-family:Inter,Segoe UI,system-ui,sans-serif;overflow:hidden;background:#000}
 #jarvis-neural-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:auto;cursor:grab;background:radial-gradient(circle at 50% 46%,rgba(29,150,255,.075),transparent 43%),radial-gradient(circle at 50% 52%,rgba(11,63,109,.055),transparent 57%),linear-gradient(180deg,#010813,#000207)}
 #jn-core-structure{position:absolute;left:0;top:0;width:188px;height:188px;transform:translate3d(-9999px,-9999px,0);transform-style:preserve-3d;pointer-events:none;z-index:22;opacity:.98;filter:drop-shadow(0 0 22px rgba(46,176,255,.18))}
@@ -848,21 +848,10 @@ function resizeNeuralComposer(){
   input.style.height=Math.min(92,Math.max(34,input.scrollHeight))+"px";
   renderNeuralConsolePlacement(true);
 }
-function toggleNeuralConsole(){
-  setConsoleCollapsed(!S.consoleCollapsed);
-  const input=ui.querySelector("#jn-chat-input");
-  if(!S.consoleCollapsed&&input)window.setTimeout(function(){input.focus();},0);
-}
+function toggleNeuralConsole(){const surface=window.jarvisTextInput;if(surface&&surface.setVisible){surface.setVisible(document.querySelector("#jarvis-text-shell")?.style.display==="none");surface.focus();}}
 window.jarvisNeuralCommandSurface={
-  setVisible:function(visible){
-    const el=ui.querySelector("#jn-neural-console"),tether=ui.querySelector("#jn-console-tether");
-    if(el)el.style.display=visible?"":"none";
-    if(tether)tether.style.display=visible?"":"none";
-    if(visible){renderNeuralConsolePlacement(true);const input=ui.querySelector("#jn-chat-input");if(input)input.focus();}
-  },
-  focus:function(){
-    const input=ui.querySelector("#jn-chat-input");if(input)input.focus();
-  }
+  setVisible:function(visible){const surface=window.jarvisTextInput;if(surface&&surface.setVisible)surface.setVisible(visible);},
+  focus:function(){const surface=window.jarvisTextInput;if(surface&&surface.focus)surface.focus();}
 };
 canvas.addEventListener("pointerdown",function(e){
   if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
@@ -917,7 +906,7 @@ ui.querySelector("#jn-console-hotkey").addEventListener("click",function(){setCo
 ui.querySelectorAll(".jn-console-chip").forEach(function(button){button.addEventListener("click",function(){const input=ui.querySelector("#jn-chat-input");if(!input)return;input.value=String(button.dataset.command||"");resizeNeuralComposer();input.focus();});});
 try{S.consoleCollapsed=localStorage.getItem("jarvis.neuralCommand.collapsed")==="1";}catch(_){}
 setConsoleCollapsed(S.consoleCollapsed);
-window.addEventListener("keydown",function(e){if(e.code==="F13"){e.preventDefault();toggleNeuralConsole();}});
+window.addEventListener("keydown",function(e){if(e.code==="F13"){e.preventDefault();const surface=window.jarvisTextInput;if(surface&&surface.setVisible){const shell=document.querySelector("#jarvis-text-shell");surface.setVisible(!shell||shell.style.display==="none");surface.focus();}}});
 window.addEventListener("resize",function(){resize();resizeNeuralComposer();});
 window.addEventListener("scroll",function(){renderNeuralConsolePlacement(true)},{passive:true});
 document.addEventListener("visibilitychange",function(){const hidden=document.hidden;canvas.style.visibility=hidden?"hidden":"visible";ui.querySelector("#jn-surfaces").style.visibility=hidden?"hidden":"visible";});
