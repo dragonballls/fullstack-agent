@@ -8,7 +8,7 @@ The supported end-user product is a single verified/release-published `Jarvis.ex
 
 Download the `Jarvis.exe` asset from the verified GitHub `latest` release. Double-clicking that executable is the normal Windows launch path.
 
-The executable contains the Jarvis runtime plus the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters, not a second agent brain.
+The executable contains the Jarvis runtime, a pinned self-contained OmniRoute gateway (Node.js 24.21.0 + OmniRoute 3.8.51), and the pinned Fullstack Agent presentation components used by the native visualizer and Backtalk voice bridge. Jarvis keeps one guarded planner/tool execution path; the embedded Fullstack components are presentation and I/O adapters, not a second agent brain.
 
 ## What first launch may create
 
@@ -30,7 +30,7 @@ Jarvis uses OmniRoute as its conversational/agent routing layer. Missing cloud c
 
 Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor.
 
-Live cloud requests still require the configured gateway/provider credential. Credentials and refresh tokens must stay behind the existing credential broker or supported environment mechanism and must never be placed in tracked configuration.
+Live cloud requests still require at least one configured provider credential. On first launch, Jarvis starts the embedded OmniRoute gateway automatically; open AI Provider Settings from the command surface, select a provider, paste its API key, and use CONNECT & TEST. Jarvis passes the secret directly to OmniRoute and clears its own input; credentials are stored by OmniRoute in its local credential store and never enter tracked configuration. The gateway's local routing endpoint is fixed to `http://127.0.0.1:20128/v1`.
 
 ## Voice
 
@@ -56,7 +56,7 @@ An update failure leaves the currently running Jarvis instance in place. Normal 
 
 Hand control, browser/device integrations, account connections, location features, and Windows maintenance remain behind their existing capability and confirmation policies. Optional capability failure must degrade the specific feature rather than take down the desktop visualizer.
 
-Hosted CI can verify source contracts, imports, routing, packaging, and the frozen visualizer/Backtalk startup path. It cannot certify a particular PC's microphone, speakers, camera, provider credentials, OAuth grants, or hardware-specific behavior.
+Hosted CI can verify source contracts, imports, routing, OmniRoute provisioning, embedded-runtime versioning, packaging, and the frozen visualizer/Backtalk startup path. It cannot certify a particular PC's microphone, speakers, camera, provider credentials, OAuth grants, or hardware-specific behavior.
 
 ## Developer-only build path
 
