@@ -191,7 +191,7 @@ const S={
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
   yaw:.20,pitch:-.12,distance:20,target:[0,0,0],lastX:0,lastY:0,
   frameMs:16,lastFrame:performance.now(),searchTimer:0,layoutTimers:new Map(),consoleCollapsed:false,consoleSubmitting:false,lastConsoleLayout:0,consoleLayoutMs:50,
-  surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200,advanced:{physics:{}}
+  surfacePositions:new Map(),surfaceScales:new Map(),layouts:new Map(),lastLayoutPoll:0,layoutPollMs:2200,advanced:{physics:{}},renderTime:0
 };
 
 function compile(type,src){
@@ -353,7 +353,7 @@ const earthIndexCount=buildEarthSphere();
 function shapeCode(node){const name=String(node.shape&&node.shape.name||"droplet").toLowerCase();const codes={sphere:2,globe:2,planet:2,icosphere:2,capsule:3,crystal:4,torus:5,ring:6,star:7,orbital:8,core:9,heart:10,gear:11,spiral:12,pyramid:13,wave:14,dna:15,molecule:16,arrow:17,cone:13,cylinder:4,disk:6,octahedron:4};if(codes[name]!==undefined)return codes[name];let hash=2166136261;for(let i=0;i<name.length;i++)hash=Math.imul(hash^name.charCodeAt(i),16777619);return 18+(hash>>>0)%46;}
 function proximityShapeCode(node){const base=shapeCode(node),lod=Number(S.lodDetail.get(node.id)||0);if(lod<3)return base;const t=String(node.label||"")+" "+String(node.kind||"")+" "+String(node.source||"");if(/gods? eye|location/i.test(t))return 2;if(/folder|file|document/i.test(t))return 4;if(/repository|memory|database/i.test(t))return 6;if(/application|process|window|page/i.test(t))return 8;if(/core|jarvis|neural/i.test(t))return 9;return base;}
 function autoLayoutBase(n,seen){if(!n||!(n.metadata&&n.metadata.auto_layout)||!n.parent_id)return n&&n.position||[0,0,0];seen=seen||new Set();if(seen.has(n.id))return n.position||[0,0,0];seen.add(n.id);const parent=S.nodeMap.get(String(n.parent_id));if(!parent||parent.id===n.id)return n.position;const seed=hashUnit(String(n.id)+"|"+String(n.parent_id)),seed2=hashUnit("v|"+String(n.id)),theta=seed*Math.PI*2,phi=(seed2-.5)*.62;const radius=(n.kind==="process"?2.1:n.kind==="page"?2.8:n.kind==="application"?3.4:n.kind==="window"?2.7:n.kind==="account"?3.0:2.4)+seed2*2.4;const pp=autoLayoutBase(parent,seen);return[pp[0]+Math.cos(theta)*Math.cos(phi)*radius,pp[1]+Math.sin(phi)*radius*.68,pp[2]+Math.sin(theta)*Math.cos(phi)*radius];}
-function nodePosition(n){const base=autoLayoutBase(n),o=S.localOffsets.get(n.id),b=o?[base[0]+o[0],base[1]+o[1],base[2]+o[2]]:base,p=S.advanced&&S.advanced.physics||{},wave=Number(p.waves&&p.waves[0]&&p.waves[0].amplitude)||0,ripple=Number(p.ripples&&p.ripples[0]&&p.ripples[0].strength)||0,t=performance.now()*.001+Number(n.id.length||0),ambient=Boolean(n.metadata&&n.metadata.visual_only);if(ambient){const h=hashUnit(String(n.id)),h2=hashUnit("ambient-flow|"+String(n.id));return[b[0]+Math.sin(t*(.12+h*.09)+h2*6.28)*(.18+h*.22),b[1]+Math.cos(t*(.10+h2*.08)+h*5.0)*(.14+h2*.20),b[2]+Math.sin(t*(.14+h2*.06)+h*4.2)*(.18+h*.18)];}return[b[0]+Math.sin(t+b[2])*wave*.32,b[1]+Math.cos(t*.83+b[0])*wave*.22,b[2]+Math.sin(t*.71+b[1])*ripple*.16];}
+function nodePosition(n){const base=autoLayoutBase(n),o=S.localOffsets.get(n.id),b=o?[base[0]+o[0],base[1]+o[1],base[2]+o[2]]:base,p=S.advanced&&S.advanced.physics||{},wave=Number(p.waves&&p.waves[0]&&p.waves[0].amplitude)||0,ripple=Number(p.ripples&&p.ripples[0]&&p.ripples[0].strength)||0,t=S.renderTime+Number(n.id.length||0),ambient=Boolean(n.metadata&&n.metadata.visual_only);if(ambient){const h=hashUnit(String(n.id)),h2=hashUnit("ambient-flow|"+String(n.id));return[b[0]+Math.sin(t*(.12+h*.09)+h2*6.28)*(.18+h*.22),b[1]+Math.cos(t*(.10+h2*.08)+h*5.0)*(.14+h2*.20),b[2]+Math.sin(t*(.14+h2*.06)+h*4.2)*(.18+h*.18)];}return[b[0]+Math.sin(t+b[2])*wave*.32,b[1]+Math.cos(t*.83+b[0])*wave*.22,b[2]+Math.sin(t*.71+b[1])*ripple*.16];}
 function hashUnit(value){let h=2166136261;const s=String(value);for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return((h>>>0)%100000)/100000;}
 function buildAmbientField(realNodes){
   const list=Array.isArray(realNodes)?realNodes:[],desired=Math.max(1800,Math.min(5200,7000-list.length));
@@ -462,6 +462,7 @@ function resize(){
 function render(now){
   requestAnimationFrame(render);
   if(document.hidden)return;
+  S.renderTime=now*.001;
   renderMinimap();
   animateSurfaceTransforms();
   renderNeuralConsolePlacement(false);
