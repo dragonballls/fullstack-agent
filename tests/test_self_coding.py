@@ -69,16 +69,16 @@ class SelfCodingTests(unittest.TestCase):
         self.assertEqual(log.stdout.strip(), "agent: verified self-coding change")
 
     def test_publish_main_is_opt_in_and_requires_remote_baseline_match(self) -> None:
-        root = self.make_repo()
-        config = SelfCodingConfig(repo=root, publish_main=True)
+        root, _ = self.make_repo()
+        config = SelfCodingConfig(repo=root, publish_main=True, state_dir=self.state_dir())
         agent = SelfCodingAgent(config)
         agent._git = lambda *args: subprocess.CompletedProcess(["git", *args], 0, "different\n", "")  # type: ignore[method-assign]
         with self.assertRaisesRegex(SelfCodingError, "remote main"):
-            agent._publish_main("seed", "agent/self-code/test")
+            agent._publish_main("seed", "agent/self-code/test", "main")
 
     def test_inspect_tool_gap_returns_structured_gap_for_missing_adapter(self) -> None:
-        root = self.make_repo()
-        agent = SelfCodingAgent(SelfCodingConfig(repo=root))
+        root, _ = self.make_repo()
+        agent = SelfCodingAgent(SelfCodingConfig(repo=root, state_dir=self.state_dir()))
         gap = agent.inspect_tool_gap("the requested tool returned an unsupported operation because no adapter is registered")
         self.assertIsNotNone(gap)
         self.assertEqual(gap.kind, "tool_capability")
@@ -105,7 +105,7 @@ class SelfCodingTests(unittest.TestCase):
         status = agent.status()
         self.assertEqual(status["state"], "preview")
         self.assertEqual(status["branch"], branch)
-        self.assertFalse((root / "preview.txt").exists() is False)
+        self.assertTrue((root / "preview.txt").exists())
 
     def test_undo_preview_returns_to_main_and_clears_active_preview(self) -> None:
         root, _ = self.make_repo()
