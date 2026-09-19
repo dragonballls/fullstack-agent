@@ -4,10 +4,40 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from quality_of_life.omniroute_setup import OmniRouteProvisioner
+from quality_of_life.omniroute_setup import OmniRouteProvisioner, detect_provider_from_key
 
 
 class OmniRouteSetupTests(unittest.TestCase):
+    def test_auto_detects_only_unambiguous_provider_key_formats(self):
+        cases = {
+            "sk-ant-example-123456": "anthropic",
+            "sk-or-v1-example-123456": "openrouter",
+            "gsk_example_123456": "groq",
+            "xai-example-123456": "xai",
+            "AIzaExample12345678": "gemini",
+            "csk-example-123456": "cerebras",
+            "sk-proj-example-123456": "openai",
+            "sk-svcacct-example-123456": "openai",
+        }
+        for key, provider in cases.items():
+            self.assertEqual(detect_provider_from_key(key), provider)
+        self.assertIsNone(detect_provider_from_key("sk-generic-example-123456"))
+        self.assertIsNone(detect_provider_from_key("unknown-format-123456"))
+
+    def test_auto_provider_uses_detected_slot_without_exposing_secret(self):
+        provisioner = OmniRouteProvisioner()
+        provisioner._resolved = ("omniroute",)
+        secret = "sk-ant-secret-123456"
+        class Completed:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        with patch("quality_of_life.omniroute_setup.subprocess.run", return_value=Completed()) as run:
+            result = provisioner.configure_provider("auto", secret)
+        self.assertEqual(result["provider"], "anthropic")
+        self.assertNotIn(secret, run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["input"], secret + "\n")
+
     def test_default_data_dir_is_user_local(self):
         with TemporaryDirectory() as tmp:
             provisioner = OmniRouteProvisioner(data_dir=Path(tmp) / "OmniRoute")
