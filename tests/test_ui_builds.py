@@ -7,6 +7,7 @@ import unittest
 
 from quality_of_life.ui_builds import (
     DEFAULT_BUILD_ID,
+    UI_QUALITY_FLOOR_LEVEL,
     UIBuildStore,
     build_manager_script,
 )
@@ -38,6 +39,37 @@ class UIBuildStoreTests(unittest.TestCase):
             self.assertEqual(len(ids), 54)
             self.assertEqual(store.active().id, DEFAULT_BUILD_ID)
             self.assertTrue((Path(tmp) / "test-build-49" / "manifest.json").is_file())
+
+    def test_quality_level_defaults_to_verified_floor(self):
+        with TemporaryDirectory() as tmp:
+            store = UIBuildStore(tmp)
+            build = store.save({"id": "verified", "name": "Verified"})
+            self.assertEqual(build.quality_level, UI_QUALITY_FLOOR_LEVEL)
+            self.assertEqual(store.catalog()[-1]["quality_level"], UI_QUALITY_FLOOR_LEVEL)
+
+    def test_existing_ui_build_cannot_be_replaced_by_lower_quality(self):
+        with TemporaryDirectory() as tmp:
+            store = UIBuildStore(tmp)
+            store.save({"id": "quality-test", "name": "Quality Test", "quality_level": 5})
+            with self.assertRaisesRegex(ValueError, "quality downgrade blocked"):
+                store.save({"id": "quality-test", "name": "Quality Test", "quality_level": 4})
+
+    def test_activation_cannot_downgrade_active_quality(self):
+        with TemporaryDirectory() as tmp:
+            store = UIBuildStore(tmp)
+            store.save({"id": "scale", "name": "Scale", "quality_level": 5})
+            store.activate("scale")
+            with self.assertRaisesRegex(ValueError, "quality downgrade blocked"):
+                store.activate(DEFAULT_BUILD_ID)
+
+    def test_rollback_remains_an_explicit_safety_recovery_path(self):
+        with TemporaryDirectory() as tmp:
+            store = UIBuildStore(tmp)
+            store.save({"id": "scale", "name": "Scale", "quality_level": 5})
+            store.activate("scale")
+            recovered = store.rollback()
+            self.assertEqual(recovered.id, DEFAULT_BUILD_ID)
+            self.assertEqual(recovered.quality_level, UI_QUALITY_FLOOR_LEVEL)
 
     def test_switch_and_multi_step_rollback(self):
         with TemporaryDirectory() as tmp:
@@ -191,6 +223,8 @@ class UIBuildStoreTests(unittest.TestCase):
             "ROLLBACK",
             "ctrlKey",
             "jarvis-ui-build-toggle",
+            "Q4 floor",
+            "quality_level",
         ):
             self.assertIn(token, script)
 
