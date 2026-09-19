@@ -10,7 +10,7 @@ from self_coding.agent import SelfCodingAgent, SelfCodingConfig, SelfCodingError
 
 
 class SelfCodingTests(unittest.TestCase):
-    def make_repo(self) -> Path:
+    def make_repo(self, with_remote: bool = False) -> Path:
         root = Path(tempfile.mkdtemp(prefix="fullstack-agent-selfcoding-"))
         subprocess.run(("git", "init", "-b", "main"), cwd=root, check=True, capture_output=True, text=True)
         subprocess.run(("git", "config", "user.name", "Self Coding Test"), cwd=root, check=True)
@@ -18,7 +18,20 @@ class SelfCodingTests(unittest.TestCase):
         (root / "README.md").write_text("seed\n", encoding="utf-8")
         subprocess.run(("git", "add", "README.md"), cwd=root, check=True)
         subprocess.run(("git", "commit", "-m", "seed"), cwd=root, check=True, capture_output=True, text=True)
+
+        if with_remote:
+            remote_parent = Path(tempfile.mkdtemp(prefix="fullstack-agent-selfcoding-remote-"))
+            remote = remote_parent / "origin.git"
+            subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True, text=True)
+            subprocess.run(("git", "remote", "add", "origin", str(remote)), cwd=root, check=True)
+            subprocess.run(("git", "push", "-u", "origin", "main"), cwd=root, check=True, capture_output=True, text=True)
+            subprocess.run(("git", "fetch", "origin", "main"), cwd=root, check=True, capture_output=True, text=True)
         return root
+
+    @staticmethod
+    def git(root: Path, *args: str) -> str:
+        result = subprocess.run(("git", *args), cwd=root, check=True, capture_output=True, text=True)
+        return result.stdout.strip()
 
     def test_dirty_repository_is_rejected(self) -> None:
         root = self.make_repo()
@@ -34,8 +47,8 @@ class SelfCodingTests(unittest.TestCase):
         with self.assertRaises(SelfCodingError):
             agent.run("make a safe change")
         self.assertFalse((root / "generated.txt").exists())
-        status = subprocess.run(("git", "status", "--porcelain"), cwd=root, check=True, capture_output=True, text=True)
-        self.assertEqual(status.stdout, "")
+        self.assertEqual(self.git(root, "status", "--porcelain"), "")
+        self.assertEqual(self.git(root, "branch", "--show-current"), "main")
 
     def test_rollback_failure_is_reported(self) -> None:
         root = self.make_repo()
@@ -48,24 +61,95 @@ class SelfCodingTests(unittest.TestCase):
         with self.assertRaisesRegex(SelfCodingError, "reset failed"):
             agent._rollback("deadbeef")
 
-    def test_successful_pass_is_committed(self) -> None:
+    def test_successful_pass_creates_pending_checkpoint(self) -> None:
         root = self.make_repo()
         config = SelfCodingConfig(repo=root, test_commands=((sys.executable, "-c", "print('ok')"),))
         agent = SelfCodingAgent(config)
         agent._invoke_backend = lambda goal: (root / "verified.txt").write_text("verified\n", encoding="utf-8")  # type: ignore[method-assign]
-        branch = agent.run("make a verified change")
-        self.assertTrue(branch.startswith("agent/self-code/"))
+        checkpoint_id = agent.run("make a verified change")
+        checkpoints = agent.list_checkpoints()
+        self.assertEqual(len(checkpoints), 1)
+        self.assertEqual(checkpoints[0]["checkpoint_id"], checkpoint_id)
+        self.assertEqual(checkpoints[0]["state"], "pending")
+        self.assertTrue(str(checkpoints[0]["branch"]).startswith("agent/checkpoint/"))
+        self.assertEqual(self.git(root, "branch", "--show-current"), str(checkpoints[0]["branch"]))
         self.assertEqual((root / "verified.txt").read_text(encoding="utf-8"), "verified\n")
-        log = subprocess.run(("git", "log", "-1", "--pretty=%s"), cwd=root, check=True, capture_output=True, text=True)
-        self.assertEqual(log.stdout.strip(), "agent: verified self-coding change")
+        self.assertEqual(self.git(root, "log", "-1", "--pretty=%s"), "agent: verified self-coding change")
 
-    def test_publish_main_is_opt_in_and_requires_remote_baseline_match(self) -> None:
+    def test_direct_main_publication_is_disabled(self) -> None:
         root = self.make_repo()
-        config = SelfCodingConfig(repo=root, publish_main=True)
+        config = SelfCodingConfig(
+            repo=root,
+            publish_main=True,
+            test_commands=((sys.executable, "-c", "print('ok')"),),
+        )
         agent = SelfCodingAgent(config)
-        agent._git = lambda *args: subprocess.CompletedProcess(["git", *args], 0, "different\n", "")  # type: ignore[method-assign]
-        with self.assertRaisesRegex(SelfCodingError, "remote main"):
-            agent._publish_main("seed", "agent/self-code/test")
+        agent._invoke_backend = lambda goal: (root / "verified.txt").write_text("verified\n", encoding="utf-8")  # type: ignore[method-assign]
+        with self.assertRaisesRegex(SelfCodingError, "Direct main publication is disabled"):
+            agent.run("make a verified change")
+
+    def test_legacy_publish_method_is_a_hard_guard(self) -> None:
+        root = self.make_repo()
+        agent = SelfCodingAgent(SelfCodingConfig(repo=root))
+        with self.assertRaisesRegex(SelfCodingError, "Direct main publication is disabled"):
+            agent._publish_main("seed", "agent/checkpoint/test")
+
+    def test_pending_checkpoint_can_be_undone(self) -> None:
+        root = self.make_repo()
+        config = SelfCodingConfig(repo=root, test_commands=((sys.executable, "-c", "print('ok')"),))
+        agent = SelfCodingAgent(config)
+        agent._invoke_backend = lambda goal: (root / "pending.txt").write_text("discard me\n", encoding="utf-8")  # type: ignore[method-assign]
+        checkpoint_id = agent.run("make a pending change")
+        self.assertEqual(self.git(root, "branch", "--show-current").startswith("agent/checkpoint/"), True)
+
+        self.assertEqual(agent.undo_checkpoint(checkpoint_id), "undone")
+        self.assertFalse((root / "pending.txt").exists())
+        self.assertEqual(self.git(root, "branch", "--show-current"), "main")
+        self.assertEqual(agent.list_checkpoints()[0]["state"], "undone")
+        self.assertNotIn(checkpoint_id, self.git(root, "branch", "-a"))
+
+    def test_approve_and_undo_are_real_remote_operations(self) -> None:
+        root = self.make_repo(with_remote=True)
+        config = SelfCodingConfig(repo=root, test_commands=((sys.executable, "-c", "print('ok')"),))
+        agent = SelfCodingAgent(config)
+        agent._invoke_backend = lambda goal: (root / "approved.txt").write_text("publish me\n", encoding="utf-8")  # type: ignore[method-assign]
+
+        baseline = self.git(root, "rev-parse", "HEAD")
+        checkpoint_id = agent.run("make an approved change")
+        checkpoint = agent.list_checkpoints()[0]
+        self.assertEqual(checkpoint["baseline"], baseline)
+        promoted = agent.approve_checkpoint(checkpoint_id)
+
+        self.assertEqual(self.git(root, "branch", "--show-current"), "main")
+        self.assertTrue((root / "approved.txt").exists())
+        self.assertEqual(self.git(root, "rev-parse", "origin/main"), promoted)
+        self.assertEqual(agent.list_checkpoints()[0]["state"], "approved")
+
+        self.assertEqual(agent.undo_checkpoint(checkpoint_id), "undone")
+        self.assertFalse((root / "approved.txt").exists())
+        self.assertEqual(self.git(root, "rev-parse", "origin/main"), baseline)
+        self.assertEqual(self.git(root, "rev-parse", "HEAD"), self.git(root, "rev-parse", "origin/main"))
+        self.assertEqual(agent.list_checkpoints()[0]["state"], "undone")
+
+    def test_approved_checkpoint_refuses_to_undo_unrelated_main_work(self) -> None:
+        root = self.make_repo(with_remote=True)
+        config = SelfCodingConfig(repo=root, test_commands=((sys.executable, "-c", "print('ok')"),))
+        agent = SelfCodingAgent(config)
+        agent._invoke_backend = lambda goal: (root / "approved.txt").write_text("publish me\n", encoding="utf-8")  # type: ignore[method-assign]
+
+        checkpoint_id = agent.run("make an approved change")
+        agent.approve_checkpoint(checkpoint_id)
+
+        (root / "unrelated.txt").write_text("keep me\n", encoding="utf-8")
+        subprocess.run(("git", "add", "unrelated.txt"), cwd=root, check=True)
+        subprocess.run(("git", "commit", "-m", "unrelated change"), cwd=root, check=True, capture_output=True, text=True)
+        subprocess.run(("git", "push", "origin", "main"), cwd=root, check=True, capture_output=True, text=True)
+
+        with self.assertRaisesRegex(SelfCodingError, "main changed after approval"):
+            agent.undo_checkpoint(checkpoint_id)
+
+        self.assertTrue((root / "approved.txt").exists())
+        self.assertTrue((root / "unrelated.txt").exists())
 
     def test_inspect_tool_gap_returns_structured_gap_for_missing_adapter(self) -> None:
         root = self.make_repo()
