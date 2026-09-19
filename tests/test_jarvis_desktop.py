@@ -214,6 +214,28 @@ class JarvisDesktopTests(unittest.TestCase):
         adapter.stop()
         self.assertIsNone(adapter.bridge)
 
+    def test_embedded_text_and_settings_javascript_parse_when_node_exists(self):
+        node = __import__("shutil").which("node")
+        if node is None:
+            self.skipTest("node is not installed on this runner")
+        import re
+        import subprocess
+        import tempfile
+        for html, label in (
+            (jarvis_desktop.TEXT_INPUT_SCRIPT, "text-input"),
+            (jarvis_desktop.OMNIROUTE_SETTINGS_HTML, "settings"),
+        ):
+            scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.DOTALL | re.IGNORECASE)
+            self.assertTrue(scripts, label)
+            with tempfile.NamedTemporaryFile("w",suffix=".js",encoding="utf-8",delete=False) as handle:
+                handle.write("\n".join(scripts))
+                path = handle.name
+            try:
+                result = subprocess.run([node,"--check",path],capture_output=True,text=True,timeout=20)
+                self.assertEqual(result.returncode,0,result.stderr or result.stdout)
+            finally:
+                __import__("os").unlink(path)
+
     def test_frozen_backtalk_smoke_mode_validates_embedded_modules_without_audio_hardware(self):
         controller = Mock()
         adapter = VoiceAdapter(controller)
