@@ -299,14 +299,15 @@ Implement the goal directly, then leave the repository in a clean, testable, coh
         baseline = getattr(self, "_verification_baseline", "")
         quality_floor = self.repo / "quality_floor.json"
         quality_gate = self.repo / "scripts" / "verify_quality_floor.py"
-        if quality_floor.is_file() and quality_gate.is_file():
-            command = (sys.executable, "-m", "scripts.verify_quality_floor")
-            if baseline:
-                command += ("--baseline", baseline)
-            result = self._run(command)
-            if result.returncode != 0:
-                output = (result.stdout + "\n" + result.stderr).strip()
-                raise SelfCodingError(f"Quality-floor verification failed.\n{output[-12000:]}")
+        if not quality_floor.is_file() or not quality_gate.is_file():
+            raise SelfCodingError("Quality-floor verification is mandatory; its manifest or gate is missing.")
+        command = (sys.executable, "-m", "scripts.verify_quality_floor")
+        if baseline:
+            command += ("--baseline", baseline)
+        result = self._run(command)
+        if result.returncode != 0:
+            output = (result.stdout + "\n" + result.stderr).strip()
+            raise SelfCodingError(f"Quality-floor verification failed.\n{output[-12000:]}")
 
         status = self._git("status", "--porcelain")
         if status.returncode != 0:
