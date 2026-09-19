@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 import unittest
 
@@ -100,7 +101,6 @@ class JarvisRuntimeTests(unittest.TestCase):
     def test_runtime_self_coding_defaults_to_preview_only(self) -> None:
         with tempfile.TemporaryDirectory() as root_dir, tempfile.TemporaryDirectory() as state_dir:
             root = os.path.abspath(root_dir)
-            subprocess = __import__("subprocess")
             subprocess.run(("git", "init", "-b", "main"), cwd=root, check=True, capture_output=True, text=True)
             subprocess.run(("git", "config", "user.name", "Runtime Test"), cwd=root, check=True)
             subprocess.run(("git", "config", "user.email", "runtime-test@example.invalid"), cwd=root, check=True)
