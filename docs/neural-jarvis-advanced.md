@@ -1,7 +1,7 @@
 # Neural JARVIS Advanced Build Matrix
 
 Repository: dragonballls/fullstack-agent
-Branch: feat/jarvis-neural-space
+Branch: feat/build2-neural-realism
 
 This matrix records the advanced systems requested for Neural JARVIS Build #2. The
 machine-readable source of truth is quality_of_life/neural_advanced.py::FEATURES.
