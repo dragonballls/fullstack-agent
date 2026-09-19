@@ -291,11 +291,11 @@ Implement the goal directly, then leave the repository clean and testable."""
                 self._git("branch", "-D", branch)
                 return original_branch
 
-            self.checkpoints.add(record)
             if self.config.push_branch:
                 pushed = self._git("push", "-u", "origin", branch)
                 if pushed.returncode != 0:
                     raise SelfCodingError(pushed.stderr.strip() or "Unable to push self-coding branch")
+            self.checkpoints.add(record)
             return branch
         except Exception:
             self._cleanup_failed_run(baseline, branch, original_branch, checkpoint_tag)
