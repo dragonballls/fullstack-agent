@@ -18,12 +18,12 @@ class NeuralMeshBuildTests(unittest.TestCase):
     def test_webgl_and_chat_contract(self):
         from quality_of_life.neural_mesh import NEURAL_MESH_BUILTIN
         script = NEURAL_MESH_BUILTIN["script"]
-        for token in ("webgl2", "pointerdown", "wheel", "drawElementsInstanced", "neural_world_snapshot", "neural_events", "neural_search", "submit_text", "spatial_windows_catalog", "gods_eye_globe", "neural_observation_state", "jn-earth", "shapeCode", "earthYaw", "earthDistance", "renderEarth", "neural_advanced_tick", "FLUID ECOLOGY", "jn-neural-console", "jn-console-tether", "renderNeuralConsolePlacement", "F13", "jarvis.neuralCommand.collapsed", "ALWAYS IN VIEW", "jn-console-float", "toggle_text_link", "jarvisNeuralCommandSurface", "aRot", "aAngular", "angular_velocity", "globe"):
+        for token in ("webgl2", "pointerdown", "wheel", "drawElementsInstanced", "neural_world_snapshot", "neural_events", "neural_search", "submit_text", "spatial_windows_catalog", "gods_eye_globe", "neural_observation_state", "jn-earth", "shapeCode", "earthYaw", "earthDistance", "renderEarth", "neural_advanced_tick", "FLUID ECOLOGY", "jn-neural-console", "jn-console-tether", "renderNeuralConsolePlacement", "F13", "jarvis.neuralCommand.collapsed", "ALWAYS IN VIEW", "jn-console-float", "toggle_text_link", "jarvisNeuralCommandSurface", "aRot", "aAngular", "angular_velocity", "globe", "buildAmbientField", "visualNodes", "restDensity", "stiffness", "viscosity", "jn-core-structure"):
             self.assertIn(token, script)
 
     def test_build_2_uses_persistent_camera_facing_command_surface(self):
         from quality_of_life.neural_mesh import NEURAL_MESH_BUILTIN
-        self.assertEqual(NEURAL_MESH_BUILTIN["version"], "0.5.0")
+        self.assertEqual(NEURAL_MESH_BUILTIN["version"], "0.6.0")
         self.assertTrue(NEURAL_MESH_BUILTIN["protected"])
         markup = NEURAL_MESH_BUILTIN["markup"]
         css = NEURAL_MESH_BUILTIN["css"]
@@ -40,7 +40,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
         ):
             self.assertIn(token, markup)
         self.assertIn('e.key==="Enter"&&!e.shiftKey', script)
-        for token in ("transform-style:preserve-3d", "translate3d", "pointer-events:auto", "will-change:transform"):
+        for token in ("transform-style:preserve-3d", "translate3d", "pointer-events:auto", "resize:both"):
             self.assertIn(token, css)
         for token in ("jarvis.core", "camera()", "worldToScreen", "clampNumber", "F13", "setConsoleCollapsed"):
             self.assertIn(token, script)
@@ -51,6 +51,8 @@ class NeuralMeshBuildTests(unittest.TestCase):
         self.assertIn("observation.enabled", script)
         self.assertIn("entity.created", script)
         self.assertIn("entity.retired", script)
+        self.assertNotIn("S.localOffsets.delete(id)", script)
+        self.assertIn("SPH-style", NEURAL_MESH_BUILTIN["description"] if "SPH-style" in NEURAL_MESH_BUILTIN["description"] else "SPH-style")
 
     def test_embedded_script_compiles_as_ui_build_script(self):
         import shutil
