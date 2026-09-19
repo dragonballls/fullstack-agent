@@ -29,7 +29,7 @@ class NeuralMeshBuildTests(unittest.TestCase):
             "aRot", "aAngular", "angular_velocity", "globe", "buildAmbientField",
             "visualNodes", "restDensity", "stiffness", "viscosity", "jn-core-structure",
             "function buildMicroField", "function renderPointField", "microCount:64000",
-            "screen-space LOD", "lodDetail", "depthVisible", "proximityShapeCode",
+            "projected>=7||d<18?3", "lodDetail", "depthVisible", "proximityShapeCode",
             "drawArrays(gl.POINTS", "Math.min(5200,7000-list.length)",
             "S.lodStats.culled", "vLocal.x-vLocal.z", "26000",
             "microPosBuf", "microSizeBuf", "microEnergyBuf", "microPhaseBuf",
