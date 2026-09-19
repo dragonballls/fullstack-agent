@@ -83,8 +83,18 @@ def globe_payload(runtime: Any) -> dict[str, object]:
             label, point[0], point[1], "saved", True,
             raw.get("accuracy_m"), str(raw.get("source", ""))[:80],
         ))
+    provider_status: list[dict[str, object]] = []
+    try:
+        eye = runtime._tool("gods_eye")
+        for kind in ("device", "phone", "family"):
+            provider_status.append(eye.provider_registry.status(kind).as_dict())
+    except Exception:
+        provider_status = []
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "authorized_current": bool(current.get("permitted", False) and _point(current) is not None),
+        "current": current,
+        "provider_status": provider_status,
+        "locator_count": len(locators),
         "locators": [item.as_dict() for item in locators],
     }
