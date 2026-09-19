@@ -445,7 +445,7 @@ TEXT_INPUT_SCRIPT = r'''
     #jarvis-text-status{height:16px;margin-top:5px;font-size:8px;line-height:1.4;letter-spacing:.10em;color:#668ba5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #jarvis-text-status.jarvis-error{color:#ff8fa8}
     #jarvis-text-hint{font-size:7px;letter-spacing:.12em;color:#466a82;user-select:none}
-    #jarvis-text-shell.history-collapsed{height:48px;min-height:48px}
+    #jarvis-text-shell.history-collapsed{height:48px!important;min-height:48px!important;resize:none}
     #jarvis-text-shell.history-collapsed #jarvis-text-history,#jarvis-text-shell.history-collapsed #jarvis-text-row,#jarvis-text-shell.history-collapsed #jarvis-text-status,#jarvis-text-shell.history-collapsed #jarvis-text-hint{display:none}
     #jarvis-text-shell[data-theme="neural"]{--jarvis-text-accent:rgba(76,199,255,.46);--jarvis-text-glow:rgba(39,151,239,.26);--jarvis-text-label-color:#d0f3ff}
     #jarvis-text-shell[data-theme="classic"]{--jarvis-text-accent:rgba(123,218,177,.40);--jarvis-text-glow:rgba(44,177,127,.18);--jarvis-text-label-color:#d4f5e4}
@@ -476,6 +476,7 @@ TEXT_INPUT_SCRIPT = r'''
   let dragState = null;
 
   function persistGeometry(){
+    if(historyCollapsed)return;
     try{
       const rect=shell.getBoundingClientRect();
       localStorage.setItem("jarvis.textSurface.geometry",JSON.stringify({x:Math.round(rect.left),y:Math.round(rect.top),width:Math.round(rect.width),height:Math.round(rect.height)}));
@@ -550,7 +551,7 @@ TEXT_INPUT_SCRIPT = r'''
         status.textContent="AWAITING CONFIRMATION";
         const accepted=window.confirm(result.text||"Jarvis requires confirmation for this action.");
         if(accepted)result=await window.pywebview.api.submit_text(textValue,true);
-        else{addMessage("jarvis","Command cancelled.");result=null;}
+        else{addMessage("jarvis","Command cancelled.");status.textContent="CANCELLED";result=null;}
       }
       if(result){
         if(result.ok){
