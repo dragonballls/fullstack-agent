@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import time
 
 
 class NeuralDiscovery:
@@ -16,6 +17,7 @@ class NeuralDiscovery:
         self._seen_pages: set[str] = set()
         self._seen_accounts: set[str] = set()
         self._seen_services: set[str] = set()
+        self._last_net: tuple[int, int, float] | None = None
 
     @staticmethod
     def _app_id(app: Any) -> str:
@@ -40,10 +42,12 @@ class NeuralDiscovery:
                 status="installed",
                 lifecycle=LifecycleState.MATURE,
                 energy=0.35, scale=0.9,
+                parent_id=subsystem,
                 metadata={
                     "publisher": str(getattr(app, "publisher", ""))[:200],
                     "version": str(getattr(app, "version", ""))[:80],
                     "inventory_source": str(getattr(app, "source", ""))[:80],
+                    "auto_layout": True,
                 },
             )
             folded = str(getattr(app, "name", "")).casefold()
@@ -77,7 +81,8 @@ class NeuralDiscovery:
                 status="running",
                 lifecycle=LifecycleState.ACTIVE,
                 energy=0.25, scale=0.6,
-                metadata={"pid": int(proc.pid), "executable": str(proc.executable or "")[:500]},
+                parent_id="jarvis.system",
+                metadata={"pid": int(proc.pid), "executable": str(proc.executable or "")[:500], "auto_layout": True},
             )
             try:
                 self.world.relate("jarvis.system", node.id, "runs_process", 0.3)
@@ -182,7 +187,8 @@ class NeuralDiscovery:
                 str(getattr(account, "label", account_id))[:180],
                 source="accounts", status=str(getattr(account, "state", "authorized"))[:80],
                 lifecycle=LifecycleState.MATURE, energy=0.4, scale=0.8,
-                metadata={"provider": provider[:80], "authorized": True},
+                parent_id="jarvis.core",
+                metadata={"provider": provider[:80], "authorized": True, "auto_layout": True},
             )
             try:
                 self.world.relate("jarvis.core", node.id, "authorized_account", 0.45)
@@ -194,6 +200,63 @@ class NeuralDiscovery:
         self._seen_accounts = seen
         return count
 
+    def sync_telemetry(self) -> int:
+        from pathlib import Path
+        from .neural_world import EntityKind, LifecycleState
+        try:
+            import psutil
+        except ImportError:
+            return 0
+        now = time.monotonic()
+        cpu = float(psutil.cpu_percent(interval=None))
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        try:
+            root = Path.home().anchor or str(Path.home())
+            disk = psutil.disk_usage(root)
+        except Exception:
+            disk = None
+        sent_rate = recv_rate = 0.0
+        try:
+            net = psutil.net_io_counters()
+            current_sent, current_recv = int(net.bytes_sent), int(net.bytes_recv)
+            if self._last_net is not None:
+                old_sent, old_recv, old_time = self._last_net
+                elapsed = max(0.25, now - old_time)
+                sent_rate = max(0.0, (current_sent-old_sent)/elapsed)
+                recv_rate = max(0.0, (current_recv-old_recv)/elapsed)
+            self._last_net = (current_sent, current_recv, now)
+        except Exception:
+            pass
+        metrics = (
+            ("telemetry:cpu", "CPU Utilization", cpu, "percent"),
+            ("telemetry:memory", "Memory Utilization", float(memory.percent), "percent"),
+            ("telemetry:swap", "Swap Utilization", float(swap.percent), "percent"),
+            ("telemetry:disk", "System Disk Utilization", float(disk.percent) if disk else 0.0, "percent"),
+            ("telemetry:network-up", "Network Upload", sent_rate, "bytes_per_second"),
+            ("telemetry:network-down", "Network Download", recv_rate, "bytes_per_second"),
+        )
+        for entity_id, label, value, metric in metrics:
+            if metric == "bytes_per_second":
+                status = f"{value/1_000_000:.2f} MB/s"
+                energy = max(0.08, min(0.98, value/25_000_000))
+            else:
+                status = f"{value:.1f}%"
+                energy = max(0.08, min(0.98, value/100.0))
+            self.world.upsert(
+                entity_id,
+                EntityKind.PERFORMANCE,
+                label,
+                source="system.telemetry",
+                status=status,
+                lifecycle=LifecycleState.ACTIVE,
+                energy=energy,
+                scale=0.82,
+                parent_id="jarvis.system",
+                metadata={"metric": metric, "value": value, "read_only": True, "auto_layout": True},
+            )
+        return len(metrics)
+
     def sync_extended(self) -> dict[str, int]:
         return {
             "applications": self.sync_applications(),
@@ -201,6 +264,7 @@ class NeuralDiscovery:
             "browser_pages": self.sync_browser_pages(),
             "accounts": self.sync_accounts(),
             "services": self.sync_services(),
+            "telemetry": self.sync_telemetry(),
         }
 
     def sync(self) -> dict[str, int]:
@@ -208,4 +272,5 @@ class NeuralDiscovery:
         return {
             "applications": result["applications"],
             "processes": result["processes"],
+            "telemetry": result.get("telemetry", 0),
         }
