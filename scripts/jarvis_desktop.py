@@ -23,6 +23,7 @@ from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.omniroute_setup import OmniRouteProvisioner
 from quality_of_life.elevenlabs_voice import ElevenLabsMouth
 from quality_of_life.runtime import JarvisRuntime
+from quality_of_life.router import CloudModelRouter
 from quality_of_life.self_update import SelfUpdateError, build_windows_handoff_script, fetch_latest_release, is_update_available, stage_update
 
 from scripts.fullstack_assets import embedded_path
@@ -1389,6 +1390,22 @@ class FullstackJarvisHost:
         LOGGER.info("native Jarvis GUI event loop exited")
 
 
+def _run_prism_live_smoke() -> None:
+    """Exercise the real packaged Jarvis cloud-router path against remote Prism."""
+    enabled = os.environ.get("JARVIS_PRISM_LIVE_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return
+    router = CloudModelRouter((CloudModelRouter.prism_target(),))
+    text, provider = router.complete([
+        {"role": "user", "content": "Reply with exactly: prism-ready"},
+    ])
+    if provider != "prism-astra":
+        raise RuntimeError(f"live Prism smoke routed to unexpected provider: {provider}")
+    if str(text).strip().lower() != "prism-ready":
+        raise RuntimeError("live Prism smoke returned an unexpected response")
+    LOGGER.info("live packaged Prism remote smoke passed; provider=%s", provider)
+
+
 def main() -> int:
     visualizer = VisualizerAdapter()
     host: FullstackJarvisHost | None = None
@@ -1397,6 +1414,9 @@ def main() -> int:
         controller = JarvisDesktopController()
         host = FullstackJarvisHost(controller, visualizer=visualizer)
         host.start()
+        _run_prism_live_smoke()
+        if os.environ.get("JARVIS_PRISM_LIVE_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}:
+            return 0
         host.run_window()
         return 0
     except Exception as exc:
