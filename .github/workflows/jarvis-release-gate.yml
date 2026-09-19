@@ -140,6 +140,14 @@ jobs:
           if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs')) { throw 'Embedded OmniRoute CLI is missing' }
           & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
           if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute CLI did not start' }
+          $env:DATA_DIR = Join-Path $env:RUNNER_TEMP 'jarvis-omniroute-credential-smoke'
+          if (Test-Path -LiteralPath $env:DATA_DIR) { Remove-Item -LiteralPath $env:DATA_DIR -Recurse -Force }
+          $dummy = 'ci-redacted-credential-12345678'
+          $dummy | & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --non-interactive providers add openai --credential-stdin *> (Join-Path $env:RUNNER_TEMP 'omniroute-add.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute credential-stdin provider add failed' }
+          $listed = & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --non-interactive providers list --json
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute provider listing failed' }
+          if ($listed -match [regex]::Escape($dummy)) { throw 'Embedded OmniRoute provider listing exposed the credential' }
 
       - name: Verify PyInstaller toolchain version
         shell: pwsh
