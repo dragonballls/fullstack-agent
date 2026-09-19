@@ -73,6 +73,20 @@ class FloatingCommandBarContractTests(unittest.TestCase):
         floating.destroy.assert_called_once_with()
         self.assertIsNone(host._floating_window)
 
+    def test_collapsing_surface_does_not_overwrite_expanded_geometry(self):
+        for token in (
+            "#jarvis-text-shell.history-collapsed{height:48px!important;min-height:48px!important;resize:none}",
+            "function persistGeometry(){",
+            "if(historyCollapsed)return;",
+        ):
+            self.assertIn(token, self.desktop)
+
+    def test_confirmation_cancel_updates_status(self):
+        self.assertIn('status.textContent="CANCELLED"', self.desktop)
+
+    def test_command_surface_retries_bridge_readiness(self):
+        self.assertIn("const readyPoll=window.setInterval(function(){", self.desktop)
+
     def test_main_text_surface_is_resizable_and_keeps_response_transcript(self):
         for token in (
             'resize:both',
