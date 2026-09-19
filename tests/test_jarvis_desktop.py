@@ -221,18 +221,22 @@ class JarvisDesktopTests(unittest.TestCase):
         import re
         import subprocess
         import tempfile
-        for html, label in (
-            (jarvis_desktop.TEXT_INPUT_SCRIPT, "text-input"),
-            (jarvis_desktop.OMNIROUTE_SETTINGS_HTML, "settings"),
-        ):
-            scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.DOTALL | re.IGNORECASE)
+        cases = [
+            (jarvis_desktop.TEXT_INPUT_SCRIPT, "text-input", False),
+            (jarvis_desktop.OMNIROUTE_SETTINGS_HTML, "settings", True),
+        ]
+        for source, label, is_html in cases:
+            scripts = (
+                re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", source, re.DOTALL | re.IGNORECASE)
+                if is_html else [source]
+            )
             self.assertTrue(scripts, label)
-            with tempfile.NamedTemporaryFile("w",suffix=".js",encoding="utf-8",delete=False) as handle:
+            with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as handle:
                 handle.write("\n".join(scripts))
                 path = handle.name
             try:
-                result = subprocess.run([node,"--check",path],capture_output=True,text=True,timeout=20)
-                self.assertEqual(result.returncode,0,result.stderr or result.stdout)
+                result = subprocess.run([node, "--check", path], capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
             finally:
                 __import__("os").unlink(path)
 
