@@ -176,7 +176,7 @@ if(!gl){ui.querySelector("#jn-status").textContent="NEURAL MESH · WEBGL2 UNAVAI
 
 const S={
   nodes:[],links:[],windows:[],selected:null,dragNode:null,orbit:false,pointerMoved:false,tracePath:[],traceIndex:0,traceTimer:null,follow:false,minimap:false,connected:"",followTask:null,
-  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthSun:[-.55,.68,.75],
+  localOffsets:new Map(),velocities:new Map(),births:new Map(),retirements:new Map(),particles:[],ambientNodes:[],eventSequence:0,dragLastTime:0,dragLastDelta:[0,0,0],earthSelected:null,earthFollow:false,earthSun:[-.55,.68,.75],
   lastSnapshot:0,lastEvents:0,lastWindows:0,lastPoll:0,lastAdvanced:0,lastNativeVisibility:0,nativeVisibilityMs:500,observationSequence:0,lastHandPoll:0,lastLayoutPoll:0,snapshotMs:2600,eventsMs:320,windowsMs:2200,advancedPollMs:720,
   quality:"maximum",mode:"foreground",view:"network",surfaceMode:"3d",frozen:false,giant:false,showWindows:true,
   earthData:{locators:[]},earthLastPoll:0,earthYaw:0,earthPitch:-0.16,earthDistance:4.6,observation:{enabled:false,focus:"auto"},hand:{enabled:false,sample:null},handWindow:null,lastHandPoll:0,handPollMs:90,handPinching:false,handNode:null,handX:0,handY:0,
@@ -460,6 +460,8 @@ function renderEarthSensor(){
   if(!states.length){const x=document.createElement("div");x.className="jn-earth-feed";x.textContent="LOCATION FEEDS · UNAVAILABLE";feeds.appendChild(x);return;}
   states.slice(0,3).forEach(function(state){const x=document.createElement("div");x.className="jn-earth-feed "+(state.live?"live":state.authorized?"auth":"");x.textContent=String(state.kind||"feed").toUpperCase()+" · "+(state.live?"LIVE":state.authorized?"AUTH":"OFF");feeds.appendChild(x);});
 }
+function earthLocatorById(id){const target=String(id||"");return (Array.isArray(S.earthData.locators)?S.earthData.locators:[]).find(function(item){return String(item.id||item.label||"")===target})||null;}
+function smoothEarthFollow(){if(!S.earthFollow||!S.earthSelected)return;const item=earthLocatorById(S.earthSelected);if(!item)return;const lat=(Number(item.latitude)||0)*Math.PI/180,lon=(Number(item.longitude)||0)*Math.PI/180;const targetYaw=lon-Math.PI*.5,targetPitch=lat;let dyaw=targetYaw-S.earthYaw;while(dyaw>Math.PI)dyaw-=Math.PI*2;while(dyaw<-Math.PI)dyaw+=Math.PI*2;S.earthYaw+=dyaw*.075;S.earthPitch+=(targetPitch-S.earthPitch)*.075;S.earthDistance+=(6.8-S.earthDistance)*.045;}
 function renderEarth(now){
   const oldYaw=S.yaw,oldPitch=S.pitch,oldDistance=S.distance,oldTarget=S.target.slice();
   S.yaw=S.earthYaw;S.pitch=S.earthPitch;S.distance=S.earthDistance;S.target=[0,0,0];
@@ -917,7 +919,7 @@ window.jarvisNeuralCommandSurface={
   focus:function(){const surface=window.jarvisTextInput;if(surface&&surface.focus)surface.focus();}
 };
 canvas.addEventListener("pointerdown",function(e){
-  if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){S.earthSelected=String(locator.id||locator.label||"");ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
+  if(S.view==="earth"){const locator=pickEarthLocator(e.clientX,e.clientY);if(locator){S.earthSelected=String(locator.id||locator.label||"");S.earthFollow=true;ui.querySelector("#jn-follow").textContent="FOLLOWING";ui.querySelector("#jn-name").textContent=String(locator.label||"Locator");ui.querySelector("#jn-meta").textContent="GOD'S EYE · "+String(locator.kind||"location")+" · "+String(locator.source||"authorized");ui.querySelector("#jn-inspector").classList.add("visible");ui.querySelector("#jn-focus").textContent="LOCATOR · "+String(locator.label||"");}S.orbit=true;S.lastX=e.clientX;S.lastY=e.clientY;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);return;}
   const n=pick(e.clientX,e.clientY);S.lastX=e.clientX;S.lastY=e.clientY;S.pointerMoved=false;S.dragLastTime=performance.now();S.dragLastDelta=[0,0,0];
   if(n){S.dragNode=n.id;setSelected(n.id);canvas.setPointerCapture(e.pointerId);return;}
   S.orbit=true;canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId);
@@ -945,7 +947,7 @@ ui.querySelector("#jn-follow").addEventListener("click",function(){S.follow=!S.f
 ui.querySelector("#jn-map").addEventListener("click",function(){S.minimap=!S.minimap;ui.querySelector("#jn-map").textContent=S.minimap?"MAP ON":"MAP";renderMinimap();});
 ui.querySelector("#jn-trace").addEventListener("click",traceSelected);
 ui.querySelector("#jn-home").addEventListener("click",function(){S.view="network";S.target=[0,0,0];S.distance=20;S.yaw=.2;S.pitch=-.12;ui.querySelector("#jn-title").textContent="JARVIS"});
-ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";S.earthSelected=null;if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
+ui.querySelector("#jn-earth").addEventListener("click",function(){S.view=S.view==="earth"?"network":"earth";S.earthSelected=null;S.earthFollow=false;ui.querySelector("#jn-follow").textContent="FOLLOW";if(S.view==="earth"){S.target=[0,0,0];pollEarth();}});
 ui.querySelector("#jn-mode").addEventListener("click",function(){setSurfaceMode(S.surfaceMode==="3d"?"2d":"3d")});
 ui.querySelector("#jn-windows").addEventListener("click",function(){S.showWindows=!S.showWindows;ui.querySelector("#jn-windows").textContent=S.showWindows?"WINDOWS":"WINDOWS OFF";renderSpatialWindows()});
 ui.querySelector("#jn-giant").addEventListener("click",function(){S.giant=!S.giant;ui.querySelector("#jn-giant").textContent=S.giant?"NORMAL":"GIANT";renderSpatialWindows()});
