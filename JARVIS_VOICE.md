@@ -42,7 +42,7 @@ An open-microphone mode is available through the supported Backtalk configuratio
 
 **ElevenLabs is the Jarvis speech-output engine.** Backtalk remains the microphone/speech-input and push-to-talk layer; it is no longer used as the desktop speech mouth. The Jarvis voice bridge injects the ElevenLabs mouth directly, so there is one outbound speech path and one deduplication boundary.
 
-The combined AI Provider / Voice Settings surface is available from the shared UI layer used by every UI build. Paste the ElevenLabs API key once, choose the configured/default voice, and use **SAVE & TEST VOICE**. The secret is stored through the Windows credential store via `keyring`; the JSON voice settings contain only non-secret voice/model identifiers.
+The supported `ELEVENLABS_API_KEY` environment name may be used by local integration tooling, but API keys must never be stored in tracked files or committed configuration.\n\nThe combined AI Provider / Voice Settings surface is available from the shared UI layer used by every UI build. Paste the ElevenLabs API key once, choose the configured/default voice, and use **SAVE & TEST VOICE**. The secret is stored through the Windows credential store via `keyring`; the JSON voice settings contain only non-secret voice/model identifiers.
 
 The default model is **Eleven v3 Conversational**, selected for expressive realtime conversation. Flash v2.5 remains available when lower latency is preferred. The voice selector can load the voices available to the configured ElevenLabs account. Jarvis's response model is separately guided toward a calm, precise, discreetly formal dialogue style before speech synthesis.
 
