@@ -313,8 +313,6 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             raise SelfCodingError("max_passes must be at least 1.")
         if self.config.publish_main:
             raise SelfCodingError("Direct main publication is disabled; preview the change and explicitly approve its checkpoint.")
-        if self.config.publish_main and self.config.push_branch:
-            raise SelfCodingError("publish_main and push_branch cannot be combined")
 
         self.validate_repo()
         branch, baseline, base_branch = self._new_branch(goal)
@@ -421,6 +419,8 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             self._save_checkpoint(checkpoint)
             raise SelfCodingError(switched.stderr.strip() or "Unable to switch to main for promotion.")
 
+        pushed_remote = False
+        promoted = ""
         try:
             merged = self._git("merge", "--ff-only", checkpoint.branch)
             if merged.returncode != 0:
@@ -430,10 +430,22 @@ Implement the goal directly, then leave the repository in a clean, testable stat
                 raise SelfCodingError("Unable to record the promoted main commit.")
             promoted = promoted_sha.stdout.strip()
 
+            promoting = _Checkpoint(
+                checkpoint_id=checkpoint.checkpoint_id,
+                branch=checkpoint.branch,
+                baseline=checkpoint.baseline,
+                base_branch=checkpoint.base_branch,
+                commits=checkpoint.commits,
+                created_at=checkpoint.created_at,
+                state="promoting",
+                promoted_sha=promoted,
+            )
+            self._save_checkpoint(promoting)
+
             pushed = self._git("push", "origin", "main")
             if pushed.returncode != 0:
-                self._git("reset", "--hard", checkpoint.baseline)
                 raise SelfCodingError(pushed.stderr.strip() or "Unable to publish the approved checkpoint to main.")
+            pushed_remote = True
 
             approved = _Checkpoint(
                 checkpoint_id=checkpoint.checkpoint_id,
@@ -447,13 +459,18 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             )
             self._save_checkpoint(approved)
             return promoted
-        except Exception:
-            self._git("reset", "--hard", checkpoint.baseline)
-            self._save_checkpoint(checkpoint)
-            if previous_branch != "main":
-                restored = self._git("switch", previous_branch)
-                if restored.returncode != 0:
-                    raise SelfCodingError("Promotion failed and the previous branch could not be restored.")
+        except Exception as exc:
+            if not pushed_remote:
+                self._git("reset", "--hard", checkpoint.baseline)
+                self._save_checkpoint(checkpoint)
+                if previous_branch != "main":
+                    restored = self._git("switch", previous_branch)
+                    if restored.returncode != 0:
+                        raise SelfCodingError("Promotion failed and the previous branch could not be restored.")
+            else:
+                raise SelfCodingError(
+                    f"Checkpoint {checkpoint_id} was promoted to main at {promoted}, but checkpoint metadata could not be finalized; it remains in a promoting state."
+                ) from exc
             raise
 
     def undo_checkpoint(self, checkpoint_id: str) -> str:
@@ -498,6 +515,7 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             raise SelfCodingError(switched.stderr.strip() or "Unable to switch to main for undo.")
 
         undo_commits: list[str] = []
+        pushed_remote = False
         try:
             for commit in reversed(checkpoint.commits):
                 reverted = self._git("revert", "--no-edit", commit)
@@ -509,10 +527,23 @@ Implement the goal directly, then leave the repository in a clean, testable stat
                     raise SelfCodingError("Unable to record an undo commit.")
                 undo_commits.append(head.stdout.strip())
 
+            undoing = _Checkpoint(
+                checkpoint_id=checkpoint.checkpoint_id,
+                branch=checkpoint.branch,
+                baseline=checkpoint.baseline,
+                base_branch=checkpoint.base_branch,
+                commits=checkpoint.commits,
+                created_at=checkpoint.created_at,
+                state="undoing",
+                promoted_sha=checkpoint.promoted_sha,
+                undo_commits=tuple(undo_commits),
+            )
+            self._save_checkpoint(undoing)
+
             pushed = self._git("push", "origin", "main")
             if pushed.returncode != 0:
-                self._git("reset", "--hard", checkpoint.promoted_sha)
                 raise SelfCodingError(pushed.stderr.strip() or "Unable to publish checkpoint undo to main.")
+            pushed_remote = True
 
             undone = _Checkpoint(
                 checkpoint_id=checkpoint.checkpoint_id,
@@ -527,8 +558,24 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             )
             self._save_checkpoint(undone)
             return "undone"
-        except Exception:
-            self._git("reset", "--hard", checkpoint.promoted_sha)
+        except Exception as exc:
+            if not pushed_remote:
+                self._git("reset", "--hard", checkpoint.promoted_sha)
+                approved = _Checkpoint(
+                    checkpoint_id=checkpoint.checkpoint_id,
+                    branch=checkpoint.branch,
+                    baseline=checkpoint.baseline,
+                    base_branch=checkpoint.base_branch,
+                    commits=checkpoint.commits,
+                    created_at=checkpoint.created_at,
+                    state="approved",
+                    promoted_sha=checkpoint.promoted_sha,
+                )
+                self._save_checkpoint(approved)
+            else:
+                raise SelfCodingError(
+                    f"Checkpoint {checkpoint_id} undo reached main, but checkpoint metadata could not be finalized; it remains in an undoing state."
+                ) from exc
             raise
 
     def _publish_main(self, baseline: str, branch: str) -> None:
