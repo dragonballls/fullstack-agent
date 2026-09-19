@@ -107,7 +107,7 @@ class NeuralDiscovery:
                 status="open", lifecycle=LifecycleState.ACTIVE,
                 energy=0.5, scale=0.75,
                 parent_id="jarvis.browser",
-                metadata={"url": page_url[:1000], "index": index},
+                metadata={"url": page_url[:1000], "index": index, "auto_layout": True},
             )
             try:
                 self.world.relate("jarvis.browser", node.id, "open_page", 0.65)
