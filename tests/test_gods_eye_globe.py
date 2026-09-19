@@ -63,7 +63,7 @@ class GlobeTests(unittest.TestCase):
 
         payload = globe_payload(Runtime())
 
-        self.assertEqual(payload["sensor_state"], "feeds-unavailable-or-unauthorized")
+        self.assertEqual(payload["sensor_state"], "sensor-status-unavailable")
         self.assertEqual(payload["current_source"], "windows-location")
         self.assertIsNone(payload["current_accuracy_m"])
 
