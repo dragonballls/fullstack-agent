@@ -11,6 +11,7 @@ from quality_of_life.elevenlabs_voice import (
     DEFAULT_MODEL_ID,
     DEFAULT_VOICE_ID,
     EXPRESSIVE_MODEL_ID,
+    LOW_LATENCY_MODEL_ID,
     ElevenLabsClient,
     ElevenLabsMouth,
     decorate_for_jarvis,
@@ -19,7 +20,8 @@ from quality_of_life.elevenlabs_voice import (
 
 class ElevenLabsVoiceTests(unittest.TestCase):
     def test_defaults_target_low_latency_conversation(self):
-        self.assertEqual(DEFAULT_MODEL_ID, "eleven_flash_v2_5")
+        self.assertEqual(DEFAULT_MODEL_ID, "eleven_v3_conversational")
+        self.assertEqual(LOW_LATENCY_MODEL_ID, "eleven_flash_v2_5")
         self.assertTrue(DEFAULT_VOICE_ID)
 
     def test_v3_delivery_guidance_is_sparse_and_preserves_dialogue(self):
