@@ -193,6 +193,8 @@ class UIBuildStore:
             raise ValueError("quality_level must be an integer") from exc
         if quality_level not in UI_QUALITY_LADDER:
             raise ValueError(f"quality_level must be between {min(UI_QUALITY_LADDER)} and {max(UI_QUALITY_LADDER)}")
+        if quality_level < UI_QUALITY_FLOOR_LEVEL:
+            raise ValueError(f"UI build quality cannot be below the verified floor Q{UI_QUALITY_FLOOR_LEVEL}")
         total_asset_bytes = sum(len(value.encode("utf-8")) for value in (css, markup, script))
         if total_asset_bytes > UI_MAX_BUILD_BYTES:
             raise ValueError(f"UI build assets exceed {UI_MAX_BUILD_BYTES} bytes")
@@ -317,7 +319,10 @@ class UIBuildStore:
             state = self._state()
             active_id = str(state.get("active", DEFAULT_BUILD_ID))
             try:
-                return self._read_build(active_id)
+                active_build = self._read_build(active_id)
+                if active_build.quality_level < UI_QUALITY_FLOOR_LEVEL:
+                    raise ValueError("active UI build is below the verified quality floor")
+                return active_build
             except (KeyError, ValueError):
                 self._write_state(DEFAULT_BUILD_ID, [])
                 return self._read_build(DEFAULT_BUILD_ID)
@@ -379,6 +384,8 @@ class UIBuildStore:
                 try:
                     target = self.get(candidate)
                 except (KeyError, ValueError):
+                    continue
+                if target.quality_level < UI_QUALITY_FLOOR_LEVEL:
                     continue
                 self._write_state(target.id, history)
                 return target
