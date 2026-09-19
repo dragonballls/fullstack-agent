@@ -163,19 +163,21 @@ class AgentOrchestratorTests(unittest.TestCase):
 
     def test_coding_handoff_requires_confirmation(self):
         router = FakeRouter()
-        runtime = FakeRuntime(FakeResult("coding branch ready"))
+        runtime = FakeRuntime(FakeResult("coding checkpoint ready"))
         result = AgentOrchestrator(router, runtime).execute("implement the fix and run the tests")
         self.assertTrue(result.needs_confirmation)
         self.assertEqual(runtime.dispatch_calls, [])
 
     def test_confirmed_coding_handoff_uses_guarded_self_coding_action(self):
         router = FakeRouter()
-        runtime = FakeRuntime(FakeResult("agent/self-code/verified"))
+        runtime = FakeRuntime(FakeResult("agent/checkpoint/verified-123"))
         result = AgentOrchestrator(router, runtime).execute("implement the fix and run the tests", confirmed=True)
         self.assertTrue(runtime.dispatch_calls)
         self.assertEqual(runtime.dispatch_calls[-1][0], Capability.REPO_WRITE)
         self.assertEqual(runtime.dispatch_calls[-1][1], "self_coding.run")
         self.assertTrue(result.verified)
+        self.assertIn("checkpoint", result.text.casefold())
+        self.assertIn("explicit approval", result.text.casefold())
 
     def test_stream_starts_with_local_ack_and_ends_with_result(self):
         events = list(AgentOrchestrator(FakeRouter(), FakeRuntime()).execute_stream("diagnose my PC"))
