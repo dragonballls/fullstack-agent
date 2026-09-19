@@ -12,7 +12,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run guarded cloud-agent coding with reversible preview checkpoints.")
     parser.add_argument("goal", nargs="?", help="What the coding agent should improve")
     parser.add_argument("--push", action="store_true", help="Push the verified preview branch to origin")
-    parser.add_argument("--publish-main", action="store_true", help="Explicitly publish a verified coding pass directly to main (legacy explicit mode)")
+    parser.add_argument("--publish-main", action="store_true", help="Deprecated compatibility flag; direct main publication is disabled")
     parser.add_argument("--approve", action="store_true", help="Explicitly approve the active preview and promote it to main")
     parser.add_argument("--undo", action="store_true", help="Undo the active preview or latest published self-coding checkpoint")
     parser.add_argument("--no-push", action="store_true", help="Do not push main when approving or undoing")
