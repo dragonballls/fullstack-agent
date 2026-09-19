@@ -56,10 +56,12 @@ class OmniRouteLifecycle:
         if not argv:
             raise RuntimeError("OmniRoute startup command is empty")
         if argv[0] == "omniroute":
-            try:
-                return OmniRouteProvisioner(self.base_url).command_argv(for_start=True)
-            except RuntimeError:
-                pass
+            resolved = shutil.which(argv[0])
+            if resolved:
+                argv[0] = resolved
+            if "--no-open" not in argv:
+                argv.append("--no-open")
+            return argv
         resolved = shutil.which(argv[0])
         if resolved:
             argv[0] = resolved
