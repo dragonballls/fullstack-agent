@@ -839,10 +839,10 @@ class FullstackJarvisHost:
         if self.started:
             return
         self.visualizer.start()
-        warm_enabled = (
-            bool(getattr(sys, "frozen", False))
-            and os.environ.get("JARVIS_OMNIROUTE_WARMUP", "1").strip().lower() not in {"0", "false", "no", "off"}
-            and os.environ.get("JARVIS_SMOKE", "0").strip().lower() not in {"1", "true", "yes", "on"}
+        warm_setting = os.environ.get("JARVIS_OMNIROUTE_WARMUP", "").strip().lower()
+        smoke = os.environ.get("JARVIS_SMOKE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        warm_enabled = bool(getattr(sys, "frozen", False)) and warm_setting not in {"0", "false", "no", "off"} and (
+            warm_setting in {"1", "true", "yes", "on"} or not smoke
         )
         if warm_enabled:
             self._omniroute_warmup_thread = threading.Thread(target=self._warm_omniroute, name="jarvis-omniroute-warmup", daemon=True)
