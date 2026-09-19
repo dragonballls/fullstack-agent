@@ -289,19 +289,22 @@ const earthIndexCount=buildEarthSphere();
 
 function shapeCode(node){const name=String(node.shape&&node.shape.name||"droplet").toLowerCase();const codes={sphere:2,globe:2,planet:2,icosphere:2,capsule:3,crystal:4,torus:5,ring:6,star:7,orbital:8,core:9,heart:10,gear:11,spiral:12,pyramid:13,wave:14,dna:15,molecule:16,arrow:17,cone:13,cylinder:4,disk:6,octahedron:4};if(codes[name]!==undefined)return codes[name];let hash=2166136261;for(let i=0;i<name.length;i++)hash=Math.imul(hash^name.charCodeAt(i),16777619);return 18+(hash>>>0)%46;}
 function nodePosition(n){const o=S.localOffsets.get(n.id),b=o?[n.position[0]+o[0],n.position[1]+o[1],n.position[2]+o[2]]:n.position,p=S.advanced&&S.advanced.physics||{},wave=Number(p.waves&&p.waves[0]&&p.waves[0].amplitude)||0,ripple=Number(p.ripples&&p.ripples[0]&&p.ripples[0].strength)||0,t=performance.now()*.001+Number(n.id.length||0);return[b[0]+Math.sin(t+b[2])*wave*.32,b[1]+Math.cos(t*.83+b[0])*wave*.22,b[2]+Math.sin(t*.71+b[1])*ripple*.16];}
+function hashUnit(value){let h=2166136261;const s=String(value);for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return((h>>>0)%100000)/100000;}
+function buildAmbientField(realNodes){
+  const list=Array.isArray(realNodes)?realNodes:[],desired=Math.max(650,Math.min(1800,2100-list.length));
+  if(S.ambientNodes.length===desired)return;
+  const field=[],seeds=list.slice(0,Math.min(list.length,120));
+  for(let i=0;i<desired;i++){
+    const seed=seeds.length?seeds[i%seeds.length]:null,h=hashUnit(String(i)+"|"+(seed&&seed.id||"field")),h2=hashUnit("y|"+i+"|"+(seed&&seed.id||"field")),h3=hashUnit("z|"+i+"|"+(seed&&seed.label||"field")),radius=4.5+h*15.5,theta=h2*Math.PI*2,phi=(h3-.5)*1.0,anchor=seed?seed.position:[0,0,0];
+    field.push({id:"visual:ambient:"+i,label:"Ambient neural field "+(i+1),kind:"temporary",source:"visual-field",status:"idle",lifecycle:"dormant",position:[Math.cos(theta)*Math.cos(phi)*radius+anchor[0]*.08,Math.sin(phi)*radius*.58+anchor[1]*.06,Math.sin(theta)*Math.cos(phi)*radius+anchor[2]*.08],scale:.34+.34*hashUnit("s|"+i),energy:.10+.35*hashUnit("e|"+i),visible:true,persistent:false,parent_id:null,shape:{name:"droplet"},metadata:{visual_only:true,ambient:true,seed_index:i},created_at:"",updated_at:""});
+  }
+  S.ambientNodes=field;
+}
+function visualNodes(){return S.nodes.concat(S.ambientNodes);}
 function activeNodes(cam){
-  const max=S.mode==="background"?320:S.quality==="performance"?720:1500;
-  const c=cam||camera();
-  const visible=S.nodes.filter(function(n){
-    const p=worldToScreen(nodePosition(n),c);
-    return p!==null&&p[0]>-140&&p[0]<canvas.clientWidth+140&&p[1]>-140&&p[1]<canvas.clientHeight+140;
-  });
-  return visible.slice().sort(function(a,b){
-    if(a.kind==="core")return-1;if(b.kind==="core")return 1;
-    const da=Math.hypot(a.position[0]-c.eye[0],a.position[1]-c.eye[1],a.position[2]-c.eye[2]);
-    const db=Math.hypot(b.position[0]-c.eye[0],b.position[1]-c.eye[1],b.position[2]-c.eye[2]);
-    return(b.energy||0)-(a.energy||0)+(da-db)*.0005;
-  }).slice(0,max);
+  const max=S.mode==="background"?720:S.quality==="performance"?1500:2600,c=cam||camera(),source=visualNodes();
+  const visible=source.filter(function(n){const p=worldToScreen(nodePosition(n),c);return p!==null&&p[0]>-220&&p[0]<canvas.clientWidth+220&&p[1]>-220&&p[1]<canvas.clientHeight+220;});
+  return visible.slice().sort(function(a,b){if(a.kind==="core")return-1;if(b.kind==="core")return 1;const da=Math.hypot(a.position[0]-c.eye[0],a.position[1]-c.eye[1],a.position[2]-c.eye[2]),db=Math.hypot(b.position[0]-c.eye[0],b.position[1]-c.eye[1],b.position[2]-c.eye[2]);return(b.energy||0)-(a.energy||0)+(da-db)*.0005;}).slice(0,max);
 }
 function simulateFluid(dt,nodes){
   if(S.mode==="background"||S.quality==="minimal"||S.dragNode)return;
@@ -359,7 +362,7 @@ function render(now){
   gl.clearColor(0,.004,.012,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   const nowMs=performance.now();
   const cp=new Float32Array(nodes.length*3),cs=new Float32Array(nodes.length),ce=new Float32Array(nodes.length),ph=new Float32Array(nodes.length),se=new Float32Array(nodes.length),sh=new Float32Array(nodes.length),bi=new Float32Array(nodes.length),rt=new Float32Array(nodes.length*3),av=new Float32Array(nodes.length*3);
-  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);cs[i]=(n.scale||1)*(n.kind==="core"?1.75:n.kind==="subsystem"?1.30:.72);ce[i]=n.energy||.2;ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
+  nodes.forEach(function(n,i){cp.set(nodePosition(n),i*3);const variance=.84+hashUnit(n.id)*.30;cs[i]=(n.scale||1)*variance*(n.kind==="core"?2.35:n.kind==="subsystem"?1.20:.60);ce[i]=n.energy||.2;ph[i]=i*.73+(n.id.length%23);se[i]=n.id===S.selected?1:0;sh[i]=shapeCode(n);bi[i]=S.births.get(n.id)||nowMs-900;const tr=n.metadata&&n.metadata.shape_transform||{};const rr=Array.isArray(tr.rotation)?tr.rotation:[0,0,0],aa=Array.isArray(tr.angular_velocity)?tr.angular_velocity:[0,0,0];rt.set([Number(rr[0])||0,Number(rr[1])||0,Number(rr[2])||0],i*3);av.set([Number(aa[0])||0,Number(aa[1])||0,Number(aa[2])||0],i*3);});
   upload(centerBuf,cp);upload(scaleBuf,cs);upload(energyBuf,ce);upload(phaseBuf,ph);upload(selectedBuf,se);upload(shapeBuf,sh);upload(birthBuf,bi);upload(rotBuf,rt);upload(angBuf,av);
   gl.useProgram(droplet);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uMvp"),false,mvp);gl.uniformMatrix4fv(gl.getUniformLocation(droplet,"uView"),false,view);gl.uniform1f(gl.getUniformLocation(droplet,"uTime"),nowMs);
   attr(droplet,"aPos",3,meshPos);attr(droplet,"aNormal",3,meshNormal);attr(droplet,"aCenter",3,centerBuf,1);attr(droplet,"aScale",1,scaleBuf,1);attr(droplet,"aEnergy",1,energyBuf,1);attr(droplet,"aPhase",1,phaseBuf,1);attr(droplet,"aSelected",1,selectedBuf,1);attr(droplet,"aShape",1,shapeBuf,1);attr(droplet,"aBirth",1,birthBuf,1);attr(droplet,"aRot",3,rotBuf,1);attr(droplet,"aAngular",3,angBuf,1);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,meshIndex);gl.drawElementsInstanced(gl.TRIANGLES,meshCount,gl.UNSIGNED_SHORT,0,nodes.length);
@@ -594,7 +597,7 @@ function renderNeuralConsolePlacement(force){
   }
 }
 
-function setSelected(id){S.selected=id;const a=api();if(a&&a.neural_selection_set&&id)a.neural_selection_set(String(id)).catch(function(){});}
+function setSelected(id){S.selected=id;const n=S.nodes.find(function(x){return x.id===id})||S.ambientNodes.find(function(x){return x.id===id});const a=api();if(n&&!(n.metadata&&n.metadata.visual_only)&&a&&a.neural_selection_set&&id)a.neural_selection_set(String(id)).catch(function(){});}
 function screenDelta(dx,dy,depth){const c=camera(),f=canvas.clientHeight/(2*Math.tan(Math.PI/6));return add(mul3(c.right,dx*depth/f),mul3(c.up,-dy*depth/f))}
 function pick(x,y){
   let best=null,bestD=Infinity;
@@ -626,10 +629,10 @@ async function pollAdvanced(){
 async function pollSnapshot(){
   const a=api();if(!a||!a.neural_world_snapshot)return;
   try{
-    const d=await a.neural_world_snapshot(S.quality==="maximum"?2200:900);
-    S.nodes=Array.isArray(d.entities)?d.entities:[];S.links=Array.isArray(d.relations)?d.relations:[];S.windows=Array.isArray(d.windows)?d.windows:[];
+    const d=await a.neural_world_snapshot(S.quality==="maximum"?5000:2600);
+    S.nodes=Array.isArray(d.entities)?d.entities:[];S.links=Array.isArray(d.relations)?d.relations:[];S.windows=Array.isArray(d.windows)?d.windows:[];buildAmbientField(S.nodes);
     S.quality=d.performance&&d.performance.quality||S.quality;S.mode=d.performance&&d.performance.mode||S.mode;
-    ui.querySelector("#jn-status").textContent="NEURAL MESH · "+S.nodes.length+" NEURONS · "+S.links.length+" LINKS · "+S.windows.length+" WINDOWS";
+    ui.querySelector("#jn-status").textContent="NEURAL MESH · "+S.nodes.length+" REAL + "+S.ambientNodes.length+" FIELD · "+S.links.length+" LINKS · "+S.windows.length+" WINDOWS";
     S.lastSnapshot=performance.now();renderSpatialWindows();
   }catch(_){ui.querySelector("#jn-status").textContent="NEURAL MESH · BACKEND DEGRADED";}
 }
