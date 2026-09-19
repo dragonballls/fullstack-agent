@@ -50,7 +50,7 @@ jobs:
 
   windows-exe:
     name: Native Windows Jarvis.exe
-    timeout-minutes: 20
+    timeout-minutes: 45
     needs: regression
     runs-on: windows-latest
     permissions:
@@ -65,6 +65,12 @@ jobs:
       - name: Fetch pinned Fullstack Agent components
         shell: pwsh
         run: python scripts/fetch-fullstack-components.py build_vendor
+      - name: Restore cached embedded OmniRoute runtime
+        uses: actions/cache@v4
+        with:
+          path: build_vendor/omniroute_runtime
+          key: jarvis-omniroute-windows-${{ runner.arch }}-node-24.21.0-omni-3.8.51-271ec25f12e4d59bc4c406f26d33666798299d25
+
       - name: Prepare pinned embedded OmniRoute runtime
         shell: pwsh
         run: python scripts/prepare_omniroute_runtime.py build_vendor/omniroute_runtime
