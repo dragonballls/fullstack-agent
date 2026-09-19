@@ -24,7 +24,7 @@ class OmniRouteLifecycle:
         poll_interval: float = 0.25,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.command = (command or os.environ.get("JARVIS_OMNIROUTE_COMMAND", "omniroute")).strip()
+        self.command = (command or os.environ.get("JARVIS_OMNIROUTE_COMMAND", "omniroute --no-open")).strip()
         self.startup_timeout = max(1.0, float(startup_timeout))
         self.poll_interval = max(0.05, float(poll_interval))
 
@@ -55,14 +55,17 @@ class OmniRouteLifecycle:
         argv = shlex.split(configured, posix=os.name != "nt")
         if not argv:
             raise RuntimeError("OmniRoute startup command is empty")
+        if argv[0] == "omniroute":
+            try:
+                return OmniRouteProvisioner(self.base_url).command_argv(for_start=True)
+            except RuntimeError:
+                pass
         resolved = shutil.which(argv[0])
         if resolved:
             argv[0] = resolved
             return argv
         if os.path.isfile(argv[0]):
             return argv
-        if argv[0] == "omniroute":
-            return OmniRouteProvisioner(self.base_url).command_argv()
         raise RuntimeError(
             f"OmniRoute is not running at {self.base_url} and the '{argv[0]}' command was not found"
         )
