@@ -4,6 +4,7 @@ import base64
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -86,7 +87,7 @@ class ElevenLabsVoiceTests(unittest.TestCase):
 
     def test_stale_generation_is_dropped_after_shut_up(self):
         mouth = ElevenLabsMouth(client=Mock())
-        started = Mock()
+        started = threading.Event()
         def synth(*args, **kwargs):
             started.set()
             return b"late-audio"
