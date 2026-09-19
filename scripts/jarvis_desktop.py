@@ -761,7 +761,7 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 <h1>JARVIS · AI PROVIDERS</h1>
 <div class="sub">OmniRoute is built into the Jarvis release. Paste an API key and Jarvis safely auto-detects recognizable provider formats; ambiguous keys require an explicit provider selection.</div>
 <div class="status" id="runtime">Checking OmniRoute runtime…</div>
-<div><div class="field"><label>PROVIDER</label><select id="provider"><option value="auto" selected>Auto-detect from API key</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google AI</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="xai">xAI</option><option value="mistral">Mistral</option><option value="cerebras">Cerebras</option><option value="together">Together</option><option value="fireworks">Fireworks</option><option value="custom">Custom provider ID…</option></select></div></div>
+<div><div class="field"><label>PROVIDER</label><select id="provider"><option value="auto" selected>Auto-detect from API key</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Google AI</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="xai">xAI</option><option value="mistral">Mistral</option><option value="cerebras">Cerebras</option><option value="together">Together</option><option value="fireworks">Fireworks</option><option value="custom">Custom provider ID…</option></select></div></div>
 <div class="field" id="customWrap" style="display:none"><label>CUSTOM PROVIDER ID</label><input id="customProvider" autocomplete="off" placeholder="provider-id"></div>
 <div class="field"><label>API KEY</label><input id="key" type="password" autocomplete="new-password" placeholder="Paste provider API key"></div>
 <div class="actions"><button id="connect" class="primary" type="button">CONNECT & TEST</button><button id="refresh" type="button">REFRESH</button><button id="dashboard" type="button">OPEN DASHBOARD</button></div>
@@ -912,11 +912,11 @@ class FullstackJarvisHost:
     def omniroute_status(self) -> dict[str, Any]:
         status = self.omniroute.status().as_dict()
         try:
-            status["ready"] = bool(self.omniroute.ensure_running(wait_seconds=0.5))
+            status["ready"] = bool(self.omniroute.probe_only())
         except Exception:
             status["ready"] = False
         try:
-            status["providers"] = self.omniroute.list_providers()
+            status["providers"] = self.omniroute.list_providers(install_if_missing=False)
         except Exception:
             status["providers"] = []
         return status
@@ -1013,10 +1013,18 @@ class FullstackJarvisHost:
                     easy_drag=True,
                     on_top=False,
                 )
+                try:
+                    self._omniroute_settings_window.events.closed += self._on_omniroute_settings_closed
+                except Exception:
+                    LOGGER.debug("OmniRoute settings window does not expose a closed event")
             return {"ok": True}
         except Exception as exc:
             LOGGER.exception("OmniRoute settings window could not open")
             raise RuntimeError("AI provider settings could not be opened") from exc
+
+    def _on_omniroute_settings_closed(self, *_args: Any, **_kwargs: Any) -> None:
+        with self._floating_lock:
+            self._omniroute_settings_window = None
 
     @staticmethod
     def _exit_for_update() -> None:
