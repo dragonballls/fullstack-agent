@@ -456,11 +456,12 @@ function renderPointField(now,c,mvp){
   gl.uniform3fv(gl.getUniformLocation(fieldProg,"uAnchor"),new Float32Array([0,0,0]));gl.uniform1f(gl.getUniformLocation(fieldProg,"uDeepField"),0);
   attr(fieldProg,"aPos",3,fieldPosBuf);attr(fieldProg,"aSize",1,fieldSizeBuf);attr(fieldProg,"aEnergy",1,fieldEnergyBuf);attr(fieldProg,"aPhase",1,fieldPhaseBuf);gl.drawArrays(gl.POINTS,0,S.pointCount);
   if(S.microBuffersReady){
+    const deepCount=S.mode==="background"?12000:S.quality==="performance"?32000:S.microCount;
     gl.uniform3fv(gl.getUniformLocation(fieldProg,"uAnchor"),new Float32Array(anchor));gl.uniform1f(gl.getUniformLocation(fieldProg,"uDeepField"),1);
     attr(fieldProg,"aPos",3,microPosBuf);attr(fieldProg,"aSize",1,microSizeBuf);attr(fieldProg,"aEnergy",1,microEnergyBuf);attr(fieldProg,"aPhase",1,microPhaseBuf);
-    gl.drawArrays(gl.POINTS,0,S.microCount);
+    gl.drawArrays(gl.POINTS,0,deepCount);
+    S.lodStats.field=deepCount;
   }
-  S.lodStats.field=S.microCount;
 }
 function resize(){
   const dpr=Math.min(window.devicePixelRatio||1,S.quality==="maximum"?1.25:1.0),w=Math.max(1,Math.floor(canvas.clientWidth*dpr)),h=Math.max(1,Math.floor(canvas.clientHeight*dpr));
