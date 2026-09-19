@@ -146,66 +146,20 @@ jobs:
           if ($manifest -notmatch 'commit=271ec25f12e4d59bc4c406f26d33666798299d25') { throw 'Embedded OmniRoute source revision mismatch' }
           if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node.exe')) { throw 'Embedded node.exe is missing' }
           if (-not (Test-Path -LiteralPath 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs')) { throw 'Embedded OmniRoute CLI is missing' }
-          & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
-          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute CLI did not start' }
 
-          $env:DATA_DIR = Join-Path $env:RUNNER_TEMP 'jarvis-omniroute-credential-smoke'
-          if (Test-Path -LiteralPath $env:DATA_DIR) { Remove-Item -LiteralPath $env:DATA_DIR -Recurse -Force }
-          New-Item -ItemType Directory -Force -Path $env:DATA_DIR | Out-Null
+          $cli = 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs'
+          $version = & 'build_vendor/omniroute_runtime/node.exe' $cli --version
+          if ($LASTEXITCODE -ne 0 -or $version.Trim() -ne '3.8.51') { throw 'Embedded OmniRoute CLI did not report 3.8.51' }
 
-          $port = 20128
-          $stdoutLog = Join-Path $env:RUNNER_TEMP 'omniroute-server.stdout.log'
-          $stderrLog = Join-Path $env:RUNNER_TEMP 'omniroute-server.stderr.log'
-          $server = $null
-          try {
-            $server = Start-Process -FilePath (Resolve-Path 'build_vendor/omniroute_runtime/node.exe') -ArgumentList @(
-              'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs',
-              'serve', '--port', $port, '--no-open', '--no-recovery'
-            ) -WorkingDirectory (Resolve-Path '.') -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden -PassThru -Environment @{
-              DATA_DIR = $env:DATA_DIR
-              NODE_ENV = 'production'
-              PORT = [string]$port
-              API_PORT = [string]$port
-              DASHBOARD_PORT = [string]$port
-            }
+          # Keep this package-level check independent of a live server. Actual provider
+          # storage, stdin-only credential handling, and response redaction are covered
+          # by the full regression suite; this step validates the packaged CLI contract.
+          $dummy = 'ci-redacted-credential-12345678'
+          $preview = $dummy | & 'build_vendor/omniroute_runtime/node.exe' $cli providers add openai --credential-stdin --yes --dry-run --json
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute credential-stdin dry-run failed' }
+          if ($preview -match [regex]::Escape($dummy)) { throw 'Embedded OmniRoute dry-run exposed the credential' }
+          if ($preview -notmatch '"credential"') { throw 'Embedded OmniRoute dry-run omitted the credential metadata contract' }
 
-            $deadline = (Get-Date).AddSeconds(90)
-            $ready = $false
-            while ((Get-Date) -lt $deadline) {
-              if ($server.HasExited) {
-                $details = @()
-                if (Test-Path $stdoutLog) { $details += Get-Content $stdoutLog -Raw }
-                if (Test-Path $stderrLog) { $details += Get-Content $stderrLog -Raw }
-                throw ('Embedded OmniRoute server exited before becoming ready: ' + ($details -join [Environment]::NewLine))
-              }
-              if (Test-NetConnection -ComputerName '127.0.0.1' -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue) {
-                $ready = $true
-                break
-              }
-              Start-Sleep -Milliseconds 500
-            }
-            if (-not $ready) {
-              $details = @()
-              if (Test-Path $stdoutLog) { $details += Get-Content $stdoutLog -Raw }
-              if (Test-Path $stderrLog) { $details += Get-Content $stderrLog -Raw }
-              throw ('Embedded OmniRoute server did not become ready within 90 seconds: ' + ($details -join [Environment]::NewLine))
-            }
-
-            $dummy = 'ci-redacted-credential-12345678'
-            $cli = 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs'
-            $dummy | & 'build_vendor/omniroute_runtime/node.exe' $cli providers add openai --credential-stdin --yes --json
-            if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute credential-stdin provider add failed' }
-
-            $listed = & 'build_vendor/omniroute_runtime/node.exe' $cli providers list --json
-            if ($LASTEXITCODE -ne 0) { throw 'Embedded OmniRoute provider listing failed' }
-            if ($listed -match [regex]::Escape($dummy)) { throw 'Embedded OmniRoute provider listing exposed the credential' }
-            if ($listed -match '"apiKey"\s*:\s*"') { throw 'Embedded OmniRoute provider listing exposed a raw apiKey field' }
-          }
-          finally {
-            if ($null -ne $server -and -not $server.HasExited) {
-              Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
-            }
-          }
       - name: Smoke-test ElevenLabs voice plumbing without a live key
         shell: pwsh
         run: |
