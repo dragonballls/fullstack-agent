@@ -289,6 +289,10 @@ class OmniRouteProvisioner:
         if self._process is not None and self._process.poll() is None:
             process = self._process
         else:
+            # The bundled PyInstaller runtime may be starting on a fresh machine where
+            # OmniRoute's persistent working directory does not exist yet. Windows
+            # rejects a missing cwd with WinError 267 before Node can even start.
+            self.data_dir.mkdir(parents=True, exist_ok=True)
             log_path = Path(
                 os.environ.get(
                     "JARVIS_OMNIROUTE_LOG",
