@@ -33,7 +33,8 @@ _MAX_ASSET_BYTES = 512 * 1024
 _MAX_NAME_LENGTH = 120
 _MAX_VERSION_LENGTH = 40
 _MAX_DESCRIPTION_LENGTH = 2000
-DEFAULT_BUILD_ID = "workspace-default"
+DEFAULT_BUILD_ID = "neural-mesh"
+LEGACY_DEFAULT_BUILD_ID = "workspace-default"
 MAX_ROLLBACK_HISTORY = 20
 UI_QUALITY_FLOOR_LEVEL = int(DEFAULT_QUALITY_FLOOR["ui_minimum_level"])
 UI_MAX_BUILD_BYTES = int(DEFAULT_QUALITY_FLOOR["performance"]["max_ui_build_bytes"])
@@ -266,6 +267,12 @@ class UIBuildStore:
             raw = json.loads(self.state_path.read_text(encoding="utf-8"))
             active = str(raw.get("active", DEFAULT_BUILD_ID))
             history = [str(item) for item in raw.get("history", []) if isinstance(item, str)]
+            # Migrate existing installs that still use the legacy base UI default.
+            # Do not override a user-selected custom UI build.
+            if active == LEGACY_DEFAULT_BUILD_ID:
+                active = DEFAULT_BUILD_ID
+                if LEGACY_DEFAULT_BUILD_ID not in history:
+                    history.append(LEGACY_DEFAULT_BUILD_ID)
             return {"active": active, "history": history[-MAX_ROLLBACK_HISTORY:]}
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return default
