@@ -263,7 +263,7 @@ jobs:
             if ($nativeContents -notmatch 'headless frozen Jarvis native window object created;') {
               throw 'Frozen Jarvis.exe did not create the real native pywebview window object in the same smoke process'
             }
-            $floatingMarker = 'floating command bar window object created; pid=\\d+ hotkey=' + [regex]::Escape('Ctrl+Alt+Shift+F12')
+            $floatingMarker = 'floating command bar window object created; pid=[0-9]+ hotkey=' + [regex]::Escape('Ctrl+Alt+Shift+F12')
             if ($nativeContents -notmatch $floatingMarker) {
               throw 'Frozen Jarvis.exe did not create the production floating command bar object in the same smoke process'
             }
