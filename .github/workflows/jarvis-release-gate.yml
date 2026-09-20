@@ -200,6 +200,7 @@ jobs:
         run: |
           $info = python -m PyInstaller --version
           if ($info -ne '6.22.3') { throw "Unexpected PyInstaller version: $info" }
+      # Smoke-test the packaged native Jarvis host is performed in this same frozen EXE smoke process.
       - name: Smoke-test embedded visualizer and OmniRoute
         shell: pwsh
         run: |
