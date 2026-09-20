@@ -104,6 +104,27 @@ class OmniRouteSetupTests(unittest.TestCase):
             self.assertEqual(command, ("node.exe", "omniroute.mjs"))
             self.assertEqual(provisioner._source, "bundled")
 
+    def test_start_creates_missing_working_directory_before_popen(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "OmniRoute"
+            provisioner = OmniRouteProvisioner(data_dir=data_dir)
+            provisioner._resolved = ("node.exe", "omniroute.mjs")
+            provisioner._source = "bundled"
+
+            class Process:
+                def poll(self):
+                    return 0
+
+            with patch.object(provisioner, "_probe", return_value=False):
+                with patch(
+                    "quality_of_life.omniroute_setup.subprocess.Popen",
+                    return_value=Process(),
+                ) as popen:
+                    self.assertFalse(provisioner.ensure_running(wait_seconds=0.5))
+
+            self.assertTrue(data_dir.is_dir())
+            self.assertEqual(popen.call_args.kwargs["cwd"], str(data_dir))
+
 
 if __name__ == "__main__":
     unittest.main()
