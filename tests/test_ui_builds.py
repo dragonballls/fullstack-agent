@@ -6,6 +6,7 @@ import subprocess
 import unittest
 
 from quality_of_life.ui_builds import (
+    DEFAULT_ACTIVE_BUILD_ID,
     DEFAULT_BUILD_ID,
     UI_QUALITY_FLOOR_LEVEL,
     UIBuildStore,
@@ -19,7 +20,7 @@ class UIBuildStoreTests(unittest.TestCase):
             store = UIBuildStore(tmp)
             catalog = store.catalog()
             self.assertGreaterEqual(len(catalog), 3)
-            self.assertEqual(store.active().id, DEFAULT_BUILD_ID)
+            self.assertEqual(store.active().id, DEFAULT_ACTIVE_BUILD_ID)
             self.assertTrue(all("protected" in item for item in catalog))
 
     def test_supports_arbitrarily_many_builds_without_replacing_core_state(self):
@@ -37,7 +38,7 @@ class UIBuildStoreTests(unittest.TestCase):
                 self.assertEqual(build.id, f"test-build-{index}")
             ids = {item.id for item in store.list()}
             self.assertEqual(len(ids), 54)
-            self.assertEqual(store.active().id, DEFAULT_BUILD_ID)
+            self.assertEqual(store.active().id, DEFAULT_ACTIVE_BUILD_ID)
             self.assertTrue((Path(tmp) / "test-build-49" / "manifest.json").is_file())
 
     def test_quality_level_defaults_to_verified_floor(self):
@@ -68,7 +69,7 @@ class UIBuildStoreTests(unittest.TestCase):
             store.save({"id": "scale", "name": "Scale", "quality_level": 5})
             store.activate("scale")
             recovered = store.rollback()
-            self.assertEqual(recovered.id, DEFAULT_BUILD_ID)
+            self.assertEqual(recovered.id, DEFAULT_ACTIVE_BUILD_ID)
             self.assertEqual(recovered.quality_level, UI_QUALITY_FLOOR_LEVEL)
 
     def test_switch_and_multi_step_rollback(self):
@@ -80,7 +81,7 @@ class UIBuildStoreTests(unittest.TestCase):
             store.activate("beta")
             self.assertEqual(store.active().id, "beta")
             self.assertEqual(store.rollback().id, "alpha")
-            self.assertEqual(store.rollback().id, DEFAULT_BUILD_ID)
+            self.assertEqual(store.rollback().id, DEFAULT_ACTIVE_BUILD_ID)
 
     def test_state_persists_across_store_instances(self):
         with TemporaryDirectory() as tmp:
