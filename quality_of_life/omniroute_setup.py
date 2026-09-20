@@ -112,6 +112,7 @@ class OmniRouteProvisioner:
         self._resolved: tuple[str, ...] | None = None
         self._source = "unavailable"
         self._process: subprocess.Popen[bytes] | None = None
+        self._process_log_handle: Any | None = None
 
     @property
     def port(self) -> int:
@@ -284,16 +285,32 @@ class OmniRouteProvisioner:
     def ensure_running(self, *, wait_seconds: float = 15.0) -> bool:
         if self._probe():
             return True
-        command = self.command_argv()
+        command = self.command_argv(for_start=True)
         if self._process is not None and self._process.poll() is None:
             process = self._process
         else:
+            log_path = Path(
+                os.environ.get(
+                    "JARVIS_OMNIROUTE_LOG",
+                    str(self.data_dir.parent / "logs" / "omniroute.log"),
+                )
+            )
+            try:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                self._process_log_handle = log_path.open("a", encoding="utf-8")
+            except OSError:
+                self._process_log_handle = None
+            env = self.environment()
+            env["HOST"] = "127.0.0.1"
+            env["PORT"] = str(self.port)
+            env.setdefault("OMNIROUTE_HEADLESS", "1")
             process = subprocess.Popen(
-                command + ["--port", str(self.port)],
+                command + ["--port", str(self.port), "--no-open"],
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=self.environment(),
+                stdout=self._process_log_handle or subprocess.DEVNULL,
+                stderr=subprocess.STDOUT if self._process_log_handle is not None else subprocess.DEVNULL,
+                env=env,
+                cwd=str(self.data_dir),
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 close_fds=True,
             )
@@ -303,9 +320,9 @@ class OmniRouteProvisioner:
             if self._probe():
                 return True
             if process.poll() is not None:
-                break
+                return False
             time.sleep(0.25)
-        return False
+        return self._probe()
 
     def status(self) -> OmniRouteRuntimeStatus:
         try:
