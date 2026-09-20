@@ -300,6 +300,37 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  validation-release:
+    name: Publish validated Windows EXE
+    if: github.ref == 'refs/heads/validate/windows-exe-bootstrap-final'
+    needs: windows-exe
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      attestations: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Jarvis-Windows-Exe
+          path: dist
+      - name: Verify Jarvis.exe build attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify dist/Jarvis.exe -R "${{ github.repository }}" --signer-workflow "${{ github.repository }}/.github/workflows/jarvis-release-gate.yml"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: validated-windows-exe
+          name: Jarvis Validated Windows EXE
+          prerelease: true
+          body: |
+            Validated Windows EXE built and passed the complete Jarvis release gate.
+            commit: ${{ github.sha }}
+            The binary is provenance-attested and verified before publication.
+          files: dist/Jarvis.exe
+          overwrite_files: true
+          make_latest: false
+
+
   latest-release:
     name: Publish rolling Jarvis latest release
     if: github.ref == 'refs/heads/main'
