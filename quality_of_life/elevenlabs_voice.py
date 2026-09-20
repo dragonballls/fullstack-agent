@@ -268,6 +268,17 @@ class ElevenLabsMouth:
     def configured(self) -> bool:
         return has_api_key()
 
+    def set_selection(self, *, voice_id: str | None = None, model_id: str | None = None) -> dict[str, str]:
+        selected_voice = str(voice_id or self.voice_id or DEFAULT_VOICE_ID).strip()[:256]
+        selected_model = str(model_id or self.model_id or DEFAULT_MODEL_ID).strip()
+        if selected_model not in SUPPORTED_MODEL_IDS:
+            raise ValueError("unsupported ElevenLabs model")
+        with self._lock:
+            self.voice_id = selected_voice
+            self.model_id = selected_model
+            self._last_error = ""
+        return {"voice_id": self.voice_id, "model_id": self.model_id}
+
     def configure(self, api_key: str, *, voice_id: str | None = None, model_id: str | None = None) -> dict[str, object]:
         save_api_key(api_key)
         explicit_voice = str(voice_id or "").strip()
@@ -507,6 +518,21 @@ class KokoroMouth:
                     self._last_error = _redact_error(exc)
                 raise RuntimeError("Local Kokoro voice engine could not initialize") from exc
             return self._pipeline
+
+    def set_selection(self, *, voice_id: str | None = None, speed: float | None = None) -> dict[str, object]:
+        selected_voice = str(voice_id or self.voice_id or KOKORO_DEFAULT_VOICE).strip()[:128]
+        try:
+            selected_speed = float(self.speed if speed is None else speed)
+        except (TypeError, ValueError):
+            selected_speed = self.speed
+        selected_speed = min(2.0, max(0.65, selected_speed))
+        with self._lock:
+            changed = selected_voice != self.voice_id or selected_speed != self.speed
+            self.voice_id = selected_voice
+            self.speed = selected_speed
+            if changed:
+                self._prepared = False
+        return {"voice_id": self.voice_id, "speed": self.speed, "prepared": self.prepared}
 
     def prepare(self) -> dict[str, object]:
         pipeline = self._get_pipeline()
