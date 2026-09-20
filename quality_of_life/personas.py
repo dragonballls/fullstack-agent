@@ -225,11 +225,14 @@ class PersonaStore:
         clean = self._clean_name(name)
         if clean.casefold() == "jarvis":
             raise ValueError("Jarvis is the built-in protected persona")
+        selected_voice = voice or PersonaVoice()
+        if selected_voice.provider not in {"inherit", "kokoro", "elevenlabs"}:
+            raise ValueError("voice provider must be inherit, kokoro, or elevenlabs")
         persona = Persona(
             name=clean,
             description=" ".join(str(description or "").split())[:MAX_DESCRIPTION],
             locked_rules=self._clean_rules(locked_rules),
-            voice=voice or PersonaVoice(),
+            voice=selected_voice,
             immutable=False,
         )
         with self._lock:
@@ -475,8 +478,15 @@ class PersonaConversation:
                     )
 
             if not self._group:
+                group_names, group_topic = extract_group_start(message, personas)
+                if len(group_names) >= 2:
+                    self.start_group(group_names, group_topic)
+                    message = group_topic or message
+                    personas = self.store.list()
                 addressed, body = extract_addressed_persona(message, personas)
                 target = self.store.get(addressed) if addressed else self.active
+                if addressed and target is not None:
+                    self.store.switch(target.name)
                 prompt = body if addressed and body else message
                 if target and target.name.casefold() == "jarvis":
                     result = self.controller.execute_request(prompt, confirmed=confirmed)
