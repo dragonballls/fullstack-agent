@@ -207,6 +207,8 @@ jobs:
           $env:JARVIS_SMOKE = '1'
           $env:JARVIS_SMOKE_VOICE = '1'
           $env:JARVIS_SMOKE_WEBVIEW = '1'
+          $env:JARVIS_UI_SMOKE = '1'
+          $env:JARVIS_ALLOW_HEADLESS_GUI = '1'
           $env:JARVIS_OMNIROUTE_WARMUP = '1'
           $process = $null
           $ready = $false
@@ -254,6 +256,17 @@ jobs:
 
             & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
             if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
+
+            $nativeContents = ''
+            if (Test-Path -LiteralPath $log) { $nativeContents = Get-Content -LiteralPath $log -Raw }
+            if ($nativeContents -notmatch 'headless frozen Jarvis native window object created;') {
+              throw 'Frozen Jarvis.exe did not create the real native pywebview window object in the same smoke process'
+            }
+            $floatingMarker = 'floating command bar window object created; pid=\\d+ hotkey=' + [regex]::Escape('Ctrl+Alt+Shift+F12')
+            if ($nativeContents -notmatch $floatingMarker) {
+              throw 'Frozen Jarvis.exe did not create the production floating command bar object in the same smoke process'
+            }
+            Write-Host 'Packaged native Jarvis host smoke passed in the same frozen EXE process.'
           }
           catch {
             Write-Host '=== Jarvis process diagnostics ==='
@@ -274,12 +287,6 @@ jobs:
             }
           }
 
-      - name: Smoke-test the packaged native Jarvis host
-        shell: pwsh
-        env:
-          JARVIS_ALLOW_HEADLESS_GUI: '1'
-          JARVIS_UI_SMOKE: '1'
-        run: ./scripts/verify_windows_gui_smoke.ps1
       - name: Generate signed Jarvis.exe build attestation
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
