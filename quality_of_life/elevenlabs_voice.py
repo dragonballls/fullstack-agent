@@ -200,6 +200,97 @@ class ElevenLabsClient:
                 result.append({"id": voice_id[:256], "name": name[:256]})
         return result
 
+    def design_voice(
+        self,
+        voice_description: str,
+        *,
+        text: str | None = None,
+        model_id: str = "eleven_multilingual_ttv_v2",
+        seed: int | None = None,
+    ) -> dict[str, object]:
+        description = " ".join(str(voice_description or "").split()).strip()
+        if not 20 <= len(description) <= 1000:
+            raise ValueError("voice description must be 20-1000 characters")
+        payload: dict[str, object] = {
+            "voice_description": description,
+            "model_id": model_id,
+            "auto_generate_text": not bool(text),
+            "stream_previews": False,
+        }
+        if text:
+            preview_text = " ".join(str(text).split()).strip()
+            if not 100 <= len(preview_text) <= 1000:
+                raise ValueError("preview text must be 100-1000 characters")
+            payload["text"] = preview_text
+        if seed is not None:
+            payload["seed"] = max(0, min(2147483647, int(seed)))
+        body = json.dumps(payload).encode("utf-8")
+        status, raw = self._request(
+            "POST",
+            "/text-to-voice/design",
+            body=body,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        if not 200 <= status < 300:
+            raise RuntimeError("ElevenLabs voice design failed")
+        try:
+            result = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("ElevenLabs returned invalid voice-design data") from exc
+        previews = result.get("previews", []) if isinstance(result, dict) else []
+        cleaned: list[dict[str, object]] = []
+        for item in previews if isinstance(previews, list) else []:
+            if not isinstance(item, dict):
+                continue
+            cleaned.append({
+                "generated_voice_id": str(item.get("generated_voice_id") or "")[:256],
+                "audio_base_64": str(item.get("audio_base_64") or ""),
+                "media_type": str(item.get("media_type") or "audio/mpeg")[:64],
+                "duration_secs": float(item.get("duration_secs") or 0.0),
+                "language": str(item.get("language") or "")[:32],
+            })
+        return {"text": str(result.get("text") or "")[:1000] if isinstance(result, dict) else "", "previews": cleaned}
+
+    def create_voice(
+        self,
+        *,
+        voice_name: str,
+        voice_description: str,
+        generated_voice_id: str,
+    ) -> dict[str, object]:
+        name = " ".join(str(voice_name or "").split()).strip()
+        description = " ".join(str(voice_description or "").split()).strip()
+        generated = str(generated_voice_id or "").strip()
+        if not name:
+            raise ValueError("voice name is required")
+        if not 20 <= len(description) <= 1000:
+            raise ValueError("voice description must be 20-1000 characters")
+        if not generated:
+            raise ValueError("generated voice id is required")
+        body = json.dumps({
+            "voice_name": name[:128],
+            "voice_description": description,
+            "generated_voice_id": generated[:256],
+        }).encode("utf-8")
+        status, raw = self._request(
+            "POST",
+            "/text-to-voice",
+            body=body,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        if not 200 <= status < 300:
+            raise RuntimeError("ElevenLabs voice creation failed")
+        try:
+            result = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("ElevenLabs returned invalid voice-creation data") from exc
+        return {
+            "ok": True,
+            "voice_id": str(result.get("voice_id") or "").strip()[:256],
+            "name": str(result.get("name") or name).strip()[:128],
+            "description": str(result.get("description") or description).strip()[:1000],
+        }
+
     def synthesize(
         self,
         text: str,
@@ -267,6 +358,17 @@ class ElevenLabsMouth:
     @property
     def configured(self) -> bool:
         return has_api_key()
+
+    def set_selection(self, *, voice_id: str | None = None, model_id: str | None = None) -> dict[str, str]:
+        selected_voice = str(voice_id or self.voice_id or DEFAULT_VOICE_ID).strip()[:256]
+        selected_model = str(model_id or self.model_id or DEFAULT_MODEL_ID).strip()
+        if selected_model not in SUPPORTED_MODEL_IDS:
+            raise ValueError("unsupported ElevenLabs model")
+        with self._lock:
+            self.voice_id = selected_voice
+            self.model_id = selected_model
+            self._last_error = ""
+        return {"voice_id": self.voice_id, "model_id": self.model_id}
 
     def configure(self, api_key: str, *, voice_id: str | None = None, model_id: str | None = None) -> dict[str, object]:
         save_api_key(api_key)
@@ -507,6 +609,21 @@ class KokoroMouth:
                     self._last_error = _redact_error(exc)
                 raise RuntimeError("Local Kokoro voice engine could not initialize") from exc
             return self._pipeline
+
+    def set_selection(self, *, voice_id: str | None = None, speed: float | None = None) -> dict[str, object]:
+        selected_voice = str(voice_id or self.voice_id or KOKORO_DEFAULT_VOICE).strip()[:128]
+        try:
+            selected_speed = float(self.speed if speed is None else speed)
+        except (TypeError, ValueError):
+            selected_speed = self.speed
+        selected_speed = min(2.0, max(0.65, selected_speed))
+        with self._lock:
+            changed = selected_voice != self.voice_id or selected_speed != self.speed
+            self.voice_id = selected_voice
+            self.speed = selected_speed
+            if changed:
+                self._prepared = False
+        return {"voice_id": self.voice_id, "speed": self.speed, "prepared": self.prepared}
 
     def prepare(self) -> dict[str, object]:
         pipeline = self._get_pipeline()
