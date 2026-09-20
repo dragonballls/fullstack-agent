@@ -107,6 +107,8 @@ class JarvisVoiceBridge:
         confirmation: Callable[[str], bool] | None = None,
         record_held: Callable[[Callable[[], bool]], str] | None = None,
         on_output: Callable[[str], None] | None = None,
+        persona_router: Callable[[str, bool], Any] | None = None,
+        on_speaker: Callable[[str], None] | None = None,
     ) -> None:
         self.controller = controller
         self.ears = ears
@@ -115,11 +117,14 @@ class JarvisVoiceBridge:
         self.confirmation = confirmation or self._native_confirmation
         self.record_held = record_held
         self.on_output = on_output
+        self.persona_router = persona_router
+        self.on_speaker = on_speaker
         self.thread: threading.Thread | None = None
         self.stop_event = threading.Event()
         self.stopped = False
         self._speak_lock = threading.RLock()
         self._last_spoken_text = ""
+        self._last_spoken_speaker = ""
         self._last_spoken_at = 0.0
         self.config: dict[str, Any] = dict(DEFAULT_CONFIG)
         self._barge_event = threading.Event()
@@ -214,19 +219,30 @@ class JarvisVoiceBridge:
         self.thread = threading.Thread(target=self._run, name="jarvis-voice", daemon=True)
         self.thread.start()
 
-    def _speak(self, text: str) -> None:
+    def _speak(self, text: str, speaker: str = "") -> None:
         message = str(text or "").strip()
         if not message:
             return
+        speaker_name = str(speaker or "").strip()
         now = __import__("time").monotonic()
         with self._speak_lock:
-            if message == self._last_spoken_text and now - self._last_spoken_at < 1.5:
+            if (
+                message == self._last_spoken_text
+                and speaker_name == self._last_spoken_speaker
+                and now - self._last_spoken_at < 1.5
+            ):
                 return
             self._last_spoken_text = message
+            self._last_spoken_speaker = speaker_name
             self._last_spoken_at = now
+            if callable(self.on_speaker):
+                try:
+                    self.on_speaker(speaker_name or "Jarvis")
+                except Exception as exc:
+                    _log(f"persona voice selection callback error: {type(exc).__name__}: {exc}")
             if self.on_output is not None:
                 try:
-                    self.on_output(message)
+                    self.on_output(f"{speaker_name}: {message}" if speaker_name and speaker_name.casefold() != "jarvis" else message)
                 except Exception as exc:
                     _log(f"output transcript callback error: {type(exc).__name__}: {exc}")
             if self.mouth is None:
@@ -258,6 +274,29 @@ class JarvisVoiceBridge:
         text = text.strip()
         if not text:
             return None
+        if callable(self.persona_router):
+            try:
+                result = self.persona_router(text, False)
+                if bool(getattr(result, "needs_confirmation", False)):
+                    question = str(getattr(result, "text", "This action requires confirmation."))
+                    speaker = str(getattr(result, "speaker", "Jarvis") or "Jarvis")
+                    self._speak(question, speaker)
+                    if not self.confirmation(text):
+                        self._speak("Cancelled.", speaker)
+                        return result
+                    result = self.persona_router(text, True)
+                turns = getattr(result, "turns", ()) or ()
+                if turns:
+                    for turn in turns:
+                        self._speak(getattr(turn, "text", ""), str(getattr(turn, "persona", "Jarvis")))
+                else:
+                    self._speak(
+                        str(getattr(result, "text", result)),
+                        str(getattr(result, "speaker", "Jarvis") or "Jarvis"),
+                    )
+                return result
+            except Exception as exc:
+                self._log(f"persona conversation routing failed; preserving Jarvis fallback: {type(exc).__name__}: {exc}")
         result = self.controller.execute_request(text, confirmed=False)
         if bool(getattr(result, "needs_confirmation", False)):
             question = str(getattr(result, "text", "This action requires confirmation."))
