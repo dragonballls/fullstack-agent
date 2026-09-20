@@ -490,6 +490,16 @@ class KokoroMouth:
             if self._pipeline is not None:
                 return self._pipeline
             try:
+                # misaki/phonemizer can consume the bundled eSpeak NG runtime on Windows.
+                try:
+                    import espeakng_loader
+                    make_available = getattr(espeakng_loader, "make_library_available", None)
+                    if callable(make_available):
+                        make_available()
+                except Exception:
+                    # English Kokoro voices can still run in environments where eSpeak is
+                    # already provided externally, so keep this fallback non-fatal.
+                    pass
                 from kokoro import KPipeline
                 self._pipeline = KPipeline(lang_code=KOKORO_LANG_CODE, device=self.device)
             except Exception as exc:
