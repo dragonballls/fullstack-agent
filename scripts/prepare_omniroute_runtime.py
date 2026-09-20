@@ -27,7 +27,7 @@ NODE_SHA256 = "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541"
 OMNIROUTE_VERSION = "3.8.50"
 OMNIROUTE_COMMIT = "5458026c216f77a3da68ea49152dc33470cfe2cb"
 OMNIROUTE_SOURCE_URL = f"https://github.com/diegosouzapw/OmniRoute/archive/{OMNIROUTE_COMMIT}.zip"
-RUNTIME_CACHE_SCHEMA = "4"
+RUNTIME_CACHE_SCHEMA = "5"
 
 
 def sha256_file(path: Path) -> str:
@@ -223,9 +223,10 @@ def prepare(destination: Path) -> None:
                 "--no-fund",
                 "--no-audit",
                 "--omit=dev",
-                # Keep dependencies hoisted so OmniRoute's postinstall can
-                # copy platform-correct natives from the project root into dist/.
-                "--install-strategy=nested",
+                # Keep dependencies hoisted so platform-correct native modules
+                # land in staging/node_modules and can be copied into OmniRoute's
+                # standalone dist payload deterministically.
+                "--install-strategy=hoisted",
                 "--package-lock=false",
                 "--ignore-scripts=false",
                 "--prefer-offline",
@@ -252,9 +253,13 @@ def prepare(destination: Path) -> None:
         # executed the package postinstall.
         shutil.copy2(bundled_node, staging / "node.exe")
         package_root = staging / "node_modules" / "omniroute"
-        root_native = package_root / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
+        root_native_candidates = [
+            staging / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node",
+            package_root / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node",
+        ]
         app_native = package_root / "dist" / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
-        if root_native.is_file():
+        root_native = next((path for path in root_native_candidates if path.is_file()), None)
+        if root_native is not None:
             app_native.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(root_native, app_native)
         critical_native = [
@@ -262,7 +267,10 @@ def prepare(destination: Path) -> None:
             package_root / "node_modules" / "wreq-js",
         ]
         if not critical_native[0].is_file():
-            raise RuntimeError("Prepared OmniRoute runtime is missing its repaired Windows better-sqlite3 binary")
+            searched = ", ".join(str(path) for path in root_native_candidates)
+            raise RuntimeError(
+                "Prepared OmniRoute runtime is missing its repaired Windows better-sqlite3 binary; " + searched
+            )
         if not _native_load_ok(bundled_node, critical_native[0]):
             raise RuntimeError(
                 "Prepared OmniRoute better-sqlite3 binary could not be loaded"
