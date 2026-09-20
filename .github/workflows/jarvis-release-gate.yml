@@ -86,7 +86,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build_vendor/omniroute_runtime
-          key: jarvis-omniroute-windows-${{ runner.arch }}-node-24.21.0-omni-3.8.50-5458026c216f77a3da68ea49152dc33470cfe2cb-schema-3
+          key: jarvis-omniroute-windows-${{ runner.arch }}-node-24.21.0-omni-3.8.50-5458026c216f77a3da68ea49152dc33470cfe2cb-schema-4
 
       - name: Prepare pinned embedded OmniRoute runtime
         shell: pwsh
