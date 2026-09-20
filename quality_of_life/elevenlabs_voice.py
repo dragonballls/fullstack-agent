@@ -521,25 +521,49 @@ class KokoroMouth:
 
     @staticmethod
     def _wav_bytes(audio: Any) -> bytes:
+        """Encode Kokoro audio without requiring NumPy in the regression/runtime layer."""
+        import array
         import io
+        import math
         import wave
-        import numpy as np
 
         value = audio
-        detach = getattr(value, "detach", None)
-        if callable(detach):
-            value = detach()
-        cpu = getattr(value, "cpu", None)
-        if callable(cpu):
-            value = cpu()
-        to_numpy = getattr(value, "numpy", None)
-        if callable(to_numpy):
-            value = to_numpy()
-        data = np.asarray(value, dtype=np.float32).reshape(-1)
-        if data.size == 0:
+        for name in ("detach", "cpu", "numpy", "flatten"):
+            method = getattr(value, name, None)
+            if callable(method):
+                try:
+                    value = method()
+                except TypeError:
+                    continue
+        tolist = getattr(value, "tolist", None)
+        if callable(tolist):
+            value = tolist()
+        if isinstance(value, (tuple, list)):
+            values = value
+        else:
+            try:
+                values = list(value)
+            except TypeError:
+                values = [value]
+        while values and isinstance(values[0], (tuple, list)):
+            flattened = []
+            for row in values:
+                flattened.extend(row if isinstance(row, (tuple, list)) else [row])
+            values = flattened
+
+        pcm = array.array("h")
+        for sample in values:
+            try:
+                numeric = float(sample)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(numeric):
+                numeric = 0.0
+            numeric = max(-1.0, min(1.0, numeric))
+            pcm.append(int(round(numeric * 32767.0)))
+
+        if not pcm:
             return b""
-        pcm = np.clip(data, -1.0, 1.0)
-        pcm = (pcm * 32767.0).astype("<i2", copy=False)
         output = io.BytesIO()
         with wave.open(output, "wb") as wav:
             wav.setnchannels(1)
