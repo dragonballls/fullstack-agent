@@ -27,7 +27,7 @@ NODE_SHA256 = "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541"
 OMNIROUTE_VERSION = "3.8.50"
 OMNIROUTE_COMMIT = "5458026c216f77a3da68ea49152dc33470cfe2cb"
 OMNIROUTE_SOURCE_URL = f"https://github.com/diegosouzapw/OmniRoute/archive/{OMNIROUTE_COMMIT}.zip"
-RUNTIME_CACHE_SCHEMA = "2"
+RUNTIME_CACHE_SCHEMA = "3"
 
 
 def sha256_file(path: Path) -> str:
@@ -196,7 +196,7 @@ def prepare(destination: Path) -> None:
                     "private": True,
                     "version": "1.0.0",
                     "allowScripts": {
-                        "omniroute": True,
+                        "omniroute@3.8.50": True,
                         "better-sqlite3": True,
                         "wreq-js": True,
                         "tls-client-node": True,
@@ -225,7 +225,7 @@ def prepare(destination: Path) -> None:
                 "--omit=dev",
                 # Keep dependencies hoisted so OmniRoute's postinstall can
                 # copy platform-correct natives from the project root into dist/.
-                "--install-strategy=hoisted",
+                "--install-strategy=nested",
                 "--package-lock=false",
                 "--ignore-scripts=false",
                 "--prefer-offline",
@@ -252,7 +252,7 @@ def prepare(destination: Path) -> None:
         # executed the package postinstall.
         shutil.copy2(bundled_node, staging / "node.exe")
         package_root = staging / "node_modules" / "omniroute"
-        root_native = staging / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
+        root_native = package_root / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
         app_native = package_root / "dist" / "node_modules" / "better-sqlite3" / "build" / "Release" / "better_sqlite3.node"
         if root_native.is_file():
             app_native.parent.mkdir(parents=True, exist_ok=True)
