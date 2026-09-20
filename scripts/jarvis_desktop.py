@@ -568,7 +568,7 @@ class JarvisWebApi:
         return self.host.set_voice_provider(provider)
 
     def voice_status(self) -> dict[str, Any]:
-        return self.voice.status()
+        return self.host.voice_status()
 
     def set_voice_provider(self, provider: str) -> dict[str, Any]:
         return self.voice.set_provider(provider)
