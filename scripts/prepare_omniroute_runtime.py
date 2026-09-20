@@ -8,6 +8,7 @@ installed with production dependencies and verified before packaging.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -26,8 +27,8 @@ NODE_URL = f"https://nodejs.org/dist/v{NODE_VERSION}/{NODE_ZIP_NAME}"
 NODE_SHA256 = "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541"
 OMNIROUTE_VERSION = "3.8.50"
 OMNIROUTE_COMMIT = "5458026c216f77a3da68ea49152dc33470cfe2cb"
-OMNIROUTE_SOURCE_URL = f"https://github.com/diegosouzapw/OmniRoute/archive/{OMNIROUTE_COMMIT}.zip"
-RUNTIME_CACHE_SCHEMA = "6"
+OMNIROUTE_NPM_METADATA_URL = f"https://registry.npmjs.org/omniroute/{OMNIROUTE_VERSION}"
+RUNTIME_CACHE_SCHEMA = "7"
 
 
 def sha256_file(path: Path) -> str:
@@ -152,49 +153,31 @@ def prepare(destination: Path) -> None:
         if not bundled_node.is_file() or not npm.is_file():
             raise RuntimeError("Node.js runtime is incomplete")
 
-        source_archive = temp / f"omniroute-{OMNIROUTE_COMMIT}.zip"
-        _download(OMNIROUTE_SOURCE_URL, source_archive)
-        source_extract = temp / "omniroute-source"
-        with ZipFile(source_archive) as zip_file:
-            zip_file.extractall(source_extract)
-        source_root = _single_extracted_root(source_extract)
-
-        package_json = source_root / "package.json"
-        source_entry = source_root / "bin" / "omniroute.mjs"
-        if not package_json.is_file() or not source_entry.is_file():
-            raise RuntimeError("Pinned OmniRoute source snapshot is incomplete")
-        metadata = json.loads(package_json.read_text(encoding="utf-8"))
-        if str(metadata.get("version")) != OMNIROUTE_VERSION:
-            raise RuntimeError("Pinned OmniRoute source version does not match the release version")
-
-        packed_dir = temp / "packed"
-        packed_dir.mkdir()
-        pack = subprocess.run(
-            [
-                str(npm),
-                "pack",
-                "--ignore-scripts",
-                "--pack-destination",
-                str(packed_dir),
-            ],
-            cwd=source_root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=180,
-            env={**os.environ, "NODE_ENV": "production"},
-            check=False,
-        )
-        if pack.returncode != 0:
-            raise RuntimeError(f"OmniRoute package creation failed: {(pack.stderr or pack.stdout or '').strip()[-4000:]}")
-        package_name = str(metadata.get("name") or "omniroute").split("/")[-1]
-        tarball = packed_dir / f"{package_name}-{OMNIROUTE_VERSION}.tgz"
-        if not tarball.is_file():
-            candidates = list(packed_dir.glob("*.tgz"))
-            if len(candidates) != 1:
-                raise RuntimeError("OmniRoute package archive was not produced as expected")
-            tarball = candidates[0]
+        metadata_path = temp / "omniroute-npm-metadata.json"
+        _download(OMNIROUTE_NPM_METADATA_URL, metadata_path)
+        registry = json.loads(metadata_path.read_text(encoding="utf-8"))
+        registry_version = str(registry.get("version") or "")
+        registry_git_head = str(registry.get("gitHead") or "")
+        dist = registry.get("dist") or {}
+        tarball_url = str(dist.get("tarball") or "")
+        integrity = str(dist.get("integrity") or "")
+        if registry_version != OMNIROUTE_VERSION:
+            raise RuntimeError(
+                f"npm registry returned OmniRoute {registry_version}, expected {OMNIROUTE_VERSION}"
+            )
+        if registry_git_head and registry_git_head != OMNIROUTE_COMMIT:
+            raise RuntimeError(
+                "npm registry gitHead does not match pinned OmniRoute commit: "
+                f"{registry_git_head} != {OMNIROUTE_COMMIT}"
+            )
+        if not tarball_url or not integrity.startswith("sha512-"):
+            raise RuntimeError("npm registry did not provide a verifiable OmniRoute tarball")
+        tarball = temp / f"omniroute-{OMNIROUTE_VERSION}.tgz"
+        _download(tarball_url, tarball)
+        expected_sha512 = base64.b64decode(integrity.removeprefix("sha512-"))
+        actual_sha512 = hashlib.sha512(tarball.read_bytes()).digest()
+        if actual_sha512 != expected_sha512:
+            raise RuntimeError("OmniRoute npm tarball integrity verification failed")
 
         staging = temp / "omniroute_runtime"
         staging.mkdir(parents=True)
@@ -294,9 +277,16 @@ def prepare(destination: Path) -> None:
                 "Prepared OmniRoute better-sqlite3 binary could not be loaded"
             )
 
-        installed_entry = staging / "node_modules" / "omniroute" / "bin" / "omniroute.mjs"
+        installed_package = staging / "node_modules" / "omniroute"
+        installed_entry = installed_package / "bin" / "omniroute.mjs"
+        installed_server = installed_package / "dist" / "server.js"
         if not installed_entry.is_file():
             raise RuntimeError("Installed OmniRoute runtime is missing its CLI entrypoint")
+        if not installed_server.is_file():
+            raise RuntimeError(
+                "Installed OmniRoute npm package is missing dist/server.js; "
+                "the published runtime bundle is incomplete"
+            )
 
         check = subprocess.run(
             [
