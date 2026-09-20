@@ -211,6 +211,9 @@ jobs:
           $process = $null
           $ready = $false
           try {
+            $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
+            $omniLog = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log'
+            Remove-Item -LiteralPath $log,$omniLog -Force -ErrorAction SilentlyContinue
             $process = Start-Process -FilePath 'dist/Jarvis.exe' -PassThru -WorkingDirectory (Resolve-Path '.')
             $startupTimeoutSeconds = 360
             $deadline = (Get-Date).AddSeconds($startupTimeoutSeconds)
@@ -227,35 +230,27 @@ jobs:
             $omniStartupTimeoutSeconds = 360
             $omniDeadline = (Get-Date).AddSeconds($omniStartupTimeoutSeconds)
             $omniReady = $false
-            $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
-            $omniLog = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log'
+            $warmupPassed = $false
             while ((Get-Date) -lt $omniDeadline) {
-              if (Test-Path -LiteralPath $log) {
-                $contents = Get-Content -LiteralPath $log -Raw
-                if ($contents -match 'embedded OmniRoute warm-up (?:failed|did not complete)') {
-                  throw 'Jarvis reported that embedded OmniRoute warm-up failed or timed out'
+              foreach ($candidate in @($log, $omniLog)) {
+                if (Test-Path -LiteralPath $candidate) {
+                  $contents = Get-Content -LiteralPath $candidate -Raw
+                  if ($contents -match 'embedded OmniRoute warm-up (?:failed|did not complete)') {
+                    throw 'Jarvis reported that embedded OmniRoute warm-up failed or timed out'
+                  }
+                  if ($contents -match 'embedded OmniRoute warm-up passed') {
+                    $warmupPassed = $true
+                  }
                 }
               }
-              $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
-              if ($tcp) { $omniReady = $true; break }
+              if ($warmupPassed) {
+                $omniReady = $true
+                break
+              }
+              if ($process.HasExited) { throw "Jarvis.exe exited before embedded OmniRoute warm-up completed with code $($process.ExitCode)" }
               Start-Sleep -Milliseconds 500
             }
-            if (-not $omniReady) { throw "Embedded OmniRoute did not become ready within $omniStartupTimeoutSeconds seconds" }
-
-            $warmupPassed = $false
-            foreach ($candidate in @(
-              (Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'),
-              (Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log')
-            )) {
-              if (Test-Path -LiteralPath $candidate) {
-                $contents = Get-Content -LiteralPath $candidate -Raw
-                if ($contents -match 'embedded OmniRoute warm-up passed') {
-                  $warmupPassed = $true
-                  break
-                }
-              }
-            }
-            if (-not $warmupPassed) { throw 'Embedded OmniRoute did not report a successful in-process warm-up' }
+            if (-not $omniReady) { throw "Embedded OmniRoute did not complete a successful warm-up within $omniStartupTimeoutSeconds seconds" }
 
             & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
             if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
