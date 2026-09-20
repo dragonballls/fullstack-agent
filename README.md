@@ -31,7 +31,7 @@ The Jarvis profile uses **OmniRoute only** as its conversational/agent brain. Cl
 
 The Jarvis voice profile adds local wake-word activation: after microphone permission is granted, wake detection can run locally and Jarvis does not send cloud requests until the wake word is accepted. See `JARVIS_SETUP.md` and `JARVIS_VOICE.md`.
 
-The preferred Jarvis speech output is **ElevenLabs**. Backtalk supplies microphone/speech input and push-to-talk behavior, while ElevenLabs supplies the spoken response. They are I/O components only, not Jarvis brains. **Kokoro** remains present in the development/build dependency set for upstream compatibility; it is not the Jarvis desktop speech-output engine.
+The default Jarvis speech output is **Kokoro Local**, an embedded open-weight TTS path that requires no paid voice API, while **ElevenLabs** remains an optional higher-end voice layer. Backtalk supplies microphone/speech input behavior, and all speech engines are I/O components only, never Jarvis brains.
 
 Jarvis also includes a scoped multi-account model for Google, Microsoft, GitHub, YouTube, Instagram, and generic web services. OAuth/user consent, provider scopes, local capability policy, and confirmation gates remain required; account credentials are kept behind a runtime credential broker.
 
