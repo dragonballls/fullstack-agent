@@ -308,6 +308,10 @@ class OmniRouteProvisioner:
             except OSError:
                 self._process_log_handle = None
             env = self.environment()
+            # The pinned OmniRoute server uses OMNIROUTE_SERVER_HOST for its bind address.
+            # Keep the legacy HOST value too for compatible runtimes, but never expose the
+            # embedded inference plane beyond loopback.
+            env["OMNIROUTE_SERVER_HOST"] = "127.0.0.1"
             env["HOST"] = "127.0.0.1"
             env["PORT"] = str(self.port)
             env.setdefault("OMNIROUTE_HEADLESS", "1")
