@@ -8,6 +8,7 @@ from quality_of_life.omniroute_setup import OmniRouteProvisioner, detect_provide
 
 
 class OmniRouteSetupTests(unittest.TestCase):
+    # Keep fresh-machine packaged-start coverage exercised by the release gate.
     def test_auto_detects_only_unambiguous_provider_key_formats(self):
         cases = {
             "sk-ant-example-123456": "anthropic",
