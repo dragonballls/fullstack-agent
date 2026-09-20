@@ -8,6 +8,7 @@ from quality_of_life.omniroute_setup import OmniRouteProvisioner, detect_provide
 
 
 class OmniRouteSetupTests(unittest.TestCase):
+    # Keep fresh-machine packaged-start coverage exercised by the release gate.
     def test_auto_detects_only_unambiguous_provider_key_formats(self):
         cases = {
             "sk-ant-example-123456": "anthropic",
@@ -103,6 +104,56 @@ class OmniRouteSetupTests(unittest.TestCase):
                 command = provisioner.resolve_command(install_if_missing=False)
             self.assertEqual(command, ("node.exe", "omniroute.mjs"))
             self.assertEqual(provisioner._source, "bundled")
+
+    def test_start_forces_omniroute_loopback_bind(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "OmniRoute"
+            provisioner = OmniRouteProvisioner(data_dir=data_dir)
+            provisioner._resolved = ("node.exe", "omniroute.mjs")
+            provisioner._source = "bundled"
+
+            class Process:
+                def poll(self):
+                    return 0
+
+            with patch.dict("os.environ", {"OMNIROUTE_SERVER_HOST": "0.0.0.0"}, clear=False):
+                with patch.object(provisioner, "_probe", return_value=False):
+                    with patch(
+                        "quality_of_life.omniroute_setup.subprocess.Popen",
+                        return_value=Process(),
+                    ) as popen:
+                        self.assertFalse(provisioner.ensure_running(wait_seconds=0.5))
+
+            env = popen.call_args.kwargs["env"]
+            self.assertEqual(env["OMNIROUTE_SERVER_HOST"], "127.0.0.1")
+            self.assertEqual(env["HOST"], "127.0.0.1")
+            if provisioner._process_log_handle is not None:
+                provisioner._process_log_handle.close()
+                provisioner._process_log_handle = None
+
+    def test_start_creates_missing_working_directory_before_popen(self):
+        with TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "OmniRoute"
+            provisioner = OmniRouteProvisioner(data_dir=data_dir)
+            provisioner._resolved = ("node.exe", "omniroute.mjs")
+            provisioner._source = "bundled"
+
+            class Process:
+                def poll(self):
+                    return 0
+
+            with patch.object(provisioner, "_probe", return_value=False):
+                with patch(
+                    "quality_of_life.omniroute_setup.subprocess.Popen",
+                    return_value=Process(),
+                ) as popen:
+                    self.assertFalse(provisioner.ensure_running(wait_seconds=0.5))
+
+            self.assertTrue(data_dir.is_dir())
+            self.assertEqual(popen.call_args.kwargs["cwd"], str(data_dir))
+            if provisioner._process_log_handle is not None:
+                provisioner._process_log_handle.close()
+                provisioner._process_log_handle = None
 
 
 if __name__ == "__main__":
