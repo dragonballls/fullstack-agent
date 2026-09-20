@@ -1048,10 +1048,17 @@ class FullstackJarvisHost:
         return self.omniroute.test_provider(provider)
 
     def voice_audio(self) -> dict[str, Any]:
-        voice = getattr(self.voice, "kokoro", None)
-        provider = getattr(self.voice, "provider", lambda: "kokoro")()
+        provider_fn = getattr(self.voice, "provider", None)
+        provider = str(provider_fn()).strip().lower() if callable(provider_fn) else ""
+        kokoro = getattr(self.voice, "kokoro", None)
+        elevenlabs = getattr(self.voice, "elevenlabs", None)
         if provider == "elevenlabs":
-            voice = getattr(self.voice, "elevenlabs", voice)
+            voice = elevenlabs if callable(getattr(elevenlabs, "take_audio", None)) else kokoro
+        elif provider == "kokoro":
+            voice = kokoro if callable(getattr(kokoro, "take_audio", None)) else elevenlabs
+        else:
+            # Backward-compatible injection path for existing tests and embedders.
+            voice = elevenlabs if callable(getattr(elevenlabs, "take_audio", None)) else kokoro
         take_audio = getattr(voice, "take_audio", None)
         generation = int(getattr(voice, "generation", 0) or 0)
         if not callable(take_audio):
