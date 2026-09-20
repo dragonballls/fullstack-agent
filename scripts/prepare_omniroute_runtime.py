@@ -232,7 +232,7 @@ def prepare(destination: Path) -> None:
             stdout=None,
             stderr=None,
             timeout=1800,
-            env={**os.environ, "NODE_ENV": "production"},
+            env={**os.environ, "NODE_ENV": "production", "CI": "1", "OMNIROUTE_SKIP_POSTINSTALL": "1"},
             check=False,
         )
         if result.returncode != 0:
