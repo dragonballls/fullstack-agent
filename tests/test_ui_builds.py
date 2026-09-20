@@ -141,7 +141,7 @@ class UIBuildStoreTests(unittest.TestCase):
                 json.dumps({"active": "missing-build", "history": ["missing-build"]}),
                 encoding="utf-8",
             )
-            self.assertEqual(store.active().id, DEFAULT_BUILD_ID)
+            self.assertEqual(store.active().id, DEFAULT_ACTIVE_BUILD_ID)
             self.assertEqual(store.active().id, json.loads((Path(tmp) / "state.json").read_text(encoding="utf-8"))["active"])
 
     def test_no_console_entrypoint_installs_ui_build_manager(self):
