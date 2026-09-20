@@ -27,7 +27,7 @@ NODE_SHA256 = "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541"
 OMNIROUTE_VERSION = "3.8.50"
 OMNIROUTE_COMMIT = "5458026c216f77a3da68ea49152dc33470cfe2cb"
 OMNIROUTE_SOURCE_URL = f"https://github.com/diegosouzapw/OmniRoute/archive/{OMNIROUTE_COMMIT}.zip"
-RUNTIME_CACHE_SCHEMA = "3"
+RUNTIME_CACHE_SCHEMA = "4"
 
 
 def sha256_file(path: Path) -> str:
@@ -196,7 +196,7 @@ def prepare(destination: Path) -> None:
                     "private": True,
                     "version": "1.0.0",
                     "allowScripts": {
-                        "omniroute@3.8.50": True,
+                        "file:../packed/omniroute-3.8.50.tgz": True,
                         "better-sqlite3": True,
                         "wreq-js": True,
                         "tls-client-node": True,
