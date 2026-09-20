@@ -156,6 +156,22 @@ class JarvisVoiceBridgeTests(TestCase):
         controller.execute_request.assert_called_once_with("hello", confirmed=False)
         mouth.say.assert_called_once_with("done")
 
+    def test_browser_playback_state_keeps_speaker_gate_closed(self):
+        bridge = JarvisVoiceBridge(controller=Mock(), ears=Mock(), mouth=Mock())
+        bridge.mouth.speaking = False
+
+        self.assertFalse(bridge._speaker_gate())
+        bridge.set_output_active(True)
+        self.assertTrue(bridge._speaker_gate())
+        bridge.set_output_active(False)
+        self.assertFalse(bridge._speaker_gate())
+
+    def test_stop_clears_browser_playback_state(self):
+        bridge = JarvisVoiceBridge(controller=Mock(), ears=Mock(), mouth=Mock())
+        bridge.set_output_active(True)
+        bridge.stop()
+        self.assertFalse(bridge._browser_audio_active)
+
     def test_stop_closes_audio_output_when_vendor_exposes_drop_out(self):
         controller = Mock()
         ears = Mock()
