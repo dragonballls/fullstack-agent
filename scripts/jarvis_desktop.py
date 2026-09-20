@@ -1063,7 +1063,11 @@ class FullstackJarvisHost:
             # Backward-compatible injection path for existing tests and embedders.
             voice = elevenlabs if callable(getattr(elevenlabs, "take_audio", None)) else kokoro
         take_audio = getattr(voice, "take_audio", None)
-        generation = int(getattr(voice, "generation", 0) or 0)
+        raw_generation = getattr(voice, "generation", 0)
+        try:
+            generation = int(raw_generation)
+        except (TypeError, ValueError):
+            generation = 0
         if not callable(take_audio):
             return {"ok": True, "items": [], "generation": generation}
         try:
