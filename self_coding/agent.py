@@ -291,14 +291,9 @@ Verification policy:
 """
         if failures:
             recent = failures[-3:]
-            prompt += "
-Previous attempt diagnostics (use these as repair input):
-"
+            prompt += "\nPrevious attempt diagnostics (use these as repair input):\n"
             for index, failure in enumerate(recent, start=max(1, len(failures) - len(recent) + 1)):
-                prompt += f"
---- diagnostic {index} ---
-{failure[:6000]}
-"
+                prompt += f"\n--- diagnostic {index} ---\n{failure[:6000]}\n"
         return prompt
 
     def _find_backend(self) -> str:
