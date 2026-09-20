@@ -487,6 +487,16 @@ class PersonaConversation:
                 target = self.store.get(addressed) if addressed else self.active
                 if addressed and target is not None:
                     self.store.switch(target.name)
+                    if not body:
+                        acknowledgement = f"Switched to {target.name}."
+                        turn = PersonaTurn(target.name, acknowledgement)
+                        self._history.append(turn)
+                        return PersonaResponse(
+                            acknowledgement,
+                            target.name,
+                            (turn,),
+                            switched_to=target.name,
+                        )
                 prompt = body if addressed and body else message
                 if target and target.name.casefold() == "jarvis":
                     result = self.controller.execute_request(prompt, confirmed=confirmed)
