@@ -264,11 +264,14 @@ class OmniRouteProvisioner:
     def _probe(self) -> bool:
         parsed = urllib.parse.urlparse(self.base_url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        for url in (self.base_url + "/models", origin + "/api/monitoring/health", origin + "/healthz"):
+        # Prefer OmniRoute's lightweight liveness endpoint. The monitoring and
+        # model-catalog routes can perform heavier work during cold startup and
+        # should never block readiness of the local gateway.
+        for url in (origin + "/healthz", self.base_url + "/models", origin + "/api/monitoring/health"):
             try:
                 with urllib.request.urlopen(
                     urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET"),
-                    timeout=1.5,
+                    timeout=5.0,
                 ) as response:
                     if 200 <= int(response.status) < 300:
                         return True
