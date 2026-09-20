@@ -124,6 +124,7 @@ class JarvisVoiceBridge:
         self.config: dict[str, Any] = dict(DEFAULT_CONFIG)
         self._barge_event = threading.Event()
         self._ptt_thread: threading.Thread | None = None
+        self._browser_audio_active = False
 
     def _mode(self) -> str:
         """Normalize Jarvis voice modes without leaking an upstream-only value."""
@@ -275,9 +276,17 @@ class JarvisVoiceBridge:
         else:
             self._run_ptt()
 
+    def set_output_active(self, active: bool) -> None:
+        """Track actual WebView playback separately from TTS synthesis."""
+        with self._speak_lock:
+            self._browser_audio_active = bool(active)
+
     def _speaker_gate(self) -> bool:
-        """Do not let Jarvis hear its own speaker output; physical PTT can override."""
-        return bool(getattr(self.mouth, "speaking", False)) and not self._barge_event.is_set()
+        """Do not let Jarvis hear its own output; physical PTT can override."""
+        speaking = bool(getattr(self.mouth, "speaking", False))
+        with self._speak_lock:
+            browser_audio = self._browser_audio_active
+        return (speaking or browser_audio) and not self._barge_event.is_set()
 
     def _run_live_barge_watch(self) -> None:
         """Watch one physical key for immediate, safe barge-in and manual capture."""
@@ -359,6 +368,7 @@ class JarvisVoiceBridge:
         if self.stopped:
             return
         self.stop_event.set()
+        self.set_output_active(False)
         try:
             if self.ptt is not None:
                 listener = getattr(self.ptt, "_listener", None)
