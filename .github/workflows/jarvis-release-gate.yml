@@ -230,14 +230,10 @@ jobs:
             $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
             $omniLog = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log'
             while ((Get-Date) -lt $omniDeadline) {
-              foreach ($candidate in @($log, $omniLog)) {
-                if (Test-Path -LiteralPath $candidate) {
-                  $contents = Get-Content -LiteralPath $candidate -Raw
-                  if ($contents -match '(?:FATAL|Error|ERROR).*OmniRoute|embedded OmniRoute warm-up (?:failed|did not complete)') {
-                    Write-Host "=== OmniRoute diagnostics from $candidate ==="
-                    $contents | Write-Host
-                    throw 'Jarvis reported that embedded OmniRoute warm-up failed or timed out'
-                  }
+              if (Test-Path -LiteralPath $log) {
+                $contents = Get-Content -LiteralPath $log -Raw
+                if ($contents -match 'embedded OmniRoute warm-up (?:failed|did not complete)') {
+                  throw 'Jarvis reported that embedded OmniRoute warm-up failed or timed out'
                 }
               }
               $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
@@ -260,99 +256,6 @@ jobs:
               }
             }
             if (-not $warmupPassed) { throw 'Embedded OmniRoute did not report a successful in-process warm-up' }
-
-            & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
-            if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
-          }
-          catch {
-            Write-Host '=== Jarvis process diagnostics ==='
-            if ($null -ne $process) { Write-Host ("PID={0} HasExited={1} ExitCode={2}" -f $process.Id, $process.HasExited, $process.ExitCode) }
-            Get-NetTCPConnection -LocalPort 8790 -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
-            Get-NetTCPConnection -LocalPort 20128 -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
-            $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
-            $omniLog = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log'
-            if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Raw | Write-Host }
-            if (Test-Path -LiteralPath $omniLog) { Write-Host '=== OmniRoute startup log ==='; Get-Content -LiteralPath $omniLog -Raw | Write-Host }
-            throw
-          }
-          finally {
-            if ($null -ne $process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
-            $owners = @(Get-NetTCPConnection -LocalPort 20128 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
-            foreach ($owner in $owners) {
-              if ($owner -and $owner -ne $PID) { Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue }
-            }
-          }
-
-      - name: Smoke-test the packaged native Jarvis host
-        shell: pwsh
-        env:
-          JARVIS_ALLOW_HEADLESS_GUI: '1'
-          JARVIS_UI_SMOKE: '1'
-        run: ./scripts/verify_windows_gui_smoke.ps1
-      - name: Generate signed Jarvis.exe build attestation
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
-        with:
-          subject-path: dist/Jarvis.exe
-      - name: Upload raw Jarvis.exe build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Jarvis-Windows-Exe
-          path: dist/Jarvis.exe
-          if-no-files-found: error
-          retention-days: 14
-
-  latest-release:
-    name: Publish rolling Jarvis latest release
-    if: github.ref == 'refs/heads/main'
-    needs: windows-exe
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      attestations: read
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Jarvis-Windows-Exe
-          path: dist
-      - name: Verify Jarvis.exe build attestation
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh attestation verify dist/Jarvis.exe -R "${{ github.repository }}" --signer-workflow "${{ github.repository }}/.github/workflows/jarvis-release-gate.yml"
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: Jarvis Latest
-          body: |
-            commit: ${{ github.sha }}
-            Generated only after the full Jarvis release gate passes.
-            The packaged binary is provenance-attested and verified before publication.
-          files: dist/Jarvis.exe
-          overwrite_files: true
-          make_latest: false
-
-  tagged-release:
-    name: Publish direct Jarvis.exe release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: windows-exe
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      attestations: read
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Jarvis-Windows-Exe
-          path: dist
-      - name: Verify Jarvis.exe build attestation
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh attestation verify dist/Jarvis.exe -R "${{ github.repository }}" --signer-workflow "${{ github.repository }}/.github/workflows/jarvis-release-gate.yml"
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/Jarvis.exe
-          generate_release_notes: true -or $code -in @('401','403','405')) { $healthOk = $true; break }
-            }
-            if (-not $healthOk) { throw 'Embedded OmniRoute opened its TCP port but did not answer a direct local HTTP readiness probe' }
 
             & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
             if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
