@@ -168,6 +168,15 @@ class JarvisDesktopTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["sequence"], 1)
         self.assertEqual(result["generation"], 0)
 
+    def test_voice_audio_handles_legacy_mouth_without_numeric_generation(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=SimpleNamespace(elevenlabs=Mock()), hands=Mock())
+        host.voice.elevenlabs.generation = Mock()
+        host.voice.elevenlabs.take_audio.return_value = [{"sequence": 1, "mime": "audio/mpeg", "data": "YQ=="}]
+        result = host.voice_audio()
+        self.assertEqual(result["generation"], 0)
+        self.assertEqual(result["items"][0]["sequence"], 1)
+
     def test_auto_detect_api_method_never_receives_provider_secret_back(self):
         controller = Mock()
         host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
