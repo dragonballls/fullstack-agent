@@ -204,6 +204,24 @@ class JarvisVoiceBridge:
             except Exception as exc:
                 _log(f"speech output error: {type(exc).__name__}: {exc}")
 
+
+    def set_mouth(self, mouth: Any) -> None:
+        """Atomically replace the active mouth and cancel pending audio from the old mouth."""
+        if mouth is None:
+            raise ValueError("mouth is required")
+        with self._speak_lock:
+            old = self.mouth
+            if old is mouth:
+                return
+            self.mouth = mouth
+            try:
+                shut_up = getattr(old, "shut_up", None)
+                if callable(shut_up):
+                    shut_up()
+            except Exception as exc:
+                _log(f"old mouth cancellation failed: {type(exc).__name__}: {exc}")
+
+
     def handle_transcript(self, text: str) -> Any:
         text = text.strip()
         if not text:
