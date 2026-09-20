@@ -255,6 +255,11 @@ class ElevenLabsMouth:
         self._configured_at = time.monotonic()
 
     @property
+    def generation(self) -> int:
+        with self._lock:
+            return self._generation
+
+    @property
     def speaking(self) -> bool:
         with self._lock:
             return self._speaking
@@ -420,3 +425,265 @@ class ElevenLabsMouth:
                 worker.join(timeout=0.5)
         with self._lock:
             self._workers.clear()
+
+
+FREE_VOICE_PROVIDER = "kokoro"
+KOKORO_DEFAULT_VOICE = "bm_lewis"
+KOKORO_LANG_CODE = "b"
+KOKORO_MODEL_ID = "hexgrad/Kokoro-82M"
+KOKORO_SAMPLE_RATE = 24000
+
+
+class KokoroMouth:
+    """Local, zero-cost TTS mouth with cancellable generation and streamed packets."""
+
+    def __init__(
+        self,
+        *,
+        voice_id: str | None = None,
+        device: str | None = None,
+        speed: float = 1.0,
+        pipeline: Any | None = None,
+    ) -> None:
+        self.voice_id = (voice_id or os.environ.get("JARVIS_KOKORO_VOICE") or KOKORO_DEFAULT_VOICE).strip()[:128]
+        self.device = (device or os.environ.get("JARVIS_KOKORO_DEVICE") or "cpu").strip().lower()
+        self.speed = min(2.0, max(0.65, float(speed)))
+        self._pipeline = pipeline
+        self._pipeline_lock = threading.RLock()
+        self._lock = threading.RLock()
+        self._generation = 0
+        self._queue: deque[VoiceAudioPacket] = deque(maxlen=24)
+        self._workers: set[threading.Thread] = set()
+        self._speaking = False
+        self._prepared = pipeline is not None
+        self._last_error = ""
+
+    @staticmethod
+    def available() -> bool:
+        try:
+            import kokoro  # noqa: F401
+            return True
+        except Exception:
+            return False
+
+    @property
+    def generation(self) -> int:
+        with self._lock:
+            return self._generation
+
+    @property
+    def speaking(self) -> bool:
+        with self._lock:
+            return self._speaking
+
+    @property
+    def configured(self) -> bool:
+        return self.available()
+
+    @property
+    def prepared(self) -> bool:
+        with self._lock:
+            return self._prepared
+
+    def _get_pipeline(self) -> Any:
+        with self._pipeline_lock:
+            if self._pipeline is not None:
+                return self._pipeline
+            try:
+                from kokoro import KPipeline
+                self._pipeline = KPipeline(lang_code=KOKORO_LANG_CODE, device=self.device)
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = _redact_error(exc)
+                raise RuntimeError("Local Kokoro voice engine could not initialize") from exc
+            return self._pipeline
+
+    def prepare(self) -> dict[str, object]:
+        pipeline = self._get_pipeline()
+        try:
+            loader = getattr(pipeline, "load_voice", None)
+            if callable(loader):
+                loader(self.voice_id)
+            with self._lock:
+                self._prepared = True
+                self._last_error = ""
+            return {
+                "ok": True,
+                "provider": "Kokoro Local",
+                "voice_id": self.voice_id,
+                "model_id": KOKORO_MODEL_ID,
+                "prepared": True,
+            }
+        except Exception as exc:
+            with self._lock:
+                self._last_error = _redact_error(exc)
+            raise RuntimeError("Local Kokoro voice preparation failed") from exc
+
+    @staticmethod
+    def _wav_bytes(audio: Any) -> bytes:
+        import io
+        import wave
+        import numpy as np
+
+        value = audio
+        detach = getattr(value, "detach", None)
+        if callable(detach):
+            value = detach()
+        cpu = getattr(value, "cpu", None)
+        if callable(cpu):
+            value = cpu()
+        to_numpy = getattr(value, "numpy", None)
+        if callable(to_numpy):
+            value = to_numpy()
+        data = np.asarray(value, dtype=np.float32).reshape(-1)
+        if data.size == 0:
+            return b""
+        pcm = np.clip(data, -1.0, 1.0)
+        pcm = (pcm * 32767.0).astype("<i2", copy=False)
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(KOKORO_SAMPLE_RATE)
+            wav.writeframes(pcm.tobytes())
+        return output.getvalue()
+
+    def _run_generation(self, message: str, generation: int) -> None:
+        pipeline = self._get_pipeline()
+        with self._pipeline_lock:
+            generator = pipeline(message, voice=self.voice_id, speed=self.speed)
+            for result in generator:
+                audio = getattr(result, "audio", None)
+                if audio is None:
+                    try:
+                        audio = result[2]
+                    except Exception:
+                        audio = None
+                if audio is None:
+                    continue
+                packet_data = self._wav_bytes(audio)
+                if not packet_data:
+                    continue
+                with self._lock:
+                    if generation != self._generation:
+                        return
+                    self._queue.append(
+                        VoiceAudioPacket(
+                            sequence=generation,
+                            mime="audio/wav",
+                            data=base64.b64encode(packet_data).decode("ascii"),
+                        )
+                    )
+                    self._prepared = True
+        with self._lock:
+            if generation == self._generation:
+                self._last_error = ""
+
+    def say(self, text: str) -> None:
+        message = str(text or "").strip()
+        if not message:
+            return
+        with self._lock:
+            self._generation += 1
+            generation = self._generation
+            self._speaking = True
+            self._last_error = ""
+        worker = threading.Thread(
+            target=self._worker,
+            args=(message, generation),
+            name="jarvis-kokoro-tts",
+            daemon=True,
+        )
+        with self._lock:
+            self._workers.add(worker)
+        worker.start()
+
+    def _worker(self, message: str, generation: int) -> None:
+        current = threading.current_thread()
+        try:
+            self._run_generation(message, generation)
+        except Exception as exc:
+            with self._lock:
+                if generation == self._generation:
+                    self._last_error = _redact_error(exc)
+        finally:
+            with self._lock:
+                self._workers.discard(current)
+                if generation == self._generation:
+                    self._speaking = False
+
+    def test_speech(self, text: str = "Local voice channel confirmed.") -> dict[str, object]:
+        try:
+            with self._lock:
+                self._generation += 1
+                generation = self._generation
+                self._speaking = True
+                self._last_error = ""
+            self._run_generation(text, generation)
+            with self._lock:
+                spoken = any(packet.sequence == generation for packet in self._queue)
+                if generation == self._generation:
+                    self._speaking = False
+            return {
+                "ok": spoken,
+                "configured": self.configured,
+                "tested": True,
+                "spoken": spoken,
+                "provider": "Kokoro Local",
+                "message": "Local Kokoro speech test passed" if spoken else "Local Kokoro speech test produced no audio",
+            }
+        except Exception:
+            with self._lock:
+                self._speaking = False
+                self._last_error = "Local Kokoro speech test failed"
+            return {
+                "ok": False,
+                "configured": self.configured,
+                "tested": True,
+                "spoken": False,
+                "provider": "Kokoro Local",
+                "message": "Local Kokoro speech test failed",
+            }
+
+    def status(self) -> dict[str, object]:
+        with self._lock:
+            return {
+                "ok": True,
+                "configured": self.configured,
+                "provider": "Kokoro Local",
+                "voice_id": self.voice_id,
+                "model_id": KOKORO_MODEL_ID,
+                "device": self.device,
+                "prepared": self._prepared,
+                "speaking": self._speaking,
+                "generation": self._generation,
+                "last_error": self._last_error,
+            }
+
+    def take_audio(self) -> list[dict[str, object]]:
+        with self._lock:
+            packets = list(self._queue)
+            self._queue.clear()
+        return [
+            {"sequence": item.sequence, "mime": item.mime, "data": item.data}
+            for item in packets
+        ]
+
+    def shut_up(self) -> None:
+        with self._lock:
+            self._generation += 1
+            self._queue.clear()
+            self._speaking = False
+
+    def shutdown(self) -> None:
+        self.shut_up()
+        with self._lock:
+            workers = list(self._workers)
+        for worker in workers:
+            if worker.is_alive():
+                worker.join(timeout=0.7)
+        with self._lock:
+            self._workers.clear()
+
+    def warm_up(self) -> dict[str, object]:
+        return self.prepare()
