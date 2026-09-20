@@ -24,12 +24,14 @@ class KokoroMouthTests(TestCase):
 
     def test_new_generation_cancels_older_audio(self):
         mouth = KokoroMouth(pipeline=_FakePipeline())
+        mouth._generation = 7
         mouth.say("first")
+        first_generation = mouth.generation
         mouth.shut_up()
-        mouth.say("second")
-        self.assertGreaterEqual(mouth.generation, 3)
-        packets = mouth.take_audio()
-        self.assertTrue(all(packet["sequence"] == mouth.generation for packet in packets))
+        cancelled_generation = mouth.generation
+        mouth._run_generation("stale", first_generation)
+        self.assertEqual(mouth.take_audio(), [])
+        self.assertEqual(mouth.generation, cancelled_generation)
 
     def test_missing_kokoro_is_reported_without_startup_import_failure(self):
         mouth = KokoroMouth(pipeline=None)
