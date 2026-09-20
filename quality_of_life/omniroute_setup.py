@@ -375,7 +375,7 @@ class OmniRouteProvisioner:
             raise ValueError("provider API key is too short")
         command = self.command_argv()
         env = self.environment()
-        add_command = [*command, "--non-interactive", "providers", "add", normalized, "--credential-stdin"]
+        add_command = [*command, "providers", "add", normalized, "--credential-stdin", "--yes"]
         result = subprocess.run(
             add_command,
             input=key + "\n",
@@ -395,7 +395,7 @@ class OmniRouteProvisioner:
     def list_providers(self, *, install_if_missing: bool = True) -> list[dict[str, object]]:
         command = self.command_argv(install_if_missing=install_if_missing)
         result = subprocess.run(
-            [*command, "--non-interactive", "providers", "list", "--json"],
+            [*command, "providers", "list", "--json"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -430,7 +430,7 @@ class OmniRouteProvisioner:
             raise ValueError("provider is required")
         command = self.command_argv()
         result = subprocess.run(
-            [*command, "--non-interactive", "providers", "test", normalized],
+            [*command, "providers", "test", normalized],
             capture_output=True,
             text=True,
             encoding="utf-8",
