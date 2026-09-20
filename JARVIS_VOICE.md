@@ -1,6 +1,6 @@
 # Jarvis voice
 
-Jarvis uses the embedded Backtalk input layer as its desktop voice interface. Backtalk handles microphone capture, speech recognition, and push-to-talk/listening behavior; ElevenLabs handles speech output, and the Jarvis runtime remains the only planner and tool-execution brain.
+Jarvis uses the embedded Backtalk input layer as its desktop voice interface. Backtalk handles microphone capture, speech recognition, and push-to-talk/listening behavior; Kokoro Local is the default speech output, ElevenLabs remains optional, and the Jarvis runtime remains the only planner and tool-execution brain.
 
 ## Brain and routing
 
@@ -40,11 +40,11 @@ An open-microphone mode is available through the supported Backtalk configuratio
 
 ## Speech output and shutdown
 
-**ElevenLabs is the Jarvis speech-output engine.** Backtalk remains the microphone/speech-input and push-to-talk layer; it is no longer used as the desktop speech mouth. The Jarvis voice bridge injects the ElevenLabs mouth directly, so there is one outbound speech path and one deduplication boundary.
+**Kokoro Local is the default Jarvis speech-output engine.** Backtalk remains the microphone/speech-input and push-to-talk layer; it is not used as the desktop speech mouth. ElevenLabs remains an optional output engine, and the Jarvis voice bridge injects exactly one active mouth at a time with one deduplication/cancellation boundary.
 
 Jarvis must never store or save the ElevenLabs API key in tracked files or committed configuration.\n\nCredential resolution is explicit: `ELEVENLABS_API_KEY` is accepted only as a runtime environment override; otherwise Jarvis reads the `Jarvis` / `ElevenLabs` entry from the OS credential store. Neither path writes the secret to tracked configuration, command-line arguments, or diagnostic logs.\n\nThe combined AI Provider / Voice Settings surface is available from the shared UI layer used by every UI build. Paste the ElevenLabs API key once, choose the configured/default voice, and use **SAVE & TEST VOICE**. The secret is stored through the Windows credential store via `keyring`; the JSON voice settings contain only non-secret voice/model identifiers.
 
-The default model is **Eleven v3 Conversational**, selected for expressive realtime conversation. Flash v2.5 remains available when lower latency is preferred. The voice selector can load the voices available to the configured ElevenLabs account. Jarvis's response model is separately guided toward a calm, precise, discreetly formal dialogue style before speech synthesis.
+The default free voice is **Kokoro 82M** with the `bm_lewis` voice, while the optional ElevenLabs path supports Conversational v3 and Flash v2.5 when a paid account is configured. The voice selector can load the voices available to the configured ElevenLabs account. Jarvis's response model is separately guided toward a calm, precise, discreetly formal dialogue style before speech synthesis.
 
 The WebView is the audio sink: Jarvis passes only short-lived, browser-playable audio packets to the native UI, so normal speech playback requires no MPV/ffmpeg console and does not open a visible PowerShell window.
 
