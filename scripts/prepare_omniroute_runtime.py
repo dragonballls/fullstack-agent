@@ -68,7 +68,7 @@ def _native_load_ok(node: Path, native: Path) -> bool:
             errors="replace",
             timeout=30,
             check=False,
-            env={**os.environ, "NODE_ENV": "production"},
+            env={**os.environ, "NODE_ENV": "production", "CI": "1", "OMNIROUTE_SKIP_POSTINSTALL": "1"},
         )
     except (OSError, subprocess.SubprocessError):
         return False
@@ -232,7 +232,7 @@ def prepare(destination: Path) -> None:
             stdout=None,
             stderr=None,
             timeout=1800,
-            env={**os.environ, "NODE_ENV": "production"},
+            env={**os.environ, "NODE_ENV": "production", "CI": "1", "OMNIROUTE_SKIP_POSTINSTALL": "1"},
             check=False,
         )
         if result.returncode != 0:
