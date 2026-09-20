@@ -93,6 +93,69 @@ class SelfCodingTests(unittest.TestCase):
         self.assertEqual((root / "verified.txt").read_text(encoding="utf-8"), "verified\n")
         self.assertEqual(self.git(root, "log", "-1", "--pretty=%s"), "agent: verified self-coding change")
 
+    def test_verification_failure_is_repaired_automatically(self) -> None:
+        root = self.make_repo()
+        marker_file = root.parent / "self-coding-verify-once.marker"
+        code = (
+            "from pathlib import Path; "
+            f"p=Path(r'{marker_file}'); "
+            "n=int(p.read_text()) if p.exists() else 0; "
+            "p.write_text(str(n+1)); "
+            "raise SystemExit(1 if n == 0 else 0)"
+        )
+        config = SelfCodingConfig(
+            repo=root,
+            test_commands=((sys.executable, "-c", code),),
+            max_passes=3,
+        )
+        agent = SelfCodingAgent(config)
+        prompts: list[str] = []
+        calls = 0
+
+        def backend(prompt: str) -> None:
+            nonlocal calls
+            calls += 1
+            prompts.append(prompt)
+            (root / "repaired.txt").write_text(f"attempt {calls}\n", encoding="utf-8")
+
+        agent._invoke_backend = backend  # type: ignore[method-assign]
+        checkpoint_id = agent.run("make a safe change")
+        self.assertEqual(calls, 2)
+        self.assertIn("Autonomous verification attempt 2/3", prompts[1])
+        self.assertIn("Verification failed", prompts[1])
+        self.assertEqual((root / "repaired.txt").read_text(encoding="utf-8"), "attempt 2\n")
+        self.assertEqual(agent.list_checkpoints()[0]["attempts"], 2)
+        self.assertEqual(agent.list_checkpoints()[0]["checkpoint_id"], checkpoint_id)
+
+    def test_exhausted_repair_loop_rolls_back_cleanly(self) -> None:
+        root = self.make_repo()
+        config = SelfCodingConfig(
+            repo=root,
+            test_commands=((sys.executable, "-c", "raise SystemExit(1)"),),
+            max_passes=2,
+        )
+        agent = SelfCodingAgent(config)
+        calls = 0
+
+        def backend(prompt: str) -> None:
+            nonlocal calls
+            calls += 1
+            (root / "broken.txt").write_text(f"attempt {calls}\n", encoding="utf-8")
+
+        agent._invoke_backend = backend  # type: ignore[method-assign]
+        with self.assertRaisesRegex(SelfCodingError, "exhausted after 2 attempts"):
+            agent.run("make a change that must verify")
+        self.assertEqual(calls, 2)
+        self.assertFalse((root / "broken.txt").exists())
+        self.assertEqual(self.git(root, "status", "--porcelain"), "")
+        self.assertEqual(self.git(root, "branch", "--show-current"), "main")
+
+    def test_unbounded_self_repair_is_rejected(self) -> None:
+        root = self.make_repo()
+        agent = SelfCodingAgent(SelfCodingConfig(repo=root, max_passes=9))
+        with self.assertRaisesRegex(SelfCodingError, "cannot exceed 8"):
+            agent.run("do not run")
+
     def test_self_coding_prompt_requires_repository_wide_coherence(self) -> None:
         root = self.make_repo()
         prompt = SelfCodingAgent._prompt("improve a capability")

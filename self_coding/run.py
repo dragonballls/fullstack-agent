@@ -31,7 +31,7 @@ def main() -> int:
 
     parser.add_argument("goal", nargs="?", help="What the coding agent should improve (default action: preview)")
     parser.add_argument("--push", action="store_true", help="Push the verified checkpoint branch to origin")
-    parser.add_argument("--passes", type=int, default=1, help="Number of verified coding passes")
+    parser.add_argument("--passes", type=int, default=5, help="Maximum autonomous implementation/verification attempts (1-8)")
     parser.add_argument("--backend", default="auto", choices=("auto", "claude", "codex", "gemini"))
     args = parser.parse_args()
 

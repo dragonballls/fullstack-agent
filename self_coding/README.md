@@ -7,8 +7,9 @@
 1. Requires a real Git repository and a clean working tree.
 2. Creates an isolated named `agent/checkpoint/<name>` branch.
 3. Sends the coding goal to an installed cloud coding CLI (`claude`, `codex`, or `gemini`).
-4. Runs verification commands after the agent changes code.
-5. Commits only after verification succeeds.
+4. Runs verification commands quietly after every coding attempt; test output is captured instead of being printed into the UI.
+5. If verification fails, feeds the concrete failure diagnostics into the next coding attempt so the agent can repair its own change.
+6. Commits only after verification succeeds.
 6. Saves durable checkpoint metadata under `.git/jarvis-checkpoints/`.
 7. Optionally pushes the verified checkpoint branch with `--push`; this never publishes `main`.
 8. If anything fails, restores the exact starting commit and removes newly-created untracked files.
@@ -38,4 +39,4 @@ To push the verified branch:
 python -m self_coding.run --push "Implement the requested improvement and verify it."
 ```
 
-The default is intentionally conservative: no automatic push and one verified pass.
+The default is intentionally conservative: no automatic push and up to five autonomous repair/verification attempts. The loop is hard-bounded at eight attempts so self-coding can never run forever.

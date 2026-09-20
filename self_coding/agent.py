@@ -43,7 +43,8 @@ class SelfCodingConfig:
     # Retained for source compatibility, but direct main publication is disabled.
     # Use approve_checkpoint() for an explicit promotion action.
     publish_main: bool = False
-    max_passes: int = 1
+    # Maximum autonomous implementation/verification attempts before the runner rolls back safely.
+    max_passes: int = 5
     backend: str = "auto"
 
 
@@ -58,6 +59,8 @@ class _Checkpoint:
     state: str
     promoted_sha: str | None = None
     undo_commits: tuple[str, ...] = ()
+    attempts: int = 0
+    repair_history: tuple[str, ...] = ()
 
 
 class SelfCodingAgent:
@@ -179,6 +182,8 @@ class SelfCodingAgent:
             "state": checkpoint.state,
             "promoted_sha": checkpoint.promoted_sha,
             "undo_commits": list(checkpoint.undo_commits),
+            "attempts": checkpoint.attempts,
+            "repair_history": list(checkpoint.repair_history),
         }
         path = self._checkpoint_path(checkpoint.checkpoint_id)
         tmp = path.with_suffix(".json.tmp")
@@ -201,6 +206,8 @@ class SelfCodingAgent:
                 state=str(payload["state"]),
                 promoted_sha=str(payload["promoted_sha"]) if payload.get("promoted_sha") else None,
                 undo_commits=tuple(str(value) for value in payload.get("undo_commits", [])),
+                attempts=int(payload.get("attempts", 0)),
+                repair_history=tuple(str(value) for value in payload.get("repair_history", [])),
             )
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise SelfCodingError(f"Checkpoint metadata is invalid: {checkpoint_id}") from exc
@@ -226,6 +233,8 @@ class SelfCodingAgent:
                     "state": checkpoint.state,
                     "promoted_sha": checkpoint.promoted_sha,
                     "undo_commits": checkpoint.undo_commits,
+                    "attempts": checkpoint.attempts,
+                    "repair_history": checkpoint.repair_history,
                 }
             )
         return tuple(results)
@@ -252,6 +261,8 @@ Rules:
 - Run the repository's relevant tests before declaring success.
 - Never claim success when tests fail.
 - Do not commit generated secrets or machine-specific configuration.
+- Do not commit changes yourself; the self-coding runner owns checkpoint commits.
+- Do not weaken, delete, skip, or rewrite tests merely to hide a failure.
 
 System-coherence mandate:
 - Treat this repository as one integrated assistant, not a collection of unrelated features.
@@ -265,6 +276,26 @@ System-coherence mandate:
 
 Implement the goal directly, then leave the repository in a clean, testable, coherently integrated state."""
 
+    def _attempt_prompt(self, goal: str, attempt: int, failures: Sequence[str]) -> str:
+        """Give each repair pass the exact previous failure while preserving the original goal."""
+        prompt = self._prompt(goal)
+        prompt += f"""
+Autonomous verification attempt {attempt}/{self.config.max_passes}.
+
+Verification policy:
+- The runner will execute the configured tests after you finish this pass.
+- A pass is accepted only when the tests and quality-floor checks actually pass.
+- You may inspect and repair the edits left by an earlier failed attempt; do not blindly start over.
+- Never make the tests weaker just to obtain a passing result.
+- Never claim success without a real passing verification run.
+"""
+        if failures:
+            recent = failures[-3:]
+            prompt += "\nPrevious attempt diagnostics (use these as repair input):\n"
+            for index, failure in enumerate(recent, start=max(1, len(failures) - len(recent) + 1)):
+                prompt += f"\n--- diagnostic {index} ---\n{failure[:6000]}\n"
+        return prompt
+
     def _find_backend(self) -> str:
         requested = self.config.backend.lower()
         if requested != "auto":
@@ -276,9 +307,9 @@ Implement the goal directly, then leave the repository in a clean, testable, coh
                 return candidate
         raise SelfCodingError("No supported cloud coding CLI was found (claude, codex, or gemini).")
 
-    def _invoke_backend(self, goal: str) -> None:
+    def _invoke_backend(self, prompt: str) -> None:
+        """Invoke the selected coding backend with an already-composed prompt."""
         backend = self._find_backend()
-        prompt = self._prompt(goal)
         if backend == "claude":
             args = (backend, "-p", prompt)
         elif backend == "codex":
@@ -334,11 +365,13 @@ Implement the goal directly, then leave the repository in a clean, testable, coh
             raise SelfCodingError("Rollback verification failed: repository is still dirty.")
 
     def run(self, goal: str) -> str:
-        """Preview verified self-coding work as a named checkpoint; never publish main."""
+        """Run bounded autonomous repair/verification passes and publish only a verified checkpoint."""
         if not goal.strip():
             raise SelfCodingError("A non-empty coding goal is required.")
         if self.config.max_passes < 1:
             raise SelfCodingError("max_passes must be at least 1.")
+        if self.config.max_passes > 8:
+            raise SelfCodingError("max_passes cannot exceed 8; refusing an unbounded self-repair loop.")
         if self.config.publish_main:
             raise SelfCodingError("Direct main publication is disabled; preview the change and explicitly approve its checkpoint.")
 
@@ -348,59 +381,94 @@ Implement the goal directly, then leave the repository in a clean, testable, coh
         checkpoint_id = branch.split("/", 2)[-1]
         created_at = datetime.now(timezone.utc).isoformat()
         commits: list[str] = []
-        checkpoint = _Checkpoint(
-            checkpoint_id=checkpoint_id,
-            branch=branch,
-            baseline=baseline,
-            base_branch=base_branch,
-            commits=(),
-            created_at=created_at,
-            state="pending",
-        )
+        failures: list[str] = []
 
         try:
-            for _ in range(self.config.max_passes):
-                self._invoke_backend(goal)
-                self._verify()
+            for attempt in range(1, self.config.max_passes + 1):
+                attempt_prompt = self._attempt_prompt(goal, attempt, failures)
+                try:
+                    self._invoke_backend(attempt_prompt)
+                    self._verify()
+                except Exception as exc:
+                    failure = str(exc).strip() or exc.__class__.__name__
+                    failures.append(failure)
+                    if attempt >= self.config.max_passes:
+                        raise SelfCodingError(
+                            f"Autonomous repair exhausted after {attempt} attempts. Last failure:\n{failure[-12000:]}"
+                        ) from exc
+                    continue
+
                 status = self._git("status", "--porcelain")
+                if status.returncode != 0:
+                    failure = status.stderr.strip() or "Unable to inspect the post-verification Git state."
+                    failures.append(failure)
+                    if attempt >= self.config.max_passes:
+                        raise SelfCodingError(
+                            f"Autonomous repair exhausted after {attempt} attempts. Last failure:\n{failure[-12000:]}"
+                        )
+                    continue
                 if not status.stdout.strip():
-                    raise SelfCodingError("Coding agent completed without producing a change.")
+                    failure = "Coding agent completed without producing a change."
+                    failures.append(failure)
+                    if attempt >= self.config.max_passes:
+                        raise SelfCodingError(
+                            f"Autonomous repair exhausted after {attempt} attempts. Last failure:\n{failure[-12000:]}"
+                        )
+                    continue
 
                 staged = self._git("add", "--all")
                 if staged.returncode != 0:
-                    raise SelfCodingError(staged.stderr.strip() or "Unable to stage changes.")
+                    failure = staged.stderr.strip() or "Unable to stage changes."
+                    failures.append(failure)
+                    if attempt >= self.config.max_passes:
+                        raise SelfCodingError(
+                            f"Autonomous repair exhausted after {attempt} attempts. Last failure:\n{failure[-12000:]}"
+                        )
+                    continue
+
                 committed = self._git("commit", "-m", "agent: verified self-coding change")
                 if committed.returncode != 0:
-                    raise SelfCodingError(committed.stderr.strip() or "Unable to commit verified changes.")
+                    failure = committed.stderr.strip() or "Unable to commit verified changes."
+                    failures.append(failure)
+                    if attempt >= self.config.max_passes:
+                        raise SelfCodingError(
+                            f"Autonomous repair exhausted after {attempt} attempts. Last failure:\n{failure[-12000:]}"
+                        )
+                    continue
+
                 commit = self._git("rev-parse", "HEAD")
                 if commit.returncode != 0:
                     raise SelfCodingError("Unable to record the verified checkpoint commit.")
+
                 commits.append(commit.stdout.strip())
                 checkpoint = _Checkpoint(
-                    checkpoint_id=checkpoint.checkpoint_id,
-                    branch=checkpoint.branch,
-                    baseline=checkpoint.baseline,
-                    base_branch=checkpoint.base_branch,
+                    checkpoint_id=checkpoint_id,
+                    branch=branch,
+                    baseline=baseline,
+                    base_branch=base_branch,
                     commits=tuple(commits),
-                    created_at=checkpoint.created_at,
+                    created_at=created_at,
                     state="pending",
+                    attempts=attempt,
+                    repair_history=tuple(failures),
                 )
                 self._save_checkpoint(checkpoint)
 
-            if self.config.push_branch:
-                pushed = self._git("push", "-u", "origin", branch)
-                if pushed.returncode != 0:
-                    raise SelfCodingError(pushed.stderr.strip() or "Unable to push self-coding checkpoint branch")
+                if self.config.push_branch:
+                    pushed = self._git("push", "-u", "origin", branch)
+                    if pushed.returncode != 0:
+                        raise SelfCodingError(pushed.stderr.strip() or "Unable to push self-coding checkpoint branch")
 
-            return checkpoint_id
+                return checkpoint_id
+
+            raise SelfCodingError("Self-coding stopped without a verified checkpoint.")
         except Exception:
             try:
                 self._rollback(baseline)
                 self._git("switch", base_branch)
                 self._delete_branch(branch)
             finally:
-                checkpoint_path = self._checkpoint_dir / f"{checkpoint_id}.json"
-                checkpoint_path.unlink(missing_ok=True)
+                (self._checkpoint_dir / f"{checkpoint_id}.json").unlink(missing_ok=True)
             raise
 
     def _refers_to_checkpoint(self, checkpoint: _Checkpoint) -> None:
