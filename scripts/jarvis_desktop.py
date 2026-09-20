@@ -767,7 +767,9 @@ window.createVoice=async i=>{try{const r=await pywebview.api.elevenlabs_create_v
 $("startCall").onclick=async()=>{try{const chosen=[...document.querySelectorAll("[data-participant]:checked")].map(x=>data[Number(x.dataset.participant)].name);const topic=$("topic").value.trim();if(chosen.length<2)throw new Error("Select at least two personas.");await pywebview.api.persona_group_start(chosen,topic);const r=await pywebview.api.submit_text(topic,false);$("status").textContent=(r.ok?"Call active: ":"Call failed: ")+((r.turns||[]).map(x=>x.persona).join(", ")||r.error||"");}catch(e){$("status").textContent=String(e);}};
 $("stopCall").onclick=async()=>{try{const r=await pywebview.api.persona_group_stop();$("status").textContent="Call stopped";}catch(e){$("status").textContent=String(e);}};
 window.addEventListener("pywebviewready",refresh);setTimeout(refresh,500);
-</script></body></html>\n'''\n\nTEXT_INPUT_SCRIPT = r'''
+</script></body></html>\n'''
+
+TEXT_INPUT_SCRIPT = r'''
 (function () {
   "use strict";
   if (window.__jarvisTextInputInstalled) return;
