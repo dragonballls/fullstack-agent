@@ -1753,11 +1753,13 @@ class FullstackJarvisHost:
         LOGGER.info("native Jarvis GUI event loop exited")
 
 
-def main() -> int:
-    visualizer = VisualizerAdapter()
+def main(*, prestarted_visualizer: VisualizerAdapter | None = None) -> int:
+    visualizer = prestarted_visualizer or VisualizerAdapter()
     host: FullstackJarvisHost | None = None
+    visualizer_prestarted = prestarted_visualizer is not None
     try:
-        visualizer.start()
+        if not visualizer_prestarted:
+            visualizer.start()
         controller = JarvisDesktopController()
         host = FullstackJarvisHost(controller, visualizer=visualizer)
         host.start()
