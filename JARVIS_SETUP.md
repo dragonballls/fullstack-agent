@@ -28,7 +28,7 @@ The supported agent brain is **OmniRoute only**. Claude Code and a Claude subscr
 
 Jarvis uses OmniRoute as its conversational/agent routing layer. Missing cloud configuration must be reported explicitly; Jarvis must not silently switch to a different agent brain.
 
-Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor.
+Speech engines such as Kokoro, Faster Whisper, or an externally configured speech provider are I/O components only. They never become a replacement planner/tool executor. The default Kokoro voice path is bundled with the Windows build so normal use does not require a separate voice subscription or a separate eSpeak installation.
 
 Live cloud requests still require at least one configured provider credential. On first launch, Jarvis starts the embedded OmniRoute gateway automatically; open AI Provider Settings from the command surface, select a provider, paste its API key, and use CONNECT & TEST. Jarvis passes the secret directly to OmniRoute and clears its own input; credentials are stored by OmniRoute in its local credential store and never enter tracked configuration. The gateway's local routing endpoint is fixed to `http://127.0.0.1:20128/v1`.
 
