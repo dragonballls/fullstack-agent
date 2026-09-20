@@ -10,9 +10,15 @@ from scripts.jarvis_voice_bridge import DEFAULT_CONFIG, JarvisVoiceBridge, _migr
 
 
 class JarvisVoiceBridgeTests(TestCase):
-    def test_default_stt_device_avoids_gpu_auto_detection(self):
+    def test_default_voice_mode_is_live_and_cpu_stt(self):
+        self.assertEqual(DEFAULT_CONFIG["mic_mode"], "open")
         self.assertEqual(DEFAULT_CONFIG["stt_device"], "cpu")
         self.assertEqual(DEFAULT_CONFIG["stt_compute"], "int8")
+
+    def test_live_mode_aliases_normalize_to_live(self):
+        bridge = JarvisVoiceBridge(controller=Mock(), ears=Mock(), mouth=Mock())
+        with patch.dict(os.environ, {"JARVIS_MIC_MODE": "hands-free"}, clear=False):
+            self.assertEqual(bridge._mode(), "live")
 
     def test_legacy_auto_and_float16_settings_migrate_to_cpu_int8(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -109,6 +115,46 @@ class JarvisVoiceBridgeTests(TestCase):
         self.assertEqual(controller.execute_request.call_args_list[0].kwargs, {"confirmed": False})
         self.assertEqual(controller.execute_request.call_args_list[1].kwargs, {"confirmed": True})
         self.assertEqual(mouth.say.call_count, 2)
+
+    def test_live_listener_uses_speaker_gate_and_abort_signal(self):
+        bridge = JarvisVoiceBridge(controller=Mock(), ears=Mock(), mouth=Mock())
+        bridge.mouth.speaking = True
+        calls = []
+
+        def listen_once(**kwargs):
+            calls.append(kwargs)
+            bridge.stop_event.set()
+            return None
+
+        bridge.ears.listen_once.side_effect = listen_once
+        bridge._run_live()
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0]["gate"]())
+        self.assertTrue(calls[0]["abort"]())
+
+        bridge.mouth.speaking = False
+        self.assertFalse(calls[0]["gate"]())
+
+    def test_live_barge_in_cancels_speech_and_reuses_existing_controller(self):
+        controller = Mock()
+        controller.execute_request.return_value = Mock(needs_confirmation=False, text="done")
+        mouth = Mock()
+        ptt = Mock()
+        record = Mock(return_value="hello")
+        bridge = JarvisVoiceBridge(
+            controller=controller,
+            ears=Mock(),
+            mouth=mouth,
+            ptt=ptt,
+            record_held=record,
+        )
+        bridge._barge_event.set()
+        bridge._handle_live_barge()
+
+        record.assert_called_once_with(ptt.is_held)
+        controller.execute_request.assert_called_once_with("hello", confirmed=False)
+        mouth.say.assert_called_once_with("done")
 
     def test_stop_closes_audio_output_when_vendor_exposes_drop_out(self):
         controller = Mock()

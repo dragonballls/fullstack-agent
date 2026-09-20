@@ -14,16 +14,18 @@ APP_DIR = Path.home() / "AppData" / "Local" / "Jarvis"
 SIGNALS_DIR = APP_DIR / "signals"
 BACKTALK_CONFIG = APP_DIR / "backtalk.json"
 
+LIVE_MIC_MODES = {"live", "open", "handsfree", "hands-free"}
+
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "name": "JARVIS",
     "ptt_key": "home",
-    "mic_mode": "ptt",
+    "mic_mode": "open",
     "voice": "bm_lewis",
     "stt_model": "small.en",
     "stt_device": "cpu",
     "stt_compute": "int8",
-    "greeting": "Hello. I'm online and ready.",
+    "greeting": "Hello. I'm online and listening.",
     "greeting_open_mic": "",
 }
 
@@ -53,7 +55,7 @@ def _configure_vendor() -> Path:
                     **DEFAULT_CONFIG,
                     "name": os.environ.get("JARVIS_NAME", DEFAULT_CONFIG["name"]),
                     "ptt_key": os.environ.get("JARVIS_PTT_KEY", DEFAULT_CONFIG["ptt_key"]),
-                    "mic_mode": os.environ.get("JARVIS_MIC_MODE", DEFAULT_CONFIG["mic_mode"]),
+                    "mic_mode": "open" if os.environ.get("JARVIS_MIC_MODE", DEFAULT_CONFIG["mic_mode"]).strip().lower() in LIVE_MIC_MODES else "ptt",
                     "voice": os.environ.get("JARVIS_VOICE", DEFAULT_CONFIG["voice"]),
                     "stt_model": os.environ.get("JARVIS_STT_MODEL", DEFAULT_CONFIG["stt_model"]),
                     "stt_device": os.environ.get("JARVIS_STT_DEVICE", DEFAULT_CONFIG["stt_device"]),
@@ -120,11 +122,18 @@ class JarvisVoiceBridge:
         self._last_spoken_text = ""
         self._last_spoken_at = 0.0
         self.config: dict[str, Any] = dict(DEFAULT_CONFIG)
+        self._barge_event = threading.Event()
+        self._ptt_thread: threading.Thread | None = None
+
+    def _mode(self) -> str:
+        """Normalize Jarvis voice modes without leaking an upstream-only value."""
+        raw = os.environ.get("JARVIS_MIC_MODE", str(self.config.get("mic_mode", "open"))).strip().lower()
+        return "live" if raw in LIVE_MIC_MODES else "ptt"
 
     def _load_components(self) -> None:
+        mode = self._mode()
         needs_vendor = self.ears is None or self.mouth is None or (
-            os.environ.get("JARVIS_MIC_MODE", self.config.get("mic_mode", "ptt")) != "open"
-            and self.ptt is None
+            mode == "ptt" and (self.ptt is None or self.record_held is None)
         )
         if needs_vendor:
             vendor = _configure_vendor()
@@ -150,14 +159,28 @@ class JarvisVoiceBridge:
             from backtalk.mouth import Mouth
             self.mouth = Mouth()
 
-        mode = os.environ.get("JARVIS_MIC_MODE", str(self.config.get("mic_mode", "ptt"))).strip().lower()
-        if mode != "open" and self.ptt is None:
-            from backtalk.ptt import PTTListener
-            self.ptt = PTTListener(os.environ.get("JARVIS_PTT_KEY", str(self.config.get("ptt_key", "home"))))
+        mode = self._mode()
+        if self.ptt is None:
+            try:
+                from backtalk.ptt import PTTListener
+                self.ptt = PTTListener(
+                    os.environ.get("JARVIS_PTT_KEY", str(self.config.get("ptt_key", "home")))
+                )
+            except Exception as exc:
+                if mode == "ptt":
+                    raise
+                self._log(f"optional live barge-in key unavailable: {type(exc).__name__}: {exc}")
+                self.ptt = None
 
-        if mode != "open" and self.record_held is None:
-            from backtalk.ears import record_held
-            self.record_held = record_held
+        if self.record_held is None and self.ptt is not None:
+            try:
+                from backtalk.ears import record_held
+                self.record_held = record_held
+            except Exception as exc:
+                if mode == "ptt":
+                    raise
+                self._log(f"optional live barge-in recorder unavailable: {type(exc).__name__}: {exc}")
+                self.record_held = None
 
     @staticmethod
     def _native_confirmation(text: str) -> bool:
@@ -172,13 +195,21 @@ class JarvisVoiceBridge:
             return
         self._load_components()
         self.stop_event.clear()
+        self._barge_event.clear()
         self.stopped = False
-        mode = os.environ.get("JARVIS_MIC_MODE", str(self.config.get("mic_mode", "ptt"))).strip().lower()
-        greeting_key = "greeting_open_mic" if mode == "open" else "greeting"
+        mode = self._mode()
+        greeting_key = "greeting_open_mic" if mode == "live" else "greeting"
         greeting = str(self.config.get(greeting_key) or self.config.get("greeting") or "")
         greeting = greeting.replace("{ptt_key}", str(self.config.get("ptt_key", "home")))
         if greeting:
             self._speak(greeting)
+        if mode == "live" and self.ptt is not None and self.record_held is not None:
+            self._ptt_thread = threading.Thread(
+                target=self._run_live_barge_watch,
+                name="jarvis-live-barge-watch",
+                daemon=True,
+            )
+            self._ptt_thread.start()
         self.thread = threading.Thread(target=self._run, name="jarvis-voice", daemon=True)
         self.thread.start()
 
@@ -239,21 +270,68 @@ class JarvisVoiceBridge:
         return result
 
     def _run(self) -> None:
-        mode = os.environ.get("JARVIS_MIC_MODE", str(self.config.get("mic_mode", "ptt"))).strip().lower()
-        if mode == "open":
-            self._run_open_mic()
+        if self._mode() == "live":
+            self._run_live()
         else:
             self._run_ptt()
 
-    def _run_open_mic(self) -> None:
+    def _speaker_gate(self) -> bool:
+        """Do not let Jarvis hear its own speaker output; physical PTT can override."""
+        return bool(getattr(self.mouth, "speaking", False)) and not self._barge_event.is_set()
+
+    def _run_live_barge_watch(self) -> None:
+        """Watch one physical key for immediate, safe barge-in and manual capture."""
         while not self.stop_event.is_set():
             try:
-                text = self.ears.listen_once(timeout_s=2.0)
+                self.ptt.wait_press()
+                if self.stop_event.is_set():
+                    break
+                self._barge_event.set()
+                try:
+                    shut_up = getattr(self.mouth, "shut_up", None)
+                    if callable(shut_up):
+                        shut_up()
+                except Exception as exc:
+                    self._log(f"live barge-in audio cut failed: {type(exc).__name__}: {exc}")
+            except Exception as exc:
+                self._log(f"live barge-in watcher error: {type(exc).__name__}: {exc}")
+                self.stop_event.wait(0.5)
+
+    def _handle_live_barge(self) -> None:
+        if not self._barge_event.is_set():
+            return
+        self._barge_event.clear()
+        if self.ptt is None or self.record_held is None:
+            self._log("live barge-in requested but no PTT recorder is available")
+            return
+        try:
+            text = self.record_held(self.ptt.is_held)
+            if text:
+                self.handle_transcript(text)
+        except Exception as exc:
+            self._log(f"live barge-in capture error: {type(exc).__name__}: {exc}")
+
+    def _run_live(self) -> None:
+        """Hands-free local VAD loop with speaker gating and explicit barge-in."""
+        while not self.stop_event.is_set():
+            try:
+                text = self.ears.listen_once(
+                    gate=self._speaker_gate,
+                    abort=lambda: self.stop_event.is_set() or self._barge_event.is_set(),
+                    timeout_s=2.0,
+                )
+                if self._barge_event.is_set():
+                    self._handle_live_barge()
+                    continue
                 if text:
                     self.handle_transcript(text)
             except Exception as exc:
-                self._log(f"open-mic error: {type(exc).__name__}: {exc}")
+                self._log(f"live-mic error: {type(exc).__name__}: {exc}")
                 self.stop_event.wait(1.0)
+
+    def _run_open_mic(self) -> None:
+        """Compatibility alias for callers that explicitly request open-mic."""
+        self._run_live()
 
     def _run_ptt(self) -> None:
         while not self.stop_event.is_set():
@@ -302,4 +380,7 @@ class JarvisVoiceBridge:
             self._log(f"mouth shutdown failed: {type(exc).__name__}: {exc}")
         if self.thread is not None and self.thread.is_alive():
             self.thread.join(timeout=3)
+        if self._ptt_thread is not None and self._ptt_thread.is_alive():
+            self._ptt_thread.join(timeout=2)
+        self._ptt_thread = None
         self.stopped = True

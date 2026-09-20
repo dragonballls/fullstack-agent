@@ -34,9 +34,9 @@ Live cloud requests still require at least one configured provider credential. O
 
 ## Voice
 
-The native desktop build embeds the pinned Backtalk source and the Jarvis voice bridge. Default Backtalk settings are configured in `%LOCALAPPDATA%\\Jarvis\\backtalk.json` and can be changed through supported Jarvis configuration/environment settings.
+The native desktop build embeds the pinned Backtalk source and the Jarvis voice bridge. Default Backtalk settings are configured in `%LOCALAPPDATA%\\Jarvis\\backtalk.json` and can be changed through supported Jarvis configuration/environment settings, with new installs using hands-free Live-like listening by default.
 
-Microphone and speaker access are machine-specific. A missing device, denied permission, or unavailable audio dependency must not prevent the Fullstack visualizer from opening; Jarvis records the degraded voice state and keeps the main desktop interface available.
+Microphone and speaker access are machine-specific. The default voice path uses local VAD plus speaker-output gating and keeps the configured PTT key as an explicit barge-in control. A missing device, denied permission, or unavailable audio dependency must not prevent the Fullstack visualizer from opening; Jarvis records the degraded voice state and keeps the main desktop interface available.
 
 See `JARVIS_VOICE.md` for the current voice/I/O contract and the real speech test procedure.
 

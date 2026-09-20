@@ -1,6 +1,6 @@
 # Jarvis voice
 
-Jarvis uses the embedded Backtalk input layer as its desktop voice interface. Backtalk handles microphone capture, speech recognition, and push-to-talk/listening behavior; Kokoro Local is the default speech output, ElevenLabs remains optional, and the Jarvis runtime remains the only planner and tool-execution brain.
+Jarvis uses the embedded Backtalk input layer as its desktop voice interface. Kokoro Local is the default speech output, ElevenLabs remains optional, and the Jarvis runtime remains the only planner and tool-execution brain. New installs use a hands-free Live-like voice loop by default, with local VAD endpointing, speaker-output gating, and a physical push-to-talk barge-in path.
 
 ## Brain and routing
 
@@ -17,7 +17,7 @@ On first normal startup Jarvis creates `%LOCALAPPDATA%\\Jarvis\\backtalk.json` w
 ```text
 name=JARVIS
 ptt_key=home
-mic_mode=ptt
+mic_mode=open
 voice=bm_lewis
 stt_model=small.en
 stt_device=cpu
@@ -28,7 +28,7 @@ The exact active values are loaded from the local Backtalk configuration and sup
 
 ## Activation behavior
 
-The default desktop configuration uses Backtalk push-to-talk behavior. When an active voice session is running, the voice bridge passes recognized speech into the existing `JarvisDesktopController`, which routes the request through the normal Jarvis orchestration and capability policy.
+The default desktop configuration uses Backtalk hands-free listening. Local VAD decides when an utterance starts and ends, while the microphone is speaker-gated during Jarvis playback so ordinary speakers do not feed Jarvis its own voice. When an active voice session is running, the voice bridge passes recognized speech into the existing `JarvisDesktopController`, which routes the request through the normal Jarvis orchestration and capability policy.
 
 The centered Jarvis visual remains the primary interaction surface. The text link is normally hidden and is revealed by hovering over the transparent center hit zone that tracks the canvas-drawn Jarvis element; moving onto the revealed field keeps it active. Typed text goes directly to the `JarvisDesktopController`, never through microphone, speech-recognition, or speech-output code.
 
@@ -36,7 +36,7 @@ While the text field has focus, Space inserts a normal space and does not trigge
 
 Mutating requests are still confirmation-gated. Voice input cannot bypass confirmation, permissions, cancellation, or the deny-by-default capability policy.
 
-An open-microphone mode is available through the supported Backtalk configuration. It still routes accepted transcripts through the same Jarvis brain and policy boundary.
+Push-to-talk remains available by setting `JARVIS_MIC_MODE=ptt` or `mic_mode=ptt`. In the default hands-free mode, the configured PTT key is also an immediate barge-in control: pressing it cuts current speech and records the next held-key utterance through the same Jarvis controller. This gives interruption behavior without unsafe automatic speaker-echo barge-in.
 
 ## Speech output and shutdown
 
@@ -46,7 +46,7 @@ Jarvis must never store or save the ElevenLabs API key in tracked files or commi
 
 The default free voice is **Kokoro 82M** with the `bm_lewis` voice, while the optional ElevenLabs path supports Conversational v3 and Flash v2.5 when a paid account is configured. The voice selector can load the voices available to the configured ElevenLabs account. Jarvis's response model is separately guided toward a calm, precise, discreetly formal dialogue style before speech synthesis.
 
-The WebView is the audio sink: Jarvis passes only short-lived, browser-playable audio packets to the native UI, so normal speech playback requires no MPV/ffmpeg console and does not open a visible PowerShell window.
+The WebView is the audio sink: Jarvis passes only short-lived, browser-playable audio packets to the native UI, so normal speech playback requires no visible console. The Live-like path keeps the existing sentence-streamed mouth and cancellation boundary instead of introducing a second audio process.
 
 ElevenLabs is an output engine only. It never becomes the agent planner or tool executor and never changes the OmniRoute-only brain boundary.
 
