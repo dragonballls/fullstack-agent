@@ -203,6 +203,21 @@ class JarvisDesktopTests(unittest.TestCase):
         self.assertEqual(result["providers"], [{"name": "openai", "status": "connected"}])
         self.assertNotIn("api_key", repr(result))
 
+    def test_voice_playback_state_reaches_bridge(self):
+        controller = Mock()
+        bridge = Mock()
+        voice = SimpleNamespace(bridge=bridge)
+        host = FullstackJarvisHost(controller, voice=voice, hands=Mock())
+        result = host.web_api.voice_playback_state(True)
+
+        bridge.set_output_active.assert_called_once_with(True)
+        self.assertEqual(result, {"ok": True, "active": True})
+
+    def test_voice_player_reports_actual_browser_playback_state(self):
+        self.assertIn("voice_playback_state", jarvis_desktop.FLOATING_TEXT_INPUT_HTML)
+        self.assertIn("reportPlayback(true)", jarvis_desktop.FLOATING_TEXT_INPUT_HTML)
+        self.assertIn("reportPlayback(false)", jarvis_desktop.FLOATING_TEXT_INPUT_HTML)
+
     def test_text_input_api_is_exposed_to_native_window(self):
         self.assertTrue(hasattr(jarvis_desktop, "JarvisWebApi"))
         self.assertTrue(hasattr(jarvis_desktop, "TEXT_INPUT_SCRIPT"))
