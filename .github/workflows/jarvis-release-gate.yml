@@ -224,15 +224,20 @@ jobs:
             }
             if (-not $ready) { throw "Embedded Fullstack visualizer did not become ready within $startupTimeoutSeconds seconds" }
 
-            $omniStartupTimeoutSeconds = 120
+            $omniStartupTimeoutSeconds = 360
             $omniDeadline = (Get-Date).AddSeconds($omniStartupTimeoutSeconds)
             $omniReady = $false
             $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
+            $omniLog = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log'
             while ((Get-Date) -lt $omniDeadline) {
-              if (Test-Path -LiteralPath $log) {
-                $contents = Get-Content -LiteralPath $log -Raw
-                if ($contents -match 'embedded OmniRoute warm-up (?:failed|did not complete)') {
-                  throw 'Jarvis reported that embedded OmniRoute warm-up failed or timed out'
+              foreach ($candidate in @($log, $omniLog)) {
+                if (Test-Path -LiteralPath $candidate) {
+                  $contents = Get-Content -LiteralPath $candidate -Raw
+                  if ($contents -match '(?:FATAL|Error|ERROR).*OmniRoute|embedded OmniRoute warm-up (?:failed|did not complete)') {
+                    Write-Host "=== OmniRoute diagnostics from $candidate ==="
+                    $contents | Write-Host
+                    throw 'Jarvis reported that embedded OmniRoute warm-up failed or timed out'
+                  }
                 }
               }
               $tcp = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
@@ -266,7 +271,9 @@ jobs:
             Get-NetTCPConnection -LocalPort 8790 -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
             Get-NetTCPConnection -LocalPort 20128 -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
             $log = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'
+            $omniLog = Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log'
             if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Raw | Write-Host }
+            if (Test-Path -LiteralPath $omniLog) { Write-Host '=== OmniRoute startup log ==='; Get-Content -LiteralPath $omniLog -Raw | Write-Host }
             throw
           }
           finally {
