@@ -880,7 +880,8 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 <div class="sub" id="message">Provider secrets are sent directly to OmniRoute over a local process boundary.</div>
 <div><div class="sub" style="margin-bottom:6px">CONFIGURED PROVIDERS</div><div class="providers" id="providers"><div class="muted">No provider status yet.</div></div></div>
 <div style="border-top:1px solid rgba(111,199,242,.10);padding-top:12px">
-<div class="sub" style="margin-bottom:6px">VOICE ENGINE · ELEVENLABS</div>
+<div class="sub" style="margin-bottom:6px">VOICE ENGINE</div>
+<div class="row"><div class="field"><label>ACTIVE OUTPUT</label><select id="voiceProvider"><option value="kokoro">Kokoro Local · free</option><option value="elevenlabs">ElevenLabs · optional</option></select></div></div>
 <div class="status" id="voiceRuntime">Checking ElevenLabs voice engine…</div>
 <div class="field"><label>ELEVENLABS API KEY</label><input id="elevenKey" type="password" autocomplete="new-password" placeholder="Paste your ElevenLabs API key once"></div>
 <div class="row">
@@ -896,8 +897,10 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 (function(){
 "use strict";
 const provider=document.getElementById("provider"), custom=document.getElementById("customWrap"), customInput=document.getElementById("customProvider"), key=document.getElementById("key"), connect=document.getElementById("connect"), refresh=document.getElementById("refresh"), dashboard=document.getElementById("dashboard"), runtime=document.getElementById("runtime"), message=document.getElementById("message"), providers=document.getElementById("providers");
-const elevenKey=document.getElementById("elevenKey"), voiceId=document.getElementById("voiceId"), voiceModel=document.getElementById("voiceModel"), voiceSave=document.getElementById("voiceSave"), voiceTest=document.getElementById("voiceTest"), voiceLoad=document.getElementById("voiceLoad"), voiceRuntime=document.getElementById("voiceRuntime"), voiceMessage=document.getElementById("voiceMessage"), voiceList=document.getElementById("voiceList");
-provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});async function detectProvider(){
+const voiceProvider=document.getElementById("voiceProvider"), elevenKey=document.getElementById("elevenKey"), voiceId=document.getElementById("voiceId"), voiceModel=document.getElementById("voiceModel"), voiceSave=document.getElementById("voiceSave"), voiceTest=document.getElementById("voiceTest"), voiceLoad=document.getElementById("voiceLoad"), voiceRuntime=document.getElementById("voiceRuntime"), voiceMessage=document.getElementById("voiceMessage"), voiceList=document.getElementById("voiceList");
+provider.addEventListener("change",()=>{custom.style.display=provider.value==="custom"?"":"none";});
+voiceProvider.addEventListener("change",async()=>{try{const result=await window.pywebview.api.voice_set_provider(voiceProvider.value);voiceProvider.value=result&&result.provider==="elevenlabs"?"elevenlabs":"kokoro";voiceMessage.textContent=voiceProvider.value==="kokoro"?"Kokoro Local is active; no paid voice key is required.":"ElevenLabs is active when a valid key is configured.";await loadVoice();}catch(_e){voiceMessage.textContent="Voice provider could not be changed.";await loadVoice();}});
+async function detectProvider(){
   if(provider.value!=="auto")return;
   const secret=key.value;
   if(!secret||!window.pywebview||!window.pywebview.api)return;
@@ -953,7 +956,7 @@ async function loadVoice(){
     voiceRuntime.textContent=(data.configured?"ELEVENLABS READY":"ELEVENLABS KEY NEEDED")+" · "+(data.model_id||"");
     if(!voiceId.value&&data.voice_id)voiceId.value=data.voice_id;
     if(data.model_id)voiceModel.value=data.model_id;
-    voiceMessage.textContent=data.last_error||"ElevenLabs voice path is ready.";
+    voiceMessage.textContent=(active&&active.provider==="kokoro")?"Kokoro Local is active; no paid voice key is required.":(data.last_error||"ElevenLabs voice path is ready.");
   }catch(_e){voiceRuntime.textContent="ELEVENLABS STATUS ERROR";}
 }
 async function saveVoice(){
