@@ -56,7 +56,7 @@ class PersonaVoice:
         if not isinstance(value, dict):
             value = {}
         provider = str(value.get("provider") or "kokoro").strip().lower()
-        if provider not in {"kokoro", "elevenlabs"}:
+        if provider not in {"inherit", "kokoro", "elevenlabs"}:
             provider = "kokoro"
         try:
             speed = float(value.get("speed", 1.0))
@@ -145,7 +145,7 @@ class PersonaStore:
                 "Never claim a computer action happened unless the guarded runtime actually verified it.",
                 "Never bypass Jarvis capability, permission, or confirmation checks.",
             ),
-            voice=PersonaVoice(provider="kokoro", voice_id="bm_lewis", description="Warm, clear, capable digital assistant."),
+            voice=PersonaVoice(provider="inherit", voice_id="bm_lewis", description="Warm, clear, capable digital assistant."),
             immutable=True,
         )
 
