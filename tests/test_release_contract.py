@@ -39,6 +39,17 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("webview.create_window(**window_kwargs)", desktop)
         self.assertIn("self._window = webview.create_window(**window_kwargs)", desktop)
 
+    def test_packaged_omniroute_smoke_uses_cold_start_budget_and_dedicated_log(self):
+        workflow = Path(".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")
+        desktop = Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8")
+        provisioner = Path("quality_of_life/omniroute_setup.py").read_text(encoding="utf-8")
+        self.assertIn("$omniStartupTimeoutSeconds = 360", workflow)
+        self.assertIn("Jarvis\\logs\\omniroute.log", workflow)
+        self.assertIn("JARVIS_OMNIROUTE_LOG", provisioner)
+        self.assertIn('command_argv(for_start=True)', provisioner)
+        self.assertIn('["--port", str(self.port)]', provisioner)
+        self.assertIn("wait_seconds=300", desktop)
+
     def test_attestation_verification_precedes_release_publication(self):
         workflow = Path(".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")
 
