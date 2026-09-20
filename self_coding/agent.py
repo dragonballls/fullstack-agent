@@ -312,9 +312,9 @@ Previous attempt diagnostics (use these as repair input):
                 return candidate
         raise SelfCodingError("No supported cloud coding CLI was found (claude, codex, or gemini).")
 
-    def _invoke_backend(self, goal: str) -> None:
+    def _invoke_backend(self, prompt: str) -> None:
+        """Invoke the selected coding backend with an already-composed prompt."""
         backend = self._find_backend()
-        prompt = self._prompt(goal)
         if backend == "claude":
             args = (backend, "-p", prompt)
         elif backend == "codex":
