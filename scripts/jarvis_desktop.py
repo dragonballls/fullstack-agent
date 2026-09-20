@@ -21,7 +21,7 @@ from typing import Any
 
 from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.omniroute_setup import OmniRouteProvisioner
-from quality_of_life.elevenlabs_voice import ElevenLabsMouth
+from quality_of_life.elevenlabs_voice import ElevenLabsMouth, KokoroMouth
 from quality_of_life.runtime import JarvisRuntime
 from quality_of_life.self_update import SelfUpdateError, build_windows_handoff_script, fetch_latest_release, is_update_available, stage_update
 
@@ -37,6 +37,7 @@ AUTO_UPDATE_INTERVAL = max(60, int(os.environ.get("JARVIS_AUTO_UPDATE_INTERVAL",
 FLOATING_HOTKEY_LABEL = "Ctrl+Alt+Shift+F12"
 FLOATING_HOTKEY_ID = 0x4A52
 FLOATING_POSITION_FILE = LOG_DIR.parent / "settings" / "floating_text_link.json"
+VOICE_PROVIDER_FILE = LOG_DIR.parent / "settings" / "voice_provider.txt"
 
 
 def _logger() -> logging.Logger:
@@ -138,6 +139,7 @@ class VoiceAdapter:
         self.controller = controller
         self.bridge: Any | None = None
         self.elevenlabs = ElevenLabsMouth()
+        self.kokoro = KokoroMouth()
         self._transcript_lock = threading.RLock()
         self._transcript_queue: deque[str] = deque(maxlen=100)
 
@@ -171,6 +173,83 @@ class VoiceAdapter:
             raise RuntimeError("ElevenLabs synthesis client is incomplete")
         LOGGER.info("embedded Backtalk + ElevenLabs voice modules validated: %s / %s", vendor, ElevenLabsMouth.__name__)
 
+    def _provider_path(self) -> Path:
+        return VOICE_PROVIDER_FILE
+
+    def provider(self) -> str:
+        override = os.environ.get("JARVIS_VOICE_PROVIDER", "").strip().lower()
+        if override in {"free", "kokoro", "local"}:
+            return "kokoro"
+        if override in {"elevenlabs", "11labs", "eleven"}:
+            return "elevenlabs"
+        try:
+            value = self._provider_path().read_text(encoding="utf-8").strip().lower()
+        except OSError:
+            value = ""
+        return value if value in {"kokoro", "elevenlabs"} else "kokoro"
+
+    def _selected_mouth(self) -> tuple[str, Any]:
+        provider = self.provider()
+        if provider == "elevenlabs" and self.elevenlabs.configured:
+            return "elevenlabs", self.elevenlabs
+        if provider == "elevenlabs":
+            LOGGER.info("ElevenLabs selected but no key is configured; falling back to free Kokoro voice")
+        return "kokoro", self.kokoro
+
+    def set_provider(self, provider: str) -> dict[str, object]:
+        normalized = str(provider or "").strip().lower()
+        if normalized in {"free", "local", "kokoro"}:
+            normalized = "kokoro"
+        elif normalized in {"elevenlabs", "11labs", "eleven"}:
+            normalized = "elevenlabs"
+        else:
+            raise ValueError("voice provider must be kokoro or elevenlabs")
+        VOICE_PROVIDER_FILE.parent.mkdir(parents=True, exist_ok=True)
+        VOICE_PROVIDER_FILE.write_text(normalized + "\n", encoding="utf-8")
+        effective, mouth = self._selected_mouth()
+        bridge = self.bridge
+        if bridge is not None:
+            setter = getattr(bridge, "set_mouth", None)
+            if callable(setter):
+                setter(mouth)
+            else:
+                bridge.mouth = mouth
+        return {"ok": True, "provider": effective, "requested": normalized}
+
+    def status(self) -> dict[str, object]:
+        effective, _mouth = self._selected_mouth()
+        return {
+            "ok": True,
+            "provider": effective,
+            "configured": True,
+            "free": self.kokoro.status(),
+            "elevenlabs": self.elevenlabs.status(),
+        }
+
+    def warm_up_free_voice(self) -> None:
+        if self.provider() != "kokoro" and self.elevenlabs.configured:
+            return
+        try:
+            result = self.kokoro.warm_up()
+            LOGGER.info("free local Kokoro voice warm-up passed: %s", result.get("voice_id", ""))
+        except Exception:
+            LOGGER.exception("free local Kokoro voice warm-up failed; voice will retry on demand")
+
+    def _smoke_validate_embedded_backtalk(self) -> None:
+        vendor = embedded_path("backtalk/source")
+        vendor_text = str(vendor)
+        if vendor_text not in sys.path:
+            sys.path.insert(0, vendor_text)
+        from backtalk.ears import Ears
+        from backtalk.mouth import Mouth
+        from backtalk.ptt import PTTListener
+        from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth, KokoroMouth
+        if not callable(getattr(ElevenLabsClient, "synthesize", None)):
+            raise RuntimeError("ElevenLabs synthesis client is incomplete")
+        if not callable(getattr(KokoroMouth, "test_speech", None)):
+            raise RuntimeError("free local Kokoro mouth is incomplete")
+        LOGGER.info("embedded Backtalk + local Kokoro + optional ElevenLabs voice modules validated: %s", vendor)
+
     def start(self) -> None:
         if self._truthy("JARVIS_SMOKE") and self._truthy("JARVIS_SMOKE_VOICE"):
             self._smoke_validate_embedded_backtalk()
@@ -179,19 +258,27 @@ class VoiceAdapter:
             LOGGER.info("voice disabled by configuration")
             return
         from scripts.jarvis_voice_bridge import JarvisVoiceBridge
+        provider, mouth = self._selected_mouth()
         self.bridge = JarvisVoiceBridge(
             self.controller,
-            mouth=self.elevenlabs,
+            mouth=mouth,
             on_output=self._record_transcript,
         )
         self.bridge.start()
+        if provider == "kokoro" and self.kokoro.available():
+            threading.Thread(
+                target=self.warm_up_free_voice,
+                name="jarvis-kokoro-warmup",
+                daemon=True,
+            ).start()
+        LOGGER.info("voice engine active: %s", provider)
 
     def stop(self) -> None:
         if self.bridge is not None:
             self.bridge.stop()
             self.bridge = None
-        else:
-            self.elevenlabs.shutdown()
+        self.kokoro.shutdown()
+        self.elevenlabs.shutdown()
 
 
 class HandsAdapter:
@@ -411,7 +498,22 @@ class JarvisWebApi:
         try:
             return self.host.voice_audio()
         except Exception:
-            return {"ok": True, "items": []}
+            return {"ok": True, "items": [], "generation": 0}
+
+    def voice_status(self) -> dict[str, Any]:
+        try:
+            return self.host.voice_status()
+        except Exception:
+            return {"ok": False}
+
+    def voice_set_provider(self, provider: str) -> dict[str, Any]:
+        return self.host.set_voice_provider(provider)
+
+    def voice_status(self) -> dict[str, Any]:
+        return self.voice.status()
+
+    def set_voice_provider(self, provider: str) -> dict[str, Any]:
+        return self.voice.set_provider(provider)
 
     def elevenlabs_status(self) -> dict[str, Any]:
         return self.host.elevenlabs_status()
@@ -733,7 +835,7 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
     async function poll(){
       if(polling||!(window.pywebview&&window.pywebview.api))return;
       polling=true;
-      try{const result=await window.pywebview.api.voice_audio();enqueue(result&&result.items);}
+      try{const result=await window.pywebview.api.voice_audio();const generation=Number(result&&result.generation||0);if(generation>lastSequence){lastSequence=generation;pending=[];stopCurrent();}enqueue(result&&result.items);}
       catch(_e){}finally{polling=false;}
     }
     let audioContext=null;
@@ -748,7 +850,7 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
       playNext();
     }
     document.addEventListener("pointerdown",resume,{passive:true});
-    window.jarvisVoicePlayer={enqueue,poll,resume};
+    window.jarvisVoicePlayer={enqueue,poll,resume,stop:stopCurrent};
     window.setInterval(poll,180);
     poll();
     return window.jarvisVoicePlayer;
@@ -946,14 +1048,18 @@ class FullstackJarvisHost:
         return self.omniroute.test_provider(provider)
 
     def voice_audio(self) -> dict[str, Any]:
-        voice = getattr(self.voice, "elevenlabs", None)
+        voice = getattr(self.voice, "kokoro", None)
+        provider = getattr(self.voice, "provider", lambda: "kokoro")()
+        if provider == "elevenlabs":
+            voice = getattr(self.voice, "elevenlabs", voice)
         take_audio = getattr(voice, "take_audio", None)
+        generation = int(getattr(voice, "generation", 0) or 0)
         if not callable(take_audio):
-            return {"ok": True, "items": []}
+            return {"ok": True, "items": [], "generation": generation}
         try:
-            return {"ok": True, "items": take_audio()}
+            return {"ok": True, "items": take_audio(), "generation": generation}
         except Exception:
-            return {"ok": True, "items": []}
+            return {"ok": True, "items": [], "generation": generation}
 
     def elevenlabs_status(self) -> dict[str, Any]:
         voice = getattr(self.voice, "elevenlabs", None)
