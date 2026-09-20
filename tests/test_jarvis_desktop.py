@@ -128,7 +128,10 @@ class JarvisDesktopTests(unittest.TestCase):
         for token in (
             "Auto-detect from API key",
             "omniroute_detect_provider",
-            "VOICE ENGINE · ELEVENLABS",
+            "VOICE ENGINE",
+            "Kokoro Local · free",
+            "ElevenLabs · optional",
+            "voice_set_provider",
             "SAVE & TEST VOICE",
             "elevenlabs_configure",
             "elevenlabs_test",
@@ -156,6 +159,14 @@ class JarvisDesktopTests(unittest.TestCase):
         host.voice.elevenlabs.take_audio.return_value = [{"sequence": 1, "mime": "audio/mpeg", "data": "YQ=="}]
         self.assertEqual(host.voice_audio()["items"][0]["sequence"], 1)
         host.voice.elevenlabs.take_audio.assert_called_once_with()
+
+    def test_voice_audio_prefers_legacy_injected_elevenlabs_when_provider_api_is_absent(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=SimpleNamespace(elevenlabs=Mock()), hands=Mock())
+        host.voice.elevenlabs.take_audio.return_value = [{"sequence": 1, "mime": "audio/mpeg", "data": "YQ=="}]
+        result = host.voice_audio()
+        self.assertEqual(result["items"][0]["sequence"], 1)
+        self.assertEqual(result["generation"], 0)
 
     def test_auto_detect_api_method_never_receives_provider_secret_back(self):
         controller = Mock()
