@@ -645,6 +645,9 @@ class JarvisWebApi:
             raise RuntimeError("ElevenLabs voice creation is unavailable")
         return create(voice_name=name, voice_description=description, generated_voice_id=generated_voice_id)
 
+    def open_persona_settings(self) -> dict[str, Any]:
+        return self.host.open_persona_settings()
+
     def omniroute_detect_provider(self, api_key: str) -> dict[str, Any]:
         from quality_of_life.omniroute_setup import detect_provider_from_key
         provider = detect_provider_from_key(api_key)
