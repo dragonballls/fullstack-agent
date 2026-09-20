@@ -506,6 +506,12 @@ class JarvisWebApi:
         except Exception:
             return {"ok": False}
 
+    def voice_playback_state(self, active: bool) -> dict[str, Any]:
+        try:
+            return self.host.voice_playback_state(bool(active))
+        except Exception:
+            return {"ok": False, "active": bool(active)}
+
     def voice_set_provider(self, provider: str) -> dict[str, Any]:
         return self.host.set_voice_provider(provider)
 
@@ -811,16 +817,27 @@ FLOATING_TEXT_INPUT_HTML = r'''<!doctype html>
 <body><div id="frame"><div id="bar" class="pywebview-drag-region"><span class="dot"></span><span id="title">JARVIS NEURAL FLOATING LINK</span><span id="hotkey">CTRL+ALT+SHIFT+F12</span><button id="close" type="button" aria-label="Return Jarvis text link to the main app">×</button></div><div id="row"><input id="input" type="text" autocomplete="off" spellcheck="false" placeholder="Talk to Jarvis from anywhere on your desktop…" disabled><button id="send" type="button" aria-label="Send text to Jarvis" disabled>↵</button></div><div id="status">CONNECTING…</div></div>
 <script>(function(){const input=document.getElementById("input"),send=document.getElementById("send"),close=document.getElementById("close"),status=document.getElementById("status");let ready=false;async function submit(confirmed){const text=input.value.trim();if(!text||!ready)return;input.disabled=true;send.disabled=true;status.classList.remove("error");status.textContent="PROCESSING…";try{let r=await window.pywebview.api.submit_text(text,!!confirmed);if(r&&r.needs_confirmation&&!confirmed){const ok=window.confirm(r.text||"Jarvis requires confirmation for this action.");if(ok)r=await window.pywebview.api.submit_text(text,true);else{status.textContent="CANCELLED";r=null}}if(r){if(r.ok){status.textContent=r.text||"DONE";input.value=""}else{status.classList.add("error");status.textContent=r.error||"Jarvis request failed."}}}catch(e){status.classList.add("error");status.textContent="TEXT LINK ERROR: "+String(e)}finally{input.disabled=false;send.disabled=false;input.focus()}}input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit(false)}else if(e.key==="Escape"){e.preventDefault();input.value="";status.textContent="";input.blur()}});send.addEventListener("click",()=>submit(false));close.addEventListener("click",()=>{if(window.pywebview&&window.pywebview.api)window.pywebview.api.toggle_text_link(false)});function readyFn(){ready=!!(window.pywebview&&window.pywebview.api);input.disabled=!ready;send.disabled=!ready;if(ready){status.textContent="FLOATING TEXT LINK ONLINE";setTimeout(()=>input.focus(),80)}}window.addEventListener("pywebviewready",readyFn);const readyPoll=window.setInterval(function(){if(window.pywebview&&window.pywebview.api){readyFn();window.clearInterval(readyPoll)}} ,250);if(window.pywebview&&window.pywebview.api)readyFn()})();  const jarvisVoicePlayer=(function(){
     let current=null,lastSequence=0,pending=[],polling=false;
-    function stopCurrent(){if(current){try{current.pause();current.currentTime=0;}catch(_e){}current=null;}}
+    function reportPlayback(active){
+      try{
+        if(window.pywebview&&window.pywebview.api&&window.pywebview.api.voice_playback_state)
+          window.pywebview.api.voice_playback_state(!!active);
+      }catch(_e){}
+    }
+    function stopCurrent(){
+      if(current){try{current.pause();current.currentTime=0;}catch(_e){}current=null;}
+      if(!pending.length)reportPlayback(false);
+    }
     function playNext(){
-      if(current||!pending.length)return;
+      if(current)return;
+      if(!pending.length){reportPlayback(false);return;}
       const packet=pending.shift();
       if(!packet||!packet.data){playNext();return;}
+      reportPlayback(true);
       const audio=new Audio("data:"+(packet.mime||"audio/mpeg")+";base64,"+packet.data);
       current=audio;
       audio.onended=()=>{current=null;playNext();};
       audio.onerror=()=>{current=null;playNext();};
-      audio.play().catch(()=>{pending.unshift(packet);current=null;});
+      audio.play().catch(()=>{pending.unshift(packet);current=null;reportPlayback(false);});
     }
     function enqueue(items){
       if(!Array.isArray(items))return;
@@ -1049,6 +1066,13 @@ class FullstackJarvisHost:
         if not self.omniroute.ensure_running(wait_seconds=15):
             raise RuntimeError("OmniRoute did not become ready")
         return self.omniroute.test_provider(provider)
+
+    def voice_playback_state(self, active: bool) -> dict[str, Any]:
+        bridge = getattr(self.voice, "bridge", None)
+        setter = getattr(bridge, "set_output_active", None)
+        if callable(setter):
+            setter(bool(active))
+        return {"ok": True, "active": bool(active)}
 
     def voice_audio(self) -> dict[str, Any]:
         provider_fn = getattr(self.voice, "provider", None)
