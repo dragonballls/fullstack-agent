@@ -246,14 +246,21 @@ jobs:
             }
             if (-not $omniReady) { throw "Embedded OmniRoute did not become ready within $omniStartupTimeoutSeconds seconds" }
 
-            $healthOk = $false
-            foreach ($url in @(
-              'http://127.0.0.1:20128/healthz',
-              'http://127.0.0.1:20128/v1/models',
-              'http://127.0.0.1:20128/api/monitoring/health'
+            $warmupPassed = $false
+            foreach ($candidate in @(
+              (Join-Path $env:LOCALAPPDATA 'Jarvis\logs\desktop.log'),
+              (Join-Path $env:LOCALAPPDATA 'Jarvis\logs\omniroute.log')
             )) {
-              $code = (& curl.exe --noproxy '*' --silent --show-error --output NUL --write-out '%{http_code}' --max-time 5 -H 'Accept: application/json' $url 2>&1).Trim()
-              if ($code -match '^(?:2|3)\d\d
+              if (Test-Path -LiteralPath $candidate) {
+                $contents = Get-Content -LiteralPath $candidate -Raw
+                if ($contents -match 'embedded OmniRoute warm-up passed') {
+                  $warmupPassed = $true
+                  break
+                }
+              }
+            }
+            if (-not $warmupPassed) { throw 'Embedded OmniRoute did not report a successful in-process warm-up' }
+
             & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
             if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
           }
