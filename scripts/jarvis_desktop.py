@@ -22,6 +22,7 @@ from typing import Any
 from quality_of_life.permissions import Capability, CapabilityPolicy
 from quality_of_life.omniroute_setup import OmniRouteProvisioner
 from quality_of_life.elevenlabs_voice import ElevenLabsMouth, KokoroMouth
+from quality_of_life.personas import PersonaConversation, PersonaVoice
 from quality_of_life.runtime import JarvisRuntime
 from quality_of_life.self_update import SelfUpdateError, build_windows_handoff_script, fetch_latest_release, is_update_available, stage_update
 
@@ -135,8 +136,9 @@ class VisualizerAdapter:
 class VoiceAdapter:
     """Bridge Backtalk ears into Jarvis while using ElevenLabs as the sole TTS engine."""
 
-    def __init__(self, controller: JarvisDesktopController) -> None:
+    def __init__(self, controller: JarvisDesktopController, personas: PersonaConversation | None = None) -> None:
         self.controller = controller
+        self.personas = personas
         self.bridge: Any | None = None
         self.elevenlabs = ElevenLabsMouth()
         self.kokoro = KokoroMouth()
@@ -195,6 +197,36 @@ class VoiceAdapter:
         if provider == "elevenlabs":
             LOGGER.info("ElevenLabs selected but no key is configured; falling back to free Kokoro voice")
         return "kokoro", self.kokoro
+
+    def set_persona_speaker(self, name: str) -> None:
+        personas = self.personas
+        bridge = self.bridge
+        if personas is None or bridge is None:
+            return
+        try:
+            persona = personas.store.get(name) or personas.active
+            profile = persona.voice
+            provider = self.provider() if profile.provider == "inherit" else profile.provider
+            if provider == "elevenlabs" and self.elevenlabs.configured:
+                self.elevenlabs.set_selection(
+                    voice_id=profile.voice_id or None,
+                    model_id=profile.model_id or None,
+                )
+                mouth = self.elevenlabs
+                effective = "elevenlabs"
+            else:
+                self.kokoro.set_selection(
+                    voice_id=profile.voice_id or None,
+                    speed=profile.speed,
+                )
+                mouth = self.kokoro
+                effective = "kokoro"
+            setter = getattr(bridge, "set_mouth", None)
+            if callable(setter):
+                setter(mouth)
+            LOGGER.info("persona speaker selected: %s provider=%s voice=%s", persona.name, effective, profile.voice_id or "default")
+        except Exception:
+            LOGGER.exception("persona voice selection failed for %s; retaining active mouth", name)
 
     def set_provider(self, provider: str) -> dict[str, object]:
         normalized = str(provider or "").strip().lower()
@@ -263,6 +295,8 @@ class VoiceAdapter:
             self.controller,
             mouth=mouth,
             on_output=self._record_transcript,
+            persona_router=getattr(self.personas, "respond", None),
+            on_speaker=self.set_persona_speaker,
         )
         self.bridge.start()
         if provider == "kokoro" and self.kokoro.available():
@@ -472,11 +506,24 @@ class JarvisWebApi:
 
     @staticmethod
     def _payload(result: Any) -> dict[str, Any]:
-        return {
+        payload = {
             "ok": True,
             "text": str(getattr(result, "text", result)),
+            "speaker": str(getattr(result, "speaker", "Jarvis") or "Jarvis"),
             "needs_confirmation": bool(getattr(result, "needs_confirmation", False)),
         }
+        turns = getattr(result, "turns", None)
+        if turns:
+            payload["turns"] = [
+                {
+                    "persona": str(getattr(turn, "persona", "Jarvis")),
+                    "text": str(getattr(turn, "text", "")),
+                }
+                for turn in turns
+            ]
+        if hasattr(result, "group_active"):
+            payload["group_active"] = bool(getattr(result, "group_active", False))
+        return payload
 
     def toggle_text_link(self, detached: bool | None = None) -> dict[str, Any]:
         return self.host.toggle_text_link(detached)
@@ -493,6 +540,11 @@ class JarvisWebApi:
             return {"ok": True, "messages": [str(item)[:12000] for item in drain()]}
         except Exception:
             return {"ok": True, "messages": []}
+
+    def set_persona_voice(self, name: str) -> None:
+        adapter = getattr(self.voice, "set_persona_speaker", None)
+        if callable(adapter):
+            adapter(name)
 
     def voice_audio(self) -> dict[str, Any]:
         try:
@@ -533,10 +585,106 @@ class JarvisWebApi:
     def elevenlabs_voices(self) -> dict[str, Any]:
         return self.host.elevenlabs_voices()
 
+    def personas(self) -> dict[str, Any]:
+        return {"ok": True, "personas": [item.as_dict() for item in self.host.personas.list()]}
+
+    def persona_state(self) -> dict[str, Any]:
+        return {"ok": True, **self.host.personas.state()}
+
+    def persona_switch(self, name: str) -> dict[str, Any]:
+        persona = self.host.personas.switch(name)
+        self.host.set_persona_voice(persona.name)
+        return {"ok": True, "active": persona.name, "persona": persona.as_dict()}
+
+    def persona_save(
+        self,
+        name: str,
+        description: str = "",
+        rules: list[str] | None = None,
+        provider: str = "kokoro",
+        voice_id: str = "",
+        model_id: str = "",
+        speed: float = 1.0,
+        voice_description: str = "",
+    ) -> dict[str, Any]:
+        voice = PersonaVoice(
+            provider=str(provider or "kokoro").strip().lower(),
+            voice_id=str(voice_id or "").strip(),
+            model_id=str(model_id or "").strip(),
+            speed=float(speed or 1.0),
+            description=str(voice_description or "").strip(),
+        )
+        persona = self.host.personas.create(
+            name=name,
+            description=description,
+            locked_rules=rules or (),
+            voice=voice,
+        )
+        return {"ok": True, "persona": persona.as_dict()}
+
+    def persona_delete(self, name: str) -> dict[str, Any]:
+        return {"ok": self.host.personas.delete(name), "active": self.host.personas.active.name}
+
+    def persona_group_start(self, participants: list[str], topic: str = "") -> dict[str, Any]:
+        return {"ok": True, **self.host.personas.start_group(participants, topic)}
+
+    def persona_group_stop(self) -> dict[str, Any]:
+        return {"ok": True, **self.host.personas.stop_group()}
+
+    def elevenlabs_design_voice(self, description: str, text: str = "", model_id: str = "eleven_multilingual_ttv_v2") -> dict[str, Any]:
+        client = getattr(getattr(self.host.voice, "elevenlabs", None), "client", None)
+        design = getattr(client, "design_voice", None)
+        if not callable(design):
+            raise RuntimeError("ElevenLabs voice design is unavailable")
+        return {"ok": True, **design(description, text=text or None, model_id=model_id)}
+
+    def elevenlabs_create_voice(self, name: str, description: str, generated_voice_id: str) -> dict[str, Any]:
+        client = getattr(getattr(self.host.voice, "elevenlabs", None), "client", None)
+        create = getattr(client, "create_voice", None)
+        if not callable(create):
+            raise RuntimeError("ElevenLabs voice creation is unavailable")
+        return create(voice_name=name, voice_description=description, generated_voice_id=generated_voice_id)
+
     def omniroute_detect_provider(self, api_key: str) -> dict[str, Any]:
         from quality_of_life.omniroute_setup import detect_provider_from_key
         provider = detect_provider_from_key(api_key)
         return {"ok": True, "provider": provider, "detected": bool(provider)}
+
+    def open_persona_settings(self) -> dict[str, Any]:
+        try:
+            import webview
+            with self._floating_lock:
+                existing = getattr(self, "_personas_window", None)
+                if existing is not None:
+                    try:
+                        existing.restore()
+                        existing.show()
+                    except Exception:
+                        pass
+                    return {"ok": True}
+                self._personas_window = webview.create_window(
+                    "Jarvis Personalities",
+                    html=PERSONA_SETTINGS_HTML,
+                    js_api=self._web_api,
+                    width=760,
+                    height=900,
+                    resizable=True,
+                    frameless=False,
+                    easy_drag=True,
+                    on_top=False,
+                )
+                try:
+                    self._personas_window.events.closed += self._on_personas_closed
+                except Exception:
+                    pass
+            return {"ok": True}
+        except Exception as exc:
+            LOGGER.exception("persona settings window could not open")
+            raise RuntimeError("personality settings could not be opened") from exc
+
+    def _on_personas_closed(self, *_args: Any, **_kwargs: Any) -> None:
+        with self._floating_lock:
+            self._personas_window = None
 
     def open_omniroute_settings(self) -> dict[str, Any]:
         return self.host.open_omniroute_settings()
@@ -563,7 +711,7 @@ class JarvisWebApi:
                 if bridge is not None and not confirmed:
                     result = bridge.handle_transcript(normalized)
                 else:
-                    result = self.host.controller.execute_request(normalized, confirmed=bool(confirmed))
+                    result = self.host.personas.respond(normalized, confirmed=bool(confirmed))
                 return self._payload(result)
             except Exception as exc:
                 LOGGER.exception("center text input request failed")
@@ -571,7 +719,7 @@ class JarvisWebApi:
                 return {"ok": False, "error": message[:500], "needs_confirmation": False}
 
 
-TEXT_INPUT_SCRIPT = r'''
+PERSONA_SETTINGS_HTML = "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Jarvis Personalities</title>\n<style>\n*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#020914;color:#e5f8ff;font:10px Consolas,monospace}body{padding:16px}.panel{height:100%;overflow:auto;border:1px solid rgba(91,190,255,.25);border-radius:18px;padding:16px;background:linear-gradient(145deg,#03111e,#01070d);box-shadow:0 18px 60px #0008}.row{display:flex;gap:8px}.field{flex:1;display:flex;flex-direction:column;gap:5px}.field label{font-size:8px;letter-spacing:.12em;color:#7698ad}input,textarea,select{width:100%;border:1px solid #6fc7f233;border-radius:8px;background:#0005;color:#e8f7ff;outline:none;padding:9px;font:10px Consolas,monospace}input,select{height:36px}textarea{min-height:70px;resize:vertical}button{height:34px;border:1px solid #6fc7f233;border-radius:8px;background:#051827;color:#c7edff;cursor:pointer;font:9px Consolas,monospace;padding:0 11px}button:hover{border-color:#97e6ff99}.primary{background:#2183b429}.list{display:flex;flex-direction:column;gap:6px;margin-top:8px}.card{padding:9px;border:1px solid #6fc7f21a;border-radius:9px;background:#ffffff04}.card.active{border-color:#78ddff66}.small{font-size:8px;color:#6d91a7;line-height:1.5}.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.check{display:flex;align-items:center;gap:7px;font-size:9px;padding:5px}.check input{width:auto;height:auto}\n</style></head><body><div class=\"panel\">\n<div style=\"font-size:13px;letter-spacing:.18em\">JARVIS · PERSONALITY DECK</div>\n<div class=\"small\" style=\"margin:7px 0 12px\">Create named personalities with persistent locked rules. Say their name to address them, or run a multi-persona call where each participant gets its own voice and reacts to the others.</div>\n<div id=\"cards\" class=\"list\"></div>\n<div style=\"border-top:1px solid #6fc7f21a;margin-top:14px;padding-top:14px\">\n<div class=\"row\"><div class=\"field\"><label>NAME</label><input id=\"name\" placeholder=\"Nova\"></div><div class=\"field\"><label>VOICE PROVIDER</label><select id=\"provider\"><option value=\"kokoro\">Kokoro Local · free</option><option value=\"elevenlabs\">ElevenLabs · optional</option></select></div></div>\n<div class=\"field\" style=\"margin-top:8px\"><label>PERSONALITY / ROLE</label><textarea id=\"description\" placeholder=\"Describe how this personality thinks, speaks, and approaches conversations.\"></textarea></div>\n<div class=\"field\" style=\"margin-top:8px\"><label>LOCKED RULES — ONE PER LINE</label><textarea id=\"rules\" placeholder=\"Always be concise.&#10;Never pretend you completed something you did not.&#10;Stay analytical and challenge assumptions.\"></textarea></div>\n<div class=\"row\" style=\"margin-top:8px\"><div class=\"field\"><label>VOICE ID</label><input id=\"voiceId\" placeholder=\"Kokoro voice or ElevenLabs voice ID\"></div><div class=\"field\"><label>MODEL</label><input id=\"modelId\" placeholder=\"ElevenLabs model (optional)\"></div><div class=\"field\"><label>SPEED</label><input id=\"speed\" type=\"number\" min=\".65\" max=\"2\" step=\".05\" value=\"1\"></div></div>\n<div class=\"field\" style=\"margin-top:8px\"><label>VOICE DESCRIPTION</label><textarea id=\"voiceDescription\" placeholder=\"A calm, low, confident voice with measured pacing...\"></textarea></div>\n<div class=\"actions\"><button id=\"save\" class=\"primary\">SAVE PERSONALITY</button><button id=\"activate\">ACTIVATE</button><button id=\"delete\">DELETE</button></div>\n</div>\n<div style=\"border-top:1px solid #6fc7f21a;margin-top:14px;padding-top:14px\">\n<div style=\"font-size:9px;letter-spacing:.14em\">ELEVENLABS VOICE DESIGN (OPTIONAL)</div>\n<div class=\"small\" style=\"margin:5px 0\">Describe the voice and generate preview candidates. Creating the selected voice uses your ElevenLabs account.</div>\n<textarea id=\"designDescription\" placeholder=\"A warm, authoritative female voice, mid-30s, crisp articulation, subtle dry humor, medium pace...\"></textarea>\n<div class=\"actions\"><button id=\"design\">GENERATE VOICE PREVIEWS</button></div><div id=\"previews\" class=\"list\"></div>\n</div>\n<div style=\"border-top:1px solid #6fc7f21a;margin-top:14px;padding-top:14px\">\n<div style=\"font-size:9px;letter-spacing:.14em\">MULTI-PERSONA CALL</div>\n<div id=\"participants\" class=\"list\"></div>\n<div class=\"field\" style=\"margin-top:8px\"><label>TOPIC / OPENING</label><textarea id=\"topic\" placeholder=\"Discuss whether AI assistants should optimize for speed or reliability.\"></textarea></div>\n<div class=\"actions\"><button id=\"startCall\" class=\"primary\">START CALL</button><button id=\"stopCall\">STOP CALL</button></div>\n<div id=\"status\" class=\"small\" style=\"margin-top:8px\"></div>\n</div>\n</div>\n<script>\nconst $=id=>document.getElementById(id);let data=[];\nfunction esc(s){return String(s||\"\").replace(/[&<>\"']/g,m=>({\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\",'\"':\"&quot;\",\"'\":\"&#39;\"}[m]));}\nasync function refresh(){const r=await pywebview.api.personas();data=r.personas||[];const st=await pywebview.api.persona_state();$(\"cards\").innerHTML=data.map((p,i)=>'<div class=\"card '+(p.name.toLowerCase()===String(st.active).toLowerCase()?'active':'')+'\"><b>'+esc(p.name)+'</b><div class=\"small\">'+esc(p.description||\"\")+'</div><div class=\"small\">Rules: '+(p.locked_rules||[]).length+' · Voice: '+esc((p.voice||{}).provider||\"kokoro\")+'</div><div class=\"actions\"><button onclick=\"pick('+i+')\">EDIT / SELECT</button></div></div>').join(\"\");$(\"participants\").innerHTML=data.map((p,i)=>'<label class=\"check\"><input type=\"checkbox\" data-participant=\"'+i+'\" '+(p.name.toLowerCase()===\"jarvis\"?'checked':'')+'><span>'+esc(p.name)+'</span></label>').join(\"\");if(st.group_active)$(\"status\").textContent=\"Call active: \"+st.participants.join(\", \");$(\"save\").disabled=false;}\nfunction pick(i){const p=data[i];$(\"name\").value=p.name;$(\"description\").value=p.description||\"\";$(\"rules\").value=(p.locked_rules||[]).join(\"\\\\n\");$(\"provider\").value=((p.voice||{}).provider===\"inherit\"?\"kokoro\":(p.voice||{}).provider||\"kokoro\");$(\"voiceId\").value=(p.voice||{}).voice_id||\"\";$(\"modelId\").value=(p.voice||{}).model_id||\"\";$(\"speed\").value=(p.voice||{}).speed||1;$(\"voiceDescription\").value=(p.voice||{}).description||\"\";}\n$(\"save\").onclick=async()=>{try{const r=await pywebview.api.persona_save($(\"name\").value,$(\"description\").value,$(\"rules\").value.split(/\\\\n+/).map(x=>x.trim()).filter(Boolean),$(\"provider\").value,$(\"voiceId\").value,$(\"modelId\").value,Number($(\"speed\").value),$(\"voiceDescription\").value);$(\"status\").textContent=r.ok?\"Saved \"+r.persona.name:\"Save failed\";await refresh();}catch(e){$(\"status\").textContent=String(e);}};\n$(\"activate\").onclick=async()=>{try{const r=await pywebview.api.persona_switch($(\"name\").value);$(\"status\").textContent=\"Active: \"+r.active;await refresh();}catch(e){$(\"status\").textContent=String(e);}};\n$(\"delete\").onclick=async()=>{try{const r=await pywebview.api.persona_delete($(\"name\").value);$(\"status\").textContent=r.ok?\"Deleted\":\"Nothing deleted\";await refresh();}catch(e){$(\"status\").textContent=String(e);}};\n$(\"design\").onclick=async()=>{try{const r=await pywebview.api.elevenlabs_design_voice($(\"designDescription\").value);$(\"previews\").innerHTML=(r.previews||[]).map((p,i)=>'<div class=\"card\"><div>Preview '+(i+1)+'</div><audio controls style=\"width:100%\" src=\"data:'+esc(p.media_type||\"audio/mpeg\")+';base64,'+p.audio_base_64+'></audio><div class=\"actions\"><button onclick=\"useVoice('+i+')\">USE THIS VOICE ID</button><button onclick=\"createVoice('+i+')\">CREATE ELEVENLABS VOICE</button></div></div>').join(\"\");window.previewData=r.previews||[];}catch(e){$(\"status\").textContent=String(e);}};\nwindow.useVoice=i=>{$(\"provider\").value=\"elevenlabs\";$(\"voiceId\").value=window.previewData[i].generated_voice_id;$(\"voiceDescription\").value=$(\"designDescription\").value;$(\"status\").textContent=\"Preview selected; save the personality to retain its generated voice id.\"};\nwindow.createVoice=async i=>{try{const r=await pywebview.api.elevenlabs_create_voice($(\"name\").value||\"Jarvis Persona Voice\",$(\"designDescription\").value,window.previewData[i].generated_voice_id);$(\"provider\").value=\"elevenlabs\";$(\"voiceId\").value=r.voice_id||\"\";$(\"status\").textContent=\"Created voice \"+(r.name||r.voice_id)+\"; save the personality.\";}catch(e){$(\"status\").textContent=String(e);}};\n$(\"startCall\").onclick=async()=>{try{const chosen=[...document.querySelectorAll(\"[data-participant]:checked\")].map(x=>data[Number(x.dataset.participant)].name);const topic=$(\"topic\").value.trim();if(chosen.length<2)throw new Error(\"Select at least two personas.\");await pywebview.api.persona_group_start(chosen,topic);const r=await pywebview.api.submit_text(topic,false);$(\"status\").textContent=(r.ok?\"Call active: \":\"Call failed: \")+((r.turns||[]).map(x=>x.persona).join(\", \")||r.error||\"\");}catch(e){$(\"status\").textContent=String(e);}};\n$(\"stopCall\").onclick=async()=>{try{const r=await pywebview.api.persona_group_stop();$(\"status\").textContent=\"Call stopped\";}catch(e){$(\"status\").textContent=String(e);}};\nwindow.addEventListener(\"pywebviewready\",refresh);setTimeout(refresh,500);\n</script></body></html>"\n\nTEXT_INPUT_SCRIPT = r'''
 (function () {
   "use strict";
   if (window.__jarvisTextInputInstalled) return;
@@ -893,7 +1041,7 @@ h1{font-size:13px;letter-spacing:.20em;margin:0;color:#dff6ff}.sub{font-size:8px
 <div><div class="field"><label>PROVIDER</label><select id="provider"><option value="auto" selected>Auto-detect from API key</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="gemini">Google AI</option><option value="openrouter">OpenRouter</option><option value="deepseek">DeepSeek</option><option value="groq">Groq</option><option value="xai">xAI</option><option value="mistral">Mistral</option><option value="cerebras">Cerebras</option><option value="together">Together</option><option value="fireworks">Fireworks</option><option value="custom">Custom provider ID…</option></select></div></div>
 <div class="field" id="customWrap" style="display:none"><label>CUSTOM PROVIDER ID</label><input id="customProvider" autocomplete="off" placeholder="provider-id"></div>
 <div class="field"><label>API KEY</label><input id="key" type="password" autocomplete="new-password" placeholder="Paste provider API key"></div>
-<div class="actions"><button id="connect" class="primary" type="button">CONNECT & TEST</button><button id="refresh" type="button">REFRESH</button><button id="dashboard" type="button">OPEN DASHBOARD</button></div>
+<div class="actions"><button id="connect" class="primary" type="button">CONNECT & TEST</button><button id="refresh" type="button">REFRESH</button><button id="dashboard" type="button">OPEN DASHBOARD</button><button id="personas" class="primary" type="button">PERSONALITIES</button></div>
 <div class="sub" id="message">Provider secrets are sent directly to OmniRoute over a local process boundary.</div>
 <div><div class="sub" style="margin-bottom:6px">CONFIGURED PROVIDERS</div><div class="providers" id="providers"><div class="muted">No provider status yet.</div></div></div>
 <div style="border-top:1px solid rgba(111,199,242,.10);padding-top:12px">
@@ -1020,7 +1168,8 @@ class FullstackJarvisHost:
     def __init__(self, controller: JarvisDesktopController, *, visualizer: Any | None = None, voice: Any | None = None, hands: Any | None = None) -> None:
         self.controller = controller
         self.visualizer = visualizer or VisualizerAdapter()
-        self.voice = voice or VoiceAdapter(controller)
+        self.personas = PersonaConversation(controller)
+        self.voice = voice or VoiceAdapter(controller, self.personas)
         self.hands = hands or HandsAdapter(controller.runtime)
         self.started = False
         self.stopped = False
@@ -1028,6 +1177,7 @@ class FullstackJarvisHost:
         self._floating_window: Any | None = None
         self._floating_visible = False
         self._omniroute_settings_window: Any | None = None
+        self._personas_window: Any | None = None
         self.omniroute = OmniRouteProvisioner()
         self._floating_lock = threading.RLock()
         self._shutting_down = False
@@ -1119,6 +1269,20 @@ class FullstackJarvisHost:
         voice = getattr(self.voice, "elevenlabs", None)
         test = getattr(voice, "test_speech", None)
         return test() if callable(test) else {"ok": False, "tested": False, "message": "ElevenLabs voice engine is unavailable"}
+
+    def elevenlabs_design_voice(self, description: str, text: str = "", model_id: str = "eleven_multilingual_ttv_v2") -> dict[str, Any]:
+        client = getattr(getattr(self.voice, "elevenlabs", None), "client", None)
+        design = getattr(client, "design_voice", None)
+        if not callable(design):
+            raise RuntimeError("ElevenLabs voice design is unavailable")
+        return design(description, text=text or None, model_id=model_id)
+
+    def elevenlabs_create_voice(self, name: str, description: str, generated_voice_id: str) -> dict[str, Any]:
+        client = getattr(getattr(self.voice, "elevenlabs", None), "client", None)
+        create = getattr(client, "create_voice", None)
+        if not callable(create):
+            raise RuntimeError("ElevenLabs voice creation is unavailable")
+        return create(voice_name=name, voice_description=description, generated_voice_id=generated_voice_id)
 
     def elevenlabs_voices(self) -> dict[str, Any]:
         voice = getattr(self.voice, "elevenlabs", None)
@@ -1224,6 +1388,12 @@ class FullstackJarvisHost:
                 except Exception:
                     LOGGER.exception("OmniRoute settings window failed to close cleanly")
                 self._omniroute_settings_window = None
+            if self._personas_window is not None:
+                try:
+                    self._personas_window.destroy()
+                except Exception:
+                    LOGGER.exception("persona settings window failed to close cleanly")
+                self._personas_window = None
         with self._floating_lock:
             self._save_floating_position()
             if self._floating_window is not None:
