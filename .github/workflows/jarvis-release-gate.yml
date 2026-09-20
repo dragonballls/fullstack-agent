@@ -145,7 +145,7 @@ jobs:
             '--add-data', 'build_vendor\omniroute_runtime\runtime-manifest.txt;omniroute_runtime',
             '--collect-submodules', 'quality_of_life', '--collect-submodules', 'self_coding',
             '--collect-submodules', 'windows_maintenance', '--collect-submodules', 'backtalk',
-            '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-submodules', 'webrtcvad',
+            '--collect-all', 'faster_whisper', '--collect-all', 'kokoro', '--collect-all', 'misaki', '--collect-submodules', 'webrtcvad',
             '--hidden-import', 'sounddevice', '--hidden-import', 'soundfile', '--hidden-import', 'pynput'
           )
           foreach ($dll in Get-Content -LiteralPath 'build_runtime_dlls.txt') { $args += @('--add-binary', ("{0};." -f $dll)) }
