@@ -200,6 +200,97 @@ class ElevenLabsClient:
                 result.append({"id": voice_id[:256], "name": name[:256]})
         return result
 
+    def design_voice(
+        self,
+        voice_description: str,
+        *,
+        text: str | None = None,
+        model_id: str = "eleven_multilingual_ttv_v2",
+        seed: int | None = None,
+    ) -> dict[str, object]:
+        description = " ".join(str(voice_description or "").split()).strip()
+        if not 20 <= len(description) <= 1000:
+            raise ValueError("voice description must be 20-1000 characters")
+        payload: dict[str, object] = {
+            "voice_description": description,
+            "model_id": model_id,
+            "auto_generate_text": not bool(text),
+            "stream_previews": False,
+        }
+        if text:
+            preview_text = " ".join(str(text).split()).strip()
+            if not 100 <= len(preview_text) <= 1000:
+                raise ValueError("preview text must be 100-1000 characters")
+            payload["text"] = preview_text
+        if seed is not None:
+            payload["seed"] = max(0, min(2147483647, int(seed)))
+        body = json.dumps(payload).encode("utf-8")
+        status, raw = self._request(
+            "POST",
+            "/text-to-voice/design",
+            body=body,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        if not 200 <= status < 300:
+            raise RuntimeError("ElevenLabs voice design failed")
+        try:
+            result = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("ElevenLabs returned invalid voice-design data") from exc
+        previews = result.get("previews", []) if isinstance(result, dict) else []
+        cleaned: list[dict[str, object]] = []
+        for item in previews if isinstance(previews, list) else []:
+            if not isinstance(item, dict):
+                continue
+            cleaned.append({
+                "generated_voice_id": str(item.get("generated_voice_id") or "")[:256],
+                "audio_base_64": str(item.get("audio_base_64") or ""),
+                "media_type": str(item.get("media_type") or "audio/mpeg")[:64],
+                "duration_secs": float(item.get("duration_secs") or 0.0),
+                "language": str(item.get("language") or "")[:32],
+            })
+        return {"text": str(result.get("text") or "")[:1000] if isinstance(result, dict) else "", "previews": cleaned}
+
+    def create_voice(
+        self,
+        *,
+        voice_name: str,
+        voice_description: str,
+        generated_voice_id: str,
+    ) -> dict[str, object]:
+        name = " ".join(str(voice_name or "").split()).strip()
+        description = " ".join(str(voice_description or "").split()).strip()
+        generated = str(generated_voice_id or "").strip()
+        if not name:
+            raise ValueError("voice name is required")
+        if not 20 <= len(description) <= 1000:
+            raise ValueError("voice description must be 20-1000 characters")
+        if not generated:
+            raise ValueError("generated voice id is required")
+        body = json.dumps({
+            "voice_name": name[:128],
+            "voice_description": description,
+            "generated_voice_id": generated[:256],
+        }).encode("utf-8")
+        status, raw = self._request(
+            "POST",
+            "/text-to-voice",
+            body=body,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        if not 200 <= status < 300:
+            raise RuntimeError("ElevenLabs voice creation failed")
+        try:
+            result = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("ElevenLabs returned invalid voice-creation data") from exc
+        return {
+            "ok": True,
+            "voice_id": str(result.get("voice_id") or "").strip()[:256],
+            "name": str(result.get("name") or name).strip()[:128],
+            "description": str(result.get("description") or description).strip()[:1000],
+        }
+
     def synthesize(
         self,
         text: str,
