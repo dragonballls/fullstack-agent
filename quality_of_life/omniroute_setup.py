@@ -305,7 +305,7 @@ class OmniRouteProvisioner:
             env["PORT"] = str(self.port)
             env.setdefault("OMNIROUTE_HEADLESS", "1")
             process = subprocess.Popen(
-                command + ["--port", str(self.port), "--no-open"],
+                command + ["--port", str(self.port)],
                 stdin=subprocess.DEVNULL,
                 stdout=self._process_log_handle or subprocess.DEVNULL,
                 stderr=subprocess.STDOUT if self._process_log_handle is not None else subprocess.DEVNULL,
