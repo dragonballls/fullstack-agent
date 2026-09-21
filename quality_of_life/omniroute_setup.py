@@ -324,10 +324,16 @@ class OmniRouteProvisioner:
         return self._owner_pid_alive(owner.get("pid"))
 
     def _write_owner(self, pid: int) -> None:
+        try:
+            numeric_pid = int(pid)
+        except (TypeError, ValueError):
+            return
+        if numeric_pid <= 0:
+            return
         self.data_dir.mkdir(parents=True, exist_ok=True)
         payload = {
             "owner": "jarvis",
-            "pid": int(pid),
+            "pid": numeric_pid,
             "base_url": self.base_url,
             "port": self.port,
             "created_at": time.time(),
