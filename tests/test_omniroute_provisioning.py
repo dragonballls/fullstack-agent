@@ -42,6 +42,24 @@ class OmniRouteProvisionerTests(unittest.TestCase):
         popen.assert_called_once()
         self.assertEqual(popen.call_args.args[0], ["omniroute", "--no-open", "--port", "20128"])
 
+    def test_ready_unmanaged_server_is_rejected_instead_of_using_a_different_data_dir(self):
+        provisioner = OmniRouteProvisioner(data_dir=Path(tempfile.mkdtemp(prefix="jarvis-omni-owned-")))
+        with patch.object(provisioner, "_probe", return_value=True), patch.object(
+            provisioner, "_managed_server_available", return_value=False
+        ):
+            with self.assertRaisesRegex(RuntimeError, "unmanaged OmniRoute instance"):
+                provisioner.ensure_running()
+
+    def test_ready_server_owned_by_current_jarvis_process_is_accepted(self):
+        provisioner = OmniRouteProvisioner(data_dir=Path(tempfile.mkdtemp(prefix="jarvis-omni-owned-")))
+        process = unittest.mock.Mock()
+        process.poll.return_value = None
+        with patch.object(provisioner, "_probe", return_value=True), patch.object(
+            provisioner, "_managed_server_available", return_value=True
+        ):
+            provisioner._process = process
+            self.assertTrue(provisioner.ensure_running())
+
     def test_status_never_exposes_provider_credentials(self):
         provisioner = OmniRouteProvisioner()
         with patch.object(provisioner, "resolve_command", return_value=("omniroute",)), patch.object(

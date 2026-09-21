@@ -112,6 +112,7 @@ class OmniRouteProvisioner:
         self._resolved: tuple[str, ...] | None = None
         self._source = "unavailable"
         self._process: subprocess.Popen[bytes] | None = None
+        self._owner_file = self.data_dir / "jarvis-owner.json"
 
     @property
     def port(self) -> int:
@@ -278,12 +279,91 @@ class OmniRouteProvisioner:
                 continue
         return False
 
+    def _read_owner(self) -> dict[str, object] | None:
+        try:
+            payload = json.loads(self._owner_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _owner_pid_alive(pid: object) -> bool:
+        try:
+            value = int(pid)
+        except (TypeError, ValueError):
+            return False
+        if value <= 0:
+            return False
+        if _is_windows():
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            SYNCHRONIZE = 0x00100000
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, value)
+            if not handle:
+                return False
+            try:
+                STILL_ACTIVE = 259
+                exit_code = ctypes.c_ulong()
+                if not ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                    return False
+                return int(exit_code.value) == STILL_ACTIVE
+            finally:
+                ctypes.windll.kernel32.CloseHandle(handle)
+        try:
+            os.kill(value, 0)
+        except (OSError, ProcessLookupError, PermissionError):
+            return False
+        return True
+
+    def _managed_server_available(self) -> bool:
+        owner = self._read_owner()
+        if not owner or owner.get("owner") != "jarvis":
+            return False
+        if str(owner.get("base_url", "")).rstrip("/") != self.base_url:
+            return False
+        return self._owner_pid_alive(owner.get("pid"))
+
+    def _write_owner(self, pid: int) -> None:
+        try:
+            numeric_pid = int(pid)
+        except (TypeError, ValueError):
+            return
+        if numeric_pid <= 0:
+            return
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "owner": "jarvis",
+            "pid": numeric_pid,
+            "base_url": self.base_url,
+            "port": self.port,
+            "created_at": time.time(),
+        }
+        tmp = self._owner_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp.replace(self._owner_file)
+
+    def _clear_owner(self) -> None:
+        try:
+            owner = self._read_owner()
+            if owner and int(owner.get("pid", -1)) == (self._process.pid if self._process is not None else -2):
+                self._owner_file.unlink(missing_ok=True)
+        except (TypeError, ValueError, OSError):
+            pass
+
     def probe_only(self) -> bool:
         return self._probe()
 
     def ensure_running(self, *, wait_seconds: float = 15.0) -> bool:
         if self._probe():
-            return True
+            if self._managed_server_available() or (
+                self._process is not None and self._process.poll() is None
+            ):
+                return True
+            raise RuntimeError(
+                f"An unmanaged OmniRoute instance is already serving {self.base_url}. "
+                "Jarvis will not configure a different data directory into a running gateway."
+            )
+
         command = self.command_argv()
         if self._process is not None and self._process.poll() is None:
             process = self._process
@@ -298,13 +378,18 @@ class OmniRouteProvisioner:
                 close_fds=True,
             )
             self._process = process
+            self._write_owner(process.pid)
+
         deadline = time.monotonic() + max(0.5, float(wait_seconds))
         while time.monotonic() < deadline:
             if self._probe():
                 return True
             if process.poll() is not None:
+                self._clear_owner()
                 break
             time.sleep(0.25)
+        if process.poll() is not None:
+            self._clear_owner()
         return False
 
     def status(self) -> OmniRouteRuntimeStatus:
@@ -419,4 +504,7 @@ class OmniRouteProvisioner:
         }
 
     def start(self) -> bool:
-        return self.ensure_running(wait_seconds=15.0)
+        try:
+            return self.ensure_running(wait_seconds=15.0)
+        except RuntimeError:
+            return False
