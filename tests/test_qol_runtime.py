@@ -18,6 +18,17 @@ class FakeEye:
         return LocationSnapshot(GeoPoint(34.1, -117.7), 20, True, "fake")
     def open_place(self, place):
         return {"surface": "gods-eye", "place": place.as_dict()}
+    def family_locations(self):
+        return [
+            {
+                "id": "device_tracker.parent",
+                "name": "Parent",
+                "point": {"latitude": 34.1, "longitude": -117.7},
+                "provider": "life360",
+            }
+        ]
+    def family_context(self):
+        return {"provider": "family", "locations": self.family_locations(), "surface": "gods-eye"}
 
 
 class FakeMaintenance:
@@ -56,6 +67,17 @@ class JarvisRuntimeTests(unittest.TestCase):
         self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye", "windows_maintenance", "account_access"} <= names)
         places = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.search", query="Tokyo")
         self.assertEqual(places[0].name, "Tokyo")
+
+    def test_runtime_dispatches_family_location_actions_through_gods_eye(self):
+        policy = CapabilityPolicy(frozenset({Capability.LOCATION_READ}))
+        runtime = JarvisRuntime(policy, factories={"gods_eye": lambda: FakeEye()})
+        locations = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.family_locations")
+        self.assertEqual(locations[0]["provider"], "life360")
+        context = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.family_context")
+        self.assertEqual(context["provider"], "family")
+        map_payload = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.family_map")
+        self.assertTrue(map_payload["available"])
+        self.assertEqual(map_payload["markers"][0]["name"], "Parent")
 
     def test_runtime_defaults_cloud_router_to_omniroute(self):
         old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED")}
