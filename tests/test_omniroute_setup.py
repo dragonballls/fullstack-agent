@@ -177,6 +177,7 @@ class OmniRouteSetupTests(unittest.TestCase):
 
             self.assertTrue(data_dir.is_dir())
             self.assertEqual(popen.call_args.kwargs["cwd"], str(data_dir))
+            self.assertIsNone(provisioner._process_log_handle)
             if provisioner._process_log_handle is not None:
                 provisioner._process_log_handle.close()
                 provisioner._process_log_handle = None
