@@ -161,6 +161,27 @@ class JarvisDesktopTests(unittest.TestCase):
         ):
             self.assertIn(method, dir(jarvis_desktop.JarvisWebApi))
 
+    def test_inherited_jarvis_voice_does_not_send_kokoro_id_to_elevenlabs(self):
+        controller = Mock()
+        persona = SimpleNamespace(
+            name="Jarvis",
+            voice=SimpleNamespace(provider="inherit", voice_id="bm_lewis", model_id="", speed=1.0),
+        )
+        personas = SimpleNamespace(
+            store=SimpleNamespace(get=Mock(return_value=persona)),
+            active=persona,
+        )
+        adapter = VoiceAdapter(controller, personas=personas)
+        adapter.bridge = Mock()
+        adapter.elevenlabs = SimpleNamespace(configured=True, set_selection=Mock())
+        adapter.kokoro = SimpleNamespace(set_selection=Mock())
+
+        with patch.object(adapter, "provider", return_value="elevenlabs"):
+            adapter.set_persona_speaker("Jarvis")
+
+        adapter.elevenlabs.set_selection.assert_called_once_with(voice_id=None, model_id=None)
+        adapter.bridge.set_mouth.assert_called_once_with(adapter.elevenlabs)
+
     def test_voice_adapter_uses_elevenlabs_as_mouth(self):
         controller = Mock()
         adapter = VoiceAdapter(controller)
