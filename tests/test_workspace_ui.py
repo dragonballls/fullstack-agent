@@ -95,11 +95,51 @@ class WorkspaceUiTests(unittest.TestCase):
         self.assertEqual([item["kind"] for item in providers], ["device", "phone", "family"])
         self.assertTrue(providers[0]["authorized"])
 
+    def test_workspace_api_exposes_family_map(self):
+        class FakeRuntime:
+            def dispatch(self, capability, operation):
+                if operation == "gods_eye.family_map":
+                    return {
+                        "available": True,
+                        "surface": "gods-eye",
+                        "provider": "life360",
+                        "markers": [
+                            {
+                                "name": "Parent",
+                                "point": {"latitude": 1.0, "longitude": 2.0},
+                            }
+                        ],
+                    }
+                return {"point": None, "permitted": False}
+
+        class FakeController:
+            def __init__(self):
+                self.runtime = FakeRuntime()
+
+        class FakeHost:
+            def __init__(self):
+                self.controller = FakeController()
+
+        desktop = type("Desktop", (), {})()
+        from quality_of_life import workspace_ui
+        base_api = type("BaseApi", (), {"__init__": lambda self, host: setattr(self, "host", host)})
+        desktop.JarvisWebApi = base_api
+        desktop.TEXT_INPUT_SCRIPT = ""
+        workspace_ui.install(desktop)
+        api = desktop.JarvisWebApi(FakeHost())
+
+        result = api.gods_eye_family_map()
+        self.assertTrue(result["available"])
+        self.assertEqual(result["provider"], "life360")
+        self.assertEqual(result["markers"][0]["name"], "Parent")
+
     def test_workspace_script_surfaces_activity_and_provider_state(self):
         script = workspace_script()
         self.assertIn("activity_snapshot", script)
         self.assertIn("activity_cancel", script)
         self.assertIn("gods_eye_providers", script)
+        self.assertIn("gods_eye_family_map", script)
+        self.assertIn("jw-family-markers", script)
         self.assertIn("ACTIVITY", script)
 
     def test_gods_eye_status_rejects_unpermitted_location_result(self):

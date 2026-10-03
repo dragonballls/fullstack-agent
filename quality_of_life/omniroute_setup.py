@@ -112,6 +112,7 @@ class OmniRouteProvisioner:
         self._resolved: tuple[str, ...] | None = None
         self._source = "unavailable"
         self._process: subprocess.Popen[bytes] | None = None
+        self._process_log_handle: Any | None = None
 
     @property
     def port(self) -> int:
@@ -260,14 +261,32 @@ class OmniRouteProvisioner:
         env["OMNIROUTE_TELEMETRY"] = env.get("OMNIROUTE_TELEMETRY", "false")
         return env
 
-    def _probe(self) -> bool:
+    def _probe(self, *, deadline: float | None = None) -> bool:
         parsed = urllib.parse.urlparse(self.base_url)
-        origin = f"{parsed.scheme}://{parsed.netloc}"
-        for url in (self.base_url + "/models", origin + "/api/monitoring/health", origin + "/healthz"):
+        scheme = parsed.scheme.lower()
+        hostname = (parsed.hostname or "").lower()
+        if scheme not in {"http", "https"} or parsed.username or parsed.password:
+            return False
+        if hostname not in {"127.0.0.1", "localhost", "::1"}:
+            return False
+        try:
+            port = parsed.port
+        except ValueError:
+            return False
+        host = f"[{hostname}]" if ":" in hostname else hostname
+        origin = f"{scheme}://{host}"
+        if port is not None:
+            origin += f":{port}"
+        endpoints = (self.base_url + "/models", origin + "/api/monitoring/health")
+        for url in endpoints:
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                return False
+            timeout = 5.0 if remaining is None else max(0.05, min(5.0, remaining))
             try:
                 with urllib.request.urlopen(
                     urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET"),
-                    timeout=1.5,
+                    timeout=timeout,
                 ) as response:
                     if 200 <= int(response.status) < 300:
                         return True
@@ -282,29 +301,67 @@ class OmniRouteProvisioner:
         return self._probe()
 
     def ensure_running(self, *, wait_seconds: float = 15.0) -> bool:
-        if self._probe():
+        deadline = time.monotonic() + max(0.5, float(wait_seconds))
+        if self._probe(deadline=deadline):
             return True
-        command = self.command_argv()
+        if time.monotonic() >= deadline:
+            return False
+        command = self.command_argv(for_start=True)
         if self._process is not None and self._process.poll() is None:
             process = self._process
         else:
-            process = subprocess.Popen(
-                command + ["--port", str(self.port)],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=self.environment(),
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                close_fds=True,
+            # The bundled PyInstaller runtime may be starting on a fresh machine where
+            # OmniRoute's persistent working directory does not exist yet. Windows
+            # rejects a missing cwd with WinError 267 before Node can even start.
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            log_path = Path(
+                os.environ.get(
+                    "JARVIS_OMNIROUTE_LOG",
+                    str(self.data_dir.parent / "logs" / "omniroute.log"),
+                )
             )
+            try:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                self._process_log_handle = log_path.open("a", encoding="utf-8")
+            except OSError:
+                self._process_log_handle = None
+            env = self.environment()
+            # The pinned OmniRoute server uses OMNIROUTE_SERVER_HOST for its bind address.
+            # Keep the legacy HOST value too for compatible runtimes, but never expose the
+            # embedded inference plane beyond loopback.
+            env["OMNIROUTE_SERVER_HOST"] = "127.0.0.1"
+            env["HOST"] = "127.0.0.1"
+            env["PORT"] = str(self.port)
+            env.setdefault("OMNIROUTE_HEADLESS", "1")
+            log_handle = self._process_log_handle
+            try:
+                process = subprocess.Popen(
+                    command + ["--port", str(self.port)],
+                    stdin=subprocess.DEVNULL,
+                    stdout=log_handle or subprocess.DEVNULL,
+                    stderr=subprocess.STDOUT if log_handle is not None else subprocess.DEVNULL,
+                    env=env,
+                    cwd=str(self.data_dir),
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    close_fds=True,
+                )
+            finally:
+                if log_handle is not None:
+                    try:
+                        log_handle.close()
+                    except OSError:
+                        pass
+                self._process_log_handle = None
             self._process = process
-        deadline = time.monotonic() + max(0.5, float(wait_seconds))
         while time.monotonic() < deadline:
-            if self._probe():
+            if self._probe(deadline=deadline):
                 return True
             if process.poll() is not None:
-                break
-            time.sleep(0.25)
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(0.25, remaining))
         return False
 
     def status(self) -> OmniRouteRuntimeStatus:
@@ -347,7 +404,7 @@ class OmniRouteProvisioner:
             raise ValueError("provider API key is too short")
         command = self.command_argv()
         env = self.environment()
-        add_command = [*command, "--non-interactive", "providers", "add", normalized, "--credential-stdin"]
+        add_command = [*command, "providers", "add", normalized, "--credential-stdin", "--yes"]
         result = subprocess.run(
             add_command,
             input=key + "\n",
@@ -367,7 +424,7 @@ class OmniRouteProvisioner:
     def list_providers(self, *, install_if_missing: bool = True) -> list[dict[str, object]]:
         command = self.command_argv(install_if_missing=install_if_missing)
         result = subprocess.run(
-            [*command, "--non-interactive", "providers", "list", "--json"],
+            [*command, "providers", "list", "--json"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -402,7 +459,7 @@ class OmniRouteProvisioner:
             raise ValueError("provider is required")
         command = self.command_argv()
         result = subprocess.run(
-            [*command, "--non-interactive", "providers", "test", normalized],
+            [*command, "providers", "test", normalized],
             capture_output=True,
             text=True,
             encoding="utf-8",

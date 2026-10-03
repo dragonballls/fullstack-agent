@@ -13,6 +13,18 @@ class SingleExeContractTests(unittest.TestCase):
         self.assertIn("VisualizerAdapter", text)
         self.assertIn("VoiceAdapter", text)
 
+    def test_desktop_host_exposes_multi_persona_runtime_and_voice_design(self):
+        desktop = (ROOT / "scripts/jarvis_desktop.py").read_text(encoding="utf-8")
+        voice = (ROOT / "scripts/jarvis_voice_bridge.py").read_text(encoding="utf-8")
+        personas = (ROOT / "quality_of_life/personas.py").read_text(encoding="utf-8")
+        self.assertIn("PersonaConversation", desktop)
+        self.assertIn("PERSONA_SETTINGS_HTML", desktop)
+        self.assertIn("persona_switch", desktop)
+        self.assertIn("elevenlabs_design_voice", desktop)
+        self.assertIn("persona_router", voice)
+        self.assertIn("locked_rules", personas)
+        self.assertIn("MAX_GROUP_SIZE", personas)
+
     def test_release_workflow_builds_and_publishes_a_raw_exe(self):
         text = (ROOT / ".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")
         self.assertIn("scripts/fetch-fullstack-components.py", text)

@@ -34,10 +34,29 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("build_vendor\\ai-visualizer\\source", workflow)
         self.assertIn("scripts/jarvis_desktop.pyw", workflow)
         self.assertIn("JARVIS_UI_SMOKE", workflow)
+        self.assertIn("pid=[0-9]+ hotkey=", workflow)
+        self.assertNotIn("pid=\\\\d+ hotkey=", workflow)
+        self.assertIn("same frozen EXE process", workflow)
         self.assertIn("headless frozen Jarvis native window object created", Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8"))
         desktop = Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8")
         self.assertIn("webview.create_window(**window_kwargs)", desktop)
         self.assertIn("self._window = webview.create_window(**window_kwargs)", desktop)
+
+    def test_packaged_visualizer_smoke_allows_cold_onefile_start(self):
+        workflow = Path(".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")
+        self.assertIn("$startupTimeoutSeconds = 360", workflow)
+        self.assertIn("Embedded Fullstack visualizer did not become ready within $startupTimeoutSeconds seconds", workflow)
+
+    def test_packaged_omniroute_smoke_uses_cold_start_budget_and_dedicated_log(self):
+        workflow = Path(".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")
+        desktop = Path("scripts/jarvis_desktop.py").read_text(encoding="utf-8")
+        provisioner = Path("quality_of_life/omniroute_setup.py").read_text(encoding="utf-8")
+        self.assertIn("$omniStartupTimeoutSeconds = 360", workflow)
+        self.assertIn("Jarvis\\logs\\omniroute.log", workflow)
+        self.assertIn("JARVIS_OMNIROUTE_LOG", provisioner)
+        self.assertIn('command_argv(for_start=True)', provisioner)
+        self.assertIn('["--port", str(self.port)]', provisioner)
+        self.assertIn("wait_seconds=300", desktop)
 
     def test_attestation_verification_precedes_release_publication(self):
         workflow = Path(".github/workflows/jarvis-release-gate.yml").read_text(encoding="utf-8")

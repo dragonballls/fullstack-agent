@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from scripts.jarvis_voice_bridge import DEFAULT_CONFIG, JarvisVoiceBridge, _migrate_legacy_stt_default
 
@@ -115,6 +116,30 @@ class JarvisVoiceBridgeTests(TestCase):
         self.assertEqual(controller.execute_request.call_args_list[0].kwargs, {"confirmed": False})
         self.assertEqual(controller.execute_request.call_args_list[1].kwargs, {"confirmed": True})
         self.assertEqual(mouth.say.call_count, 2)
+
+    def test_multi_persona_turns_wait_between_speakers(self):
+        controller = Mock()
+        result = Mock(
+            needs_confirmation=False,
+            turns=(
+                SimpleNamespace(text="first", persona="Nova"),
+                SimpleNamespace(text="second", persona="Echo"),
+                SimpleNamespace(text="third", persona="Jarvis"),
+            ),
+        )
+        controller.execute_request.return_value = result
+        bridge = JarvisVoiceBridge(controller=controller, ears=Mock(), mouth=Mock(), ptt=Mock(), persona_router=Mock(return_value=result))
+        bridge._speak = Mock()
+        bridge._wait_for_output_idle = Mock(return_value=True)
+
+        bridge.handle_transcript("group")
+
+        self.assertEqual(bridge._speak.call_count, 3)
+        self.assertEqual(bridge._wait_for_output_idle.call_count, 2)
+        self.assertEqual(
+            [call.args[1] for call in bridge._speak.call_args_list],
+            ["Nova", "Echo", "Jarvis"],
+        )
 
     def test_live_listener_uses_speaker_gate_and_abort_signal(self):
         bridge = JarvisVoiceBridge(controller=Mock(), ears=Mock(), mouth=Mock())

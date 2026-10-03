@@ -34,6 +34,8 @@ _MAX_NAME_LENGTH = 120
 _MAX_VERSION_LENGTH = 40
 _MAX_DESCRIPTION_LENGTH = 2000
 DEFAULT_BUILD_ID = "workspace-default"
+DEFAULT_ACTIVE_BUILD_ID = "neural-mesh"
+LEGACY_DEFAULT_BUILD_ID = DEFAULT_BUILD_ID
 MAX_ROLLBACK_HISTORY = 20
 UI_QUALITY_FLOOR_LEVEL = int(DEFAULT_QUALITY_FLOOR["ui_minimum_level"])
 UI_MAX_BUILD_BYTES = int(DEFAULT_QUALITY_FLOOR["performance"]["max_ui_build_bytes"])
@@ -259,13 +261,19 @@ class UIBuildStore:
             raise ValueError(f"invalid UI build '{build_id}': {type(exc).__name__}") from exc
 
     def _state(self) -> dict[str, object]:
-        default = {"active": DEFAULT_BUILD_ID, "history": []}
+        default = {"active": DEFAULT_ACTIVE_BUILD_ID, "history": []}
         if not self.state_path.exists():
             return default
         try:
             raw = json.loads(self.state_path.read_text(encoding="utf-8"))
-            active = str(raw.get("active", DEFAULT_BUILD_ID))
+            active = str(raw.get("active", DEFAULT_ACTIVE_BUILD_ID))
             history = [str(item) for item in raw.get("history", []) if isinstance(item, str)]
+            # Migrate existing installs that still use the legacy base UI default.
+            # Do not override a user-selected custom UI build.
+            if active == LEGACY_DEFAULT_BUILD_ID:
+                active = DEFAULT_ACTIVE_BUILD_ID
+                if LEGACY_DEFAULT_BUILD_ID not in history:
+                    history.append(LEGACY_DEFAULT_BUILD_ID)
             return {"active": active, "history": history[-MAX_ROLLBACK_HISTORY:]}
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return default
@@ -324,8 +332,8 @@ class UIBuildStore:
                     raise ValueError("active UI build is below the verified quality floor")
                 return active_build
             except (KeyError, ValueError):
-                self._write_state(DEFAULT_BUILD_ID, [])
-                return self._read_build(DEFAULT_BUILD_ID)
+                self._write_state(DEFAULT_ACTIVE_BUILD_ID, [])
+                return self._read_build(DEFAULT_ACTIVE_BUILD_ID)
 
     def save(self, payload: Mapping[str, object]) -> UIBuild:
         with self._lock:
@@ -389,8 +397,8 @@ class UIBuildStore:
                     continue
                 self._write_state(target.id, history)
                 return target
-            self._write_state(DEFAULT_BUILD_ID, [])
-            return self.get(DEFAULT_BUILD_ID)
+            self._write_state(DEFAULT_ACTIVE_BUILD_ID, [])
+            return self.get(DEFAULT_ACTIVE_BUILD_ID)
 
     def _read_metadata(self, build_id: str) -> UIBuild:
         safe_id = self._safe_build_id(build_id)

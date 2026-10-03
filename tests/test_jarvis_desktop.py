@@ -116,6 +116,19 @@ class JarvisDesktopTests(unittest.TestCase):
         fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
         self.assertIsNotNone(host._window)
 
+    def test_persona_settings_window_api_proxies_to_host(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
+        host.open_persona_settings = Mock(return_value={"ok": True})
+        self.assertEqual(host.web_api.open_persona_settings(), {"ok": True})
+        host.open_persona_settings.assert_called_once_with()
+
+    def test_persona_settings_html_is_well_formed_enough_for_the_webview(self):
+        html = jarvis_desktop.PERSONA_SETTINGS_HTML
+        self.assertTrue(html.startswith("<!doctype html>"))
+        self.assertNotIn(r"\n<!doctype html>", html)
+        self.assertIn('p.audio_base_64+'"></audio>', html)
+
     def test_omniroute_provider_api_is_exposed(self):
         self.assertTrue(hasattr(jarvis_desktop, "OMNIROUTE_SETTINGS_HTML"))
         self.assertIn("open_omniroute_settings", dir(jarvis_desktop.JarvisWebApi))
@@ -148,10 +161,49 @@ class JarvisDesktopTests(unittest.TestCase):
         ):
             self.assertIn(method, dir(jarvis_desktop.JarvisWebApi))
 
+    def test_inherited_jarvis_voice_does_not_send_kokoro_id_to_elevenlabs(self):
+        controller = Mock()
+        persona = SimpleNamespace(
+            name="Jarvis",
+            voice=SimpleNamespace(provider="inherit", voice_id="bm_lewis", model_id="", speed=1.0),
+        )
+        personas = SimpleNamespace(
+            store=SimpleNamespace(get=Mock(return_value=persona)),
+            active=persona,
+        )
+        adapter = VoiceAdapter(controller, personas=personas)
+        adapter.bridge = Mock()
+        adapter.elevenlabs = SimpleNamespace(configured=True, set_selection=Mock())
+        adapter.kokoro = SimpleNamespace(set_selection=Mock())
+
+        with patch.object(adapter, "provider", return_value="elevenlabs"):
+            adapter.set_persona_speaker("Jarvis")
+
+        adapter.elevenlabs.set_selection.assert_called_once_with(voice_id=None, model_id=None)
+        adapter.bridge.set_mouth.assert_called_once_with(adapter.elevenlabs)
+
     def test_voice_adapter_uses_elevenlabs_as_mouth(self):
         controller = Mock()
         adapter = VoiceAdapter(controller)
         self.assertIsInstance(adapter.elevenlabs, jarvis_desktop.ElevenLabsMouth)
+
+    def test_persona_voice_api_routes_through_host_voice_adapter(self):
+        controller = Mock()
+        voice = SimpleNamespace(set_persona_speaker=Mock())
+        host = FullstackJarvisHost(controller, voice=voice, hands=Mock())
+        host.web_api.set_persona_voice("Nova")
+        voice.set_persona_speaker.assert_called_once_with("Nova")
+
+    def test_persona_switch_updates_active_voice(self):
+        controller = Mock()
+        voice = SimpleNamespace(set_persona_speaker=Mock())
+        host = FullstackJarvisHost(controller, voice=voice, hands=Mock())
+        persona = SimpleNamespace(name="Nova", as_dict=lambda: {"name": "Nova"})
+        host.personas.switch = Mock(return_value=persona)
+        switched = host.web_api.persona_switch("Nova")
+        self.assertEqual(switched["active"], "Nova")
+        host.personas.switch.assert_called_once_with("Nova")
+        voice.set_persona_speaker.assert_called_once_with("Nova")
 
     def test_voice_audio_drains_elevenlabs_packets(self):
         controller = Mock()

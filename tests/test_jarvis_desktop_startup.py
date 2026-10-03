@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import scripts.jarvis_desktop as desktop
 
 
 class JarvisDesktopStartupTests(unittest.TestCase):
+    def test_frozen_entrypoint_defers_heavy_ui_imports_until_after_visualizer_start(self):
+        entrypoint = (Path(__file__).resolve().parents[1] / "scripts" / "jarvis_desktop.pyw").read_text(encoding="utf-8")
+        visualizer_start = entrypoint.index("visualizer.start()")
+        for marker in (
+            "from quality_of_life.workspace_ui import",
+            "from quality_of_life.ui_builds import",
+            "from quality_of_life.neural_world import",
+        ):
+            self.assertLess(visualizer_start, entrypoint.index(marker))
+        self.assertIn("prestarted_visualizer=visualizer", entrypoint)
+
     def test_visualizer_starts_before_core_controller_construction(self) -> None:
         events: list[str] = []
 
