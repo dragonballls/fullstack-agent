@@ -542,7 +542,7 @@ class JarvisWebApi:
             return {"ok": True, "messages": []}
 
     def set_persona_voice(self, name: str) -> None:
-        adapter = getattr(self.voice, "set_persona_speaker", None)
+        adapter = getattr(self.host.voice, "set_persona_speaker", None)
         if callable(adapter):
             adapter(name)
 
@@ -593,7 +593,7 @@ class JarvisWebApi:
 
     def persona_switch(self, name: str) -> dict[str, Any]:
         persona = self.host.personas.switch(name)
-        self.host.set_persona_voice(persona.name)
+        self.set_persona_voice(persona.name)
         return {"ok": True, "active": persona.name, "persona": persona.as_dict()}
 
     def persona_save(
