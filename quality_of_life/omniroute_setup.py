@@ -333,16 +333,25 @@ class OmniRouteProvisioner:
             env["HOST"] = "127.0.0.1"
             env["PORT"] = str(self.port)
             env.setdefault("OMNIROUTE_HEADLESS", "1")
-            process = subprocess.Popen(
-                command + ["--port", str(self.port)],
-                stdin=subprocess.DEVNULL,
-                stdout=self._process_log_handle or subprocess.DEVNULL,
-                stderr=subprocess.STDOUT if self._process_log_handle is not None else subprocess.DEVNULL,
-                env=env,
-                cwd=str(self.data_dir),
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                close_fds=True,
-            )
+            log_handle = self._process_log_handle
+            try:
+                process = subprocess.Popen(
+                    command + ["--port", str(self.port)],
+                    stdin=subprocess.DEVNULL,
+                    stdout=log_handle or subprocess.DEVNULL,
+                    stderr=subprocess.STDOUT if log_handle is not None else subprocess.DEVNULL,
+                    env=env,
+                    cwd=str(self.data_dir),
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    close_fds=True,
+                )
+            finally:
+                if log_handle is not None:
+                    try:
+                        log_handle.close()
+                    except OSError:
+                        pass
+                self._process_log_handle = None
             self._process = process
         while time.monotonic() < deadline:
             if self._probe(deadline=deadline):
