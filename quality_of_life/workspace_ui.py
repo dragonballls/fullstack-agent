@@ -107,6 +107,27 @@ def install(desktop_module: Any) -> None:
                 for spec in specs
             ]
 
+        def gods_eye_family_map(self) -> dict[str, object]:
+            """Return authorized family locations in the existing God’s Eye map contract."""
+            try:
+                result = self.host.controller.runtime.dispatch(
+                    Capability.LOCATION_READ,
+                    "gods_eye.family_map",
+                )
+                return result if isinstance(result, dict) else {
+                    "available": False,
+                    "surface": "gods-eye",
+                    "markers": [],
+                    "reason": "Family map result is unavailable.",
+                }
+            except Exception as exc:
+                return {
+                    "available": False,
+                    "surface": "gods-eye",
+                    "markers": [],
+                    "reason": f"Family location provider unavailable: {type(exc).__name__}",
+                }
+
         def gods_eye_providers(self) -> list[dict[str, object]]:
             location_result = self.gods_eye_status()
             if location_result.get("ok"):
@@ -171,6 +192,9 @@ def workspace_script() -> str:
     @keyframes jw-scan { to { transform:rotate(360deg); } }
     .jw-marker { position:absolute; width:12px; height:12px; border-radius:50%; background:#72f2ad; box-shadow:0 0 16px rgba(114,242,173,.8); border:2px solid rgba(255,255,255,.7); transform:translate(-50%,-50%); }
     .jw-marker span { position:absolute; top:16px; left:9px; white-space:nowrap; font-size:9px; color:#a9c8bb; }
+    #jw-family-markers { position:absolute; inset:0; z-index:3; pointer-events:none; }
+    .jw-family-marker { position:absolute; width:13px; height:13px; border-radius:50%; background:#72f2ad; box-shadow:0 0 18px rgba(114,242,173,.9); border:2px solid rgba(255,255,255,.78); transform:translate(-50%,-50%); }
+    .jw-family-marker span { position:absolute; top:17px; left:10px; white-space:nowrap; padding:3px 6px; border:1px solid rgba(143,232,184,.12); border-radius:6px; background:rgba(2,8,6,.78); color:#c1ded2; font-size:9px; }
     .jw-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:7px; color:#61766e; font-size:10px; letter-spacing:.13em; text-align:center; }
     .jw-empty strong { color:#9dbab0; font-size:12px; }
     .jw-list { padding:4px 12px 12px; display:flex; flex-direction:column; gap:7px; overflow:auto; height:calc(100% - 32px); }
@@ -232,7 +256,7 @@ def workspace_script() -> str:
     </div>
     <div id="jarvis-workspace-content">
       <section class="jw-view active" data-view="home"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">ACTIVE AGENT SHELL</div><h1>Jarvis is ready.</h1><p>The command surface stays available while Jarvis changes workspaces. You can type commands without leaving the active system view.</p><div class="jw-command-hint"><button class="jw-chip" data-command="Open God's Eye">OPEN GOD'S EYE</button><button class="jw-chip" data-command="Show my phone">SHOW MY PHONE</button><button class="jw-chip" data-command="Show my workflows">WORKFLOWS</button><button class="jw-chip" data-command="Check system status">SYSTEM STATUS</button></div></div></div></section>
-      <section class="jw-view" data-view="gods-eye"><div class="jw-grid"><div class="jw-card"><div class="jw-card-title">GOD'S EYE / LIVE CONTEXT</div><div class="jw-map"><div class="jw-radar"></div><div class="jw-empty" id="jw-location-empty"><strong>AWAITING AUTHORIZED LOCATION DATA</strong><span>Jarvis will never invent a device or family location.</span></div></div></div><div class="jw-card"><div class="jw-card-title">ENTITIES</div><div class="jw-list" id="jw-entities"><div class="jw-row"><b>Location service</b><small>checking…</small></div><div class="jw-row"><b>Phone</b><small>not connected</small></div><div class="jw-row"><b>Family</b><small>no shared feed</small></div></div></div><div class="jw-bottom"><div class="jw-card jw-stat"><small>WORKSPACE</small><strong>GOD'S EYE</strong></div><div class="jw-card jw-stat"><small>COMMAND LINK</small><strong>ONLINE</strong></div><div class="jw-card jw-stat"><small>LOCATION PRIVACY</small><strong>GUARDED</strong></div></div></div></section>
+      <section class="jw-view" data-view="gods-eye"><div class="jw-grid"><div class="jw-card"><div class="jw-card-title">GOD'S EYE / LIVE CONTEXT</div><div class="jw-map"><div class="jw-radar"></div><div id="jw-family-markers"></div><div class="jw-empty" id="jw-location-empty"><strong>AWAITING AUTHORIZED LOCATION DATA</strong><span>Jarvis will never invent a device or family location.</span></div></div></div><div class="jw-card"><div class="jw-card-title">ENTITIES</div><div class="jw-list" id="jw-entities"><div class="jw-row"><b>Location service</b><small>checking…</small></div><div class="jw-row"><b>Phone</b><small>not connected</small></div><div class="jw-row"><b>Family</b><small>no shared feed</small></div></div></div><div class="jw-bottom"><div class="jw-card jw-stat"><small>WORKSPACE</small><strong>GOD'S EYE</strong></div><div class="jw-card jw-stat"><small>COMMAND LINK</small><strong>ONLINE</strong></div><div class="jw-card jw-stat"><small>LOCATION PRIVACY</small><strong>GUARDED</strong></div></div></div></section>
       <section class="jw-view" data-view="coding"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">CODING AGENT</div><h1>Build • Test • Verify</h1><p>Jarvis keeps the command link alive while coding tasks run. Progress, tool activity, and failures can be surfaced here without replacing the underlying agent.</p></div></div></section>
       <section class="jw-view" data-view="browser"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">BROWSER WORKSPACE</div><h1>Research and action</h1><p>Browser tasks can remain visible while the command bar stays available for follow-up instructions.</p></div></div></section>
       <section class="jw-view" data-view="system"><div class="jw-center"><div class="jw-card jw-home-card"><div class="jw-card-title">SYSTEM HEALTH</div><h1>Observe before changing</h1><p>System maintenance should surface resource state, active applications, and proposed changes before mutating anything.</p></div></div></section>
@@ -363,19 +387,76 @@ def workspace_script() -> str:
     }
   }
 
+  function renderFamilyMarkers(payload) {
+    const container = document.getElementById("jw-family-markers");
+    if (!container) return;
+    container.innerHTML = "";
+    const markers = Array.isArray(payload && payload.markers) ? payload.markers : [];
+    const points = markers
+      .map(marker => marker && marker.point)
+      .filter(point => point && Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude)));
+    if (!points.length) return;
+
+    const lats = points.map(point => Number(point.latitude));
+    const lons = points.map(point => Number(point.longitude));
+    let minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    let minLon = Math.min(...lons), maxLon = Math.max(...lons);
+    const latPad = Math.max((maxLat - minLat) * 0.15, 0.005);
+    const lonPad = Math.max((maxLon - minLon) * 0.15, 0.005);
+    minLat -= latPad; maxLat += latPad; minLon -= lonPad; maxLon += lonPad;
+    const latRange = Math.max(maxLat - minLat, 0.0001);
+    const lonRange = Math.max(maxLon - minLon, 0.0001);
+
+    markers.forEach(marker => {
+      if (!marker || !marker.point) return;
+      const lat = Number(marker.point.latitude);
+      const lon = Number(marker.point.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      const left = 8 + ((lon - minLon) / lonRange) * 84;
+      const top = 92 - ((lat - minLat) / latRange) * 84;
+      const node = document.createElement("div");
+      node.className = "jw-family-marker";
+      node.style.left = Math.max(4, Math.min(96, left)) + "%";
+      node.style.top = Math.max(4, Math.min(96, top)) + "%";
+      const label = document.createElement("span");
+      label.textContent = String(marker.name || "Family member");
+      node.appendChild(label);
+      container.appendChild(node);
+    });
+  }
+
   async function refreshLocation() {
     const empty = document.getElementById("jw-location-empty");
     const entities = document.getElementById("jw-entities");
     try {
       const result = await api().gods_eye_status();
       const providers = api().gods_eye_providers ? await api().gods_eye_providers() : [];
-      if (result && result.ok && result.location) {
-        empty.innerHTML = "<strong>LOCATION DATA AVAILABLE</strong><span>Source and permission state received from Jarvis.</span>";
-        entities.innerHTML = providers.map(provider => '<div class="jw-row"><b>' + String(provider.kind || "provider").toUpperCase() + '</b><small>' + (provider.live ? 'LIVE / ' : '') + (provider.authorized ? 'AUTHORIZED' : 'UNAVAILABLE') + '</small></div>').join("");
+      const familyMap = api().gods_eye_family_map ? await api().gods_eye_family_map() : {available: false, markers: []};
+      renderFamilyMarkers(familyMap);
+
+      if (familyMap && familyMap.available && Array.isArray(familyMap.markers) && familyMap.markers.length) {
+        empty.innerHTML = "<strong>FAMILY LOCATION FEED LIVE</strong><span>Authorized Life360 members are shown in the God’s Eye spatial view.</span>";
+      } else if (result && result.ok && result.location) {
+        empty.innerHTML = "<strong>LOCATION DATA AVAILABLE</strong><span>Family feed is not currently available.</span>";
+      } else if (familyMap && familyMap.reason) {
+        empty.innerHTML = `<strong>FAMILY FEED OFFLINE</strong><span>${String(familyMap.reason).replace(/[<>]/g, "")}</span>`;
       } else if (result && result.reason) {
         empty.innerHTML = `<strong>LOCATION FEED OFFLINE</strong><span>${String(result.reason).replace(/[<>]/g, "")}</span>`;
       }
+
+      const familyCount = familyMap && Array.isArray(familyMap.markers) ? familyMap.markers.length : 0;
+      entities.innerHTML = providers.map(provider =>
+        '<div class="jw-row"><b>' + String(provider.kind || "provider").toUpperCase() + '</b><small>' +
+        (provider.live ? 'LIVE / ' : '') + (provider.authorized ? 'AUTHORIZED' : 'UNAVAILABLE') +
+        '</small></div>'
+      ).join("") + (familyCount
+        ? familyMap.markers.map(marker =>
+            '<div class="jw-row"><b>' + String(marker.name || "Family member").replace(/[<>]/g, "") +
+            '</b><small>LIFE360 LOCATION</small></div>'
+          ).join("")
+        : "");
     } catch (_) {
+      renderFamilyMarkers({markers: []});
       empty.innerHTML = "<strong>LOCATION FEED OFFLINE</strong><span>The workspace remains available while the provider is unavailable.</span>";
     }
   }
