@@ -261,17 +261,32 @@ class OmniRouteProvisioner:
         env["OMNIROUTE_TELEMETRY"] = env.get("OMNIROUTE_TELEMETRY", "false")
         return env
 
-    def _probe(self) -> bool:
+    def _probe(self, *, deadline: float | None = None) -> bool:
         parsed = urllib.parse.urlparse(self.base_url)
-        origin = f"{parsed.scheme}://{parsed.netloc}"
-        # Prefer OmniRoute's lightweight liveness endpoint. The monitoring and
-        # model-catalog routes can perform heavier work during cold startup and
-        # should never block readiness of the local gateway.
-        for url in (origin + "/healthz", self.base_url + "/models", origin + "/api/monitoring/health"):
+        scheme = parsed.scheme.lower()
+        hostname = (parsed.hostname or "").lower()
+        if scheme not in {"http", "https"} or parsed.username or parsed.password:
+            return False
+        if hostname not in {"127.0.0.1", "localhost", "::1"}:
+            return False
+        try:
+            port = parsed.port
+        except ValueError:
+            return False
+        host = f"[{hostname}]" if ":" in hostname else hostname
+        origin = f"{scheme}://{host}"
+        if port is not None:
+            origin += f":{port}"
+        endpoints = (self.base_url + "/models", origin + "/api/monitoring/health")
+        for url in endpoints:
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                return False
+            timeout = 5.0 if remaining is None else max(0.05, min(5.0, remaining))
             try:
                 with urllib.request.urlopen(
                     urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET"),
-                    timeout=5.0,
+                    timeout=timeout,
                 ) as response:
                     if 200 <= int(response.status) < 300:
                         return True
@@ -286,8 +301,11 @@ class OmniRouteProvisioner:
         return self._probe()
 
     def ensure_running(self, *, wait_seconds: float = 15.0) -> bool:
-        if self._probe():
+        deadline = time.monotonic() + max(0.5, float(wait_seconds))
+        if self._probe(deadline=deadline):
             return True
+        if time.monotonic() >= deadline:
+            return False
         command = self.command_argv(for_start=True)
         if self._process is not None and self._process.poll() is None:
             process = self._process
@@ -326,14 +344,16 @@ class OmniRouteProvisioner:
                 close_fds=True,
             )
             self._process = process
-        deadline = time.monotonic() + max(0.5, float(wait_seconds))
         while time.monotonic() < deadline:
-            if self._probe():
+            if self._probe(deadline=deadline):
                 return True
             if process.poll() is not None:
                 return False
-            time.sleep(0.25)
-        return self._probe()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(0.25, remaining))
+        return False
 
     def status(self) -> OmniRouteRuntimeStatus:
         try:
