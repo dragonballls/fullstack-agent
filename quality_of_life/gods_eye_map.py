@@ -29,6 +29,31 @@ class MapView:
 
 class GodsEyeMap:
     @staticmethod
+    def build_family_location_view(
+        locations: Iterable[dict[str, object]],
+        center: GeoPoint | None = None,
+    ) -> MapView | None:
+        """Convert authorized family provider records into God’s Eye markers."""
+        markers: list[Place] = []
+        for location in locations:
+            try:
+                point_data = location["point"]
+                if not isinstance(point_data, dict):
+                    continue
+                point = GeoPoint(float(point_data["latitude"]), float(point_data["longitude"]))
+                name = str(location.get("name") or location.get("id") or "Family member").strip()
+                if not name:
+                    continue
+                place_id = str(location.get("id")) if location.get("id") is not None else None
+            except (KeyError, TypeError, ValueError):
+                continue
+            markers.append(Place(name, point, place_id, "life360"))
+        if not markers:
+            return None
+        anchor = center or markers[0].point
+        return MapView(anchor, 12, tuple(markers))
+
+    @staticmethod
     def build_search_view(places: Iterable[Place], selected: Place | None = None) -> MapView:
         markers = tuple(places)
         if not markers and selected is None:
