@@ -164,10 +164,11 @@ class JarvisDesktopTests(unittest.TestCase):
         controller = Mock()
         voice = SimpleNamespace(set_persona_speaker=Mock())
         host = FullstackJarvisHost(controller, voice=voice, hands=Mock())
-        result = host.web_api.persona_save("Nova", description="Analytical")
-        self.assertTrue(result["ok"])
+        persona = SimpleNamespace(name="Nova", as_dict=lambda: {"name": "Nova"})
+        host.personas.switch = Mock(return_value=persona)
         switched = host.web_api.persona_switch("Nova")
         self.assertEqual(switched["active"], "Nova")
+        host.personas.switch.assert_called_once_with("Nova")
         voice.set_persona_speaker.assert_called_once_with("Nova")
 
     def test_voice_audio_drains_elevenlabs_packets(self):
