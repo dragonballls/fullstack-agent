@@ -219,6 +219,19 @@ class JarvisVoiceBridge:
         self.thread = threading.Thread(target=self._run, name="jarvis-voice", daemon=True)
         self.thread.start()
 
+    def _wait_for_output_idle(self, timeout_seconds: float = 120.0) -> bool:
+        deadline = __import__("time").monotonic() + max(0.1, float(timeout_seconds))
+        while __import__("time").monotonic() < deadline:
+            with self._speak_lock:
+                browser_active = bool(self._browser_audio_active)
+                speaking = getattr(self.mouth, "speaking", False) if self.mouth is not None else False
+                mouth_active = speaking if isinstance(speaking, bool) else False
+            if not browser_active and not mouth_active:
+                return True
+            if self.stop_event.wait(0.05):
+                return False
+        return False
+
     def _speak(self, text: str, speaker: str = "") -> None:
         message = str(text or "").strip()
         if not message:
@@ -287,8 +300,10 @@ class JarvisVoiceBridge:
                     result = self.persona_router(text, True)
                 turns = getattr(result, "turns", ()) or ()
                 if turns:
-                    for turn in turns:
+                    for index, turn in enumerate(turns):
                         self._speak(getattr(turn, "text", ""), str(getattr(turn, "persona", "Jarvis")))
+                        if index + 1 < len(turns):
+                            self._wait_for_output_idle()
                 else:
                     self._speak(
                         str(getattr(result, "text", result)),
