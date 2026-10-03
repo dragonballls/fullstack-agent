@@ -116,6 +116,20 @@ class JarvisDesktopTests(unittest.TestCase):
         fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
         self.assertIsNotNone(host._window)
 
+    def test_persona_settings_window_api_is_host_owned(self):
+        controller = Mock()
+        host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
+        self.assertEqual(host.web_api.open_persona_settings.__func__.__qualname__.split(".")[0], "JarvisWebApi")
+        with patch("builtins.__import__"):
+            pass
+        self.assertIn("return self.host.open_persona_settings()", jarvis_desktop.JarvisWebApi.open_persona_settings.__code__.co_consts)
+
+    def test_persona_settings_html_is_well_formed_enough_for_the_webview(self):
+        html = jarvis_desktop.PERSONA_SETTINGS_HTML
+        self.assertTrue(html.startswith("<!doctype html>"))
+        self.assertNotIn(r"\n<!doctype html>", html)
+        self.assertIn('p.audio_base_64+'"></audio>', html)
+
     def test_omniroute_provider_api_is_exposed(self):
         self.assertTrue(hasattr(jarvis_desktop, "OMNIROUTE_SETTINGS_HTML"))
         self.assertIn("open_omniroute_settings", dir(jarvis_desktop.JarvisWebApi))
