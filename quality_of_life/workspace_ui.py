@@ -153,11 +153,14 @@ def install(desktop_module: Any) -> None:
                     "source": "",
                     "detail": str(location_result.get("reason", "location unavailable"))[:240],
                 }
-            optional = [
-                state.as_dict()
-                for state in self._location_providers.snapshot()
-                if state.kind != "device"
-            ]
+            try:
+                optional = list(self.host.controller.runtime.gods_eye_provider_status())
+            except Exception:
+                optional = [
+                    state.as_dict()
+                    for state in self._location_providers.snapshot()
+                    if state.kind != "device"
+                ]
             return [device, *optional]
 
     desktop_module.JarvisWebApi = WorkspaceWebApi
