@@ -1309,6 +1309,42 @@ class FullstackJarvisHost:
         except Exception:
             return {"ok": False, "voices": []}
 
+    def open_persona_settings(self) -> dict[str, Any]:
+        try:
+            import webview
+            with self._floating_lock:
+                existing = self._personas_window
+                if existing is not None:
+                    try:
+                        existing.restore()
+                        existing.show()
+                    except Exception:
+                        pass
+                    return {"ok": True}
+                self._personas_window = webview.create_window(
+                    "Jarvis Personalities",
+                    html=PERSONA_SETTINGS_HTML,
+                    js_api=self._web_api,
+                    width=760,
+                    height=900,
+                    resizable=True,
+                    frameless=False,
+                    easy_drag=True,
+                    on_top=False,
+                )
+                try:
+                    self._personas_window.events.closed += self._on_personas_closed
+                except Exception:
+                    LOGGER.debug("persona settings window does not expose a closed event")
+            return {"ok": True}
+        except Exception as exc:
+            LOGGER.exception("persona settings window could not open")
+            raise RuntimeError("personality settings could not be opened") from exc
+
+    def _on_personas_closed(self, *_args: Any, **_kwargs: Any) -> None:
+        with self._floating_lock:
+            self._personas_window = None
+
     def open_omniroute_dashboard(self) -> dict[str, Any]:
         import webbrowser
         webbrowser.open("http://127.0.0.1:20128")
