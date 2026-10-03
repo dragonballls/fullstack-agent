@@ -270,21 +270,6 @@ class VoiceAdapter:
         except Exception:
             LOGGER.exception("free local Kokoro voice warm-up failed; voice will retry on demand")
 
-    def _smoke_validate_embedded_backtalk(self) -> None:
-        vendor = embedded_path("backtalk/source")
-        vendor_text = str(vendor)
-        if vendor_text not in sys.path:
-            sys.path.insert(0, vendor_text)
-        from backtalk.ears import Ears
-        from backtalk.mouth import Mouth
-        from backtalk.ptt import PTTListener
-        from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth, KokoroMouth
-        if not callable(getattr(ElevenLabsClient, "synthesize", None)):
-            raise RuntimeError("ElevenLabs synthesis client is incomplete")
-        if not callable(getattr(KokoroMouth, "test_speech", None)):
-            raise RuntimeError("free local Kokoro mouth is incomplete")
-        LOGGER.info("embedded Backtalk + local Kokoro + optional ElevenLabs voice modules validated: %s", vendor)
-
     def start(self) -> None:
         if self._truthy("JARVIS_SMOKE") and self._truthy("JARVIS_SMOKE_VOICE"):
             self._smoke_validate_embedded_backtalk()
