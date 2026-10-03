@@ -41,7 +41,7 @@ Current location has two paths: an explicit system/browser/provider callback can
 
 ### Life360 / family map
 
-Life360 family data is opt-in and provider-backed. Configure the existing Home Assistant Life360 integration first, then enable the bridge with `JARVIS_LIFE360_ENABLED=1`, `JARVIS_LIFE360_HA_URL`, and `JARVIS_LIFE360_HA_TOKEN`. The bridge reads Home Assistant's authenticated `/api/states` endpoint and normalizes Life360 `device_tracker` attributes such as latitude, longitude, GPS accuracy, battery level, address, place, and last-seen time. Home Assistant's REST API requires a Bearer access token, and its `/api/states` endpoint exposes entity attributes. citeturn631543search0turn193980search1
+Life360 family data is opt-in and provider-backed. Configure the existing Home Assistant Life360 integration first, then enable the bridge with `JARVIS_LIFE360_ENABLED=1`, `JARVIS_LIFE360_HA_URL`, and `JARVIS_LIFE360_HA_TOKEN`. The bridge reads Home Assistant's authenticated `/api/states` endpoint and normalizes Life360 `device_tracker` attributes such as latitude, longitude, GPS accuracy, battery level, address, place, and last-seen time. Home Assistant's REST API requires a Bearer access token, and its `/api/states` endpoint exposes entity attributes.
 
 Jarvis exposes `gods_eye.family_locations`, `gods_eye.family_context`, and `gods_eye.family_map` under the existing `LOCATION_READ` capability. Family location data is never fetched unless Life360 is explicitly enabled and an authorized Home Assistant token is configured. The default transport accepts only localhost/private-IP or `.local` Home Assistant hosts.
 
