@@ -11,9 +11,11 @@ from .background import BackgroundJobs
 from .background_mode import BackgroundModeController
 from .activity import ActivityStore
 from .gods_eye import GodsEye, Place
+from .gods_eye_map import GodsEyeMap
 from .gods_eye_launcher import GodsEyeLauncher
 from .intents import Intent, parse_intent
 from .location import FallbackLocationProvider, IpLocationProvider, NominatimGeocoder, SystemLocationProvider
+from .life360 import Life360HomeAssistantProvider
 from .location_memory import SavedLocationStore
 from .manifest import default_registry
 from .orchestrator import Action, ConfirmationHook, QoLOrchestrator
@@ -226,7 +228,14 @@ class JarvisRuntime:
         if name == "scheduler":
             return lambda: target(self._tool("background"))
         if name == "gods_eye":
-            return lambda: GodsEye(NominatimGeocoder(), FallbackLocationProvider(SystemLocationProvider(), IpLocationProvider()))
+            def build_gods_eye() -> GodsEye:
+                eye = GodsEye(
+                    NominatimGeocoder(),
+                    FallbackLocationProvider(SystemLocationProvider(), IpLocationProvider()),
+                )
+                eye.register_location_provider("family", Life360HomeAssistantProvider())
+                return eye
+            return build_gods_eye
         if name == "locations":
             configured = os.environ.get("JARVIS_LOCATION_STORE")
             return lambda: SavedLocationStore(configured)
@@ -404,6 +413,9 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.locate_me", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.open_place", lambda query: self._open_place(query)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.route_to", lambda query: self._route_to(query)))
+        self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.family_locations", lambda: self._tool("gods_eye").family_locations()))
+        self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.family_context", lambda: self._tool("gods_eye").family_context()))
+        self.orchestrator.register(Action(Capability.LOCATION_READ, "gods_eye.family_map", self._family_map))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.current", lambda: self._tool("gods_eye").locate_me()))
         self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.save", lambda name, latitude, longitude, address=None, accuracy_m=None, source="user", confirmed=False: self._save_location(name, latitude, longitude, address=address, accuracy_m=accuracy_m, source=source, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.save_current", lambda name, address=None, confirmed=False: self._save_current_location(name, address=address, confirmed=confirmed)))
@@ -449,6 +461,21 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.status", lambda: self._neural_advanced_command("master", "status", {})))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.execute", lambda feature, payload=None, confirmed=False: self._neural_master_execute(feature, payload, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "neural.master.smoke", lambda limit=None: self._neural_advanced_command("master", "smoke", {"limit": limit} if limit is not None else {})))
+
+    def _family_map(self) -> dict[str, object]:
+        eye = self._tool("gods_eye")
+        locations = eye.family_locations()
+        snapshot = eye.locate_me()
+        center = snapshot.point if snapshot.permitted else None
+        view = GodsEyeMap.build_family_location_view(locations, center=center)
+        if view is None:
+            return {
+                "surface": "gods-eye",
+                "markers": [],
+                "available": False,
+                "reason": "no authorized Life360 family locations are currently available",
+            }
+        return {**view.as_dict(), "available": True, "provider": "life360"}
 
     def _neural_domain_capability(self, domain: str, operation: str = "") -> Capability:
         name = str(domain).strip().casefold()
