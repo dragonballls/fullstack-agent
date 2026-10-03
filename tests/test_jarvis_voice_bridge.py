@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from scripts.jarvis_voice_bridge import DEFAULT_CONFIG, JarvisVoiceBridge, _migrate_legacy_stt_default
 
