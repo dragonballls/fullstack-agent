@@ -233,6 +233,7 @@ jobs:
             $omniStartupTimeoutSeconds = 360
             $omniDeadline = (Get-Date).AddSeconds($omniStartupTimeoutSeconds)
             $omniReady = $false
+            $tcpReady = $false
             $warmupPassed = $false
             while ((Get-Date) -lt $omniDeadline) {
               foreach ($candidate in @($log, $omniLog)) {
@@ -246,14 +247,15 @@ jobs:
                   }
                 }
               }
-              if ($warmupPassed) {
+              $tcpReady = Test-NetConnection -ComputerName '127.0.0.1' -Port 20128 -InformationLevel Quiet -WarningAction SilentlyContinue
+              if ($warmupPassed -and $tcpReady) {
                 $omniReady = $true
                 break
               }
               if ($process.HasExited) { throw "Jarvis.exe exited before embedded OmniRoute warm-up completed with code $($process.ExitCode)" }
               Start-Sleep -Milliseconds 500
             }
-            if (-not $omniReady) { throw "Embedded OmniRoute did not complete a successful warm-up within $omniStartupTimeoutSeconds seconds" }
+            if (-not $omniReady) { throw "Embedded OmniRoute did not become TCP-ready and complete a successful warm-up within $omniStartupTimeoutSeconds seconds" }
 
             & 'build_vendor/omniroute_runtime/node.exe' 'build_vendor/omniroute_runtime/node_modules/omniroute/bin/omniroute.mjs' --version
             if ($LASTEXITCODE -ne 0) { throw 'Packaged embedded OmniRoute CLI failed after Jarvis startup' }
