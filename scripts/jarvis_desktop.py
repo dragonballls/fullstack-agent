@@ -170,10 +170,12 @@ class VoiceAdapter:
         from backtalk.ears import Ears
         from backtalk.mouth import Mouth
         from backtalk.ptt import PTTListener
-        from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth
+        from quality_of_life.elevenlabs_voice import ElevenLabsClient, ElevenLabsMouth, KokoroMouth
         if not callable(getattr(ElevenLabsClient, "synthesize", None)):
             raise RuntimeError("ElevenLabs synthesis client is incomplete")
-        LOGGER.info("embedded Backtalk + ElevenLabs voice modules validated: %s / %s", vendor, ElevenLabsMouth.__name__)
+        if not callable(getattr(KokoroMouth, "test_speech", None)):
+            raise RuntimeError("free local Kokoro mouth is incomplete")
+        LOGGER.info("embedded Backtalk + local Kokoro + optional ElevenLabs voice modules validated: %s", vendor)
 
     def _provider_path(self) -> Path:
         return VOICE_PROVIDER_FILE
@@ -206,11 +208,12 @@ class VoiceAdapter:
         try:
             persona = personas.store.get(name) or personas.active
             profile = persona.voice
-            provider = self.provider() if profile.provider == "inherit" else profile.provider
+            inherited_provider = profile.provider == "inherit"
+            provider = self.provider() if inherited_provider else profile.provider
             if provider == "elevenlabs" and self.elevenlabs.configured:
                 self.elevenlabs.set_selection(
-                    voice_id=profile.voice_id or None,
-                    model_id=profile.model_id or None,
+                    voice_id=None if inherited_provider else (profile.voice_id or None),
+                    model_id=None if inherited_provider else (profile.model_id or None),
                 )
                 mouth = self.elevenlabs
                 effective = "elevenlabs"
