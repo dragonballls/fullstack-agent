@@ -116,13 +116,12 @@ class JarvisDesktopTests(unittest.TestCase):
         fake_webview.start.assert_called_once_with(gui="edgechromium", debug=False)
         self.assertIsNotNone(host._window)
 
-    def test_persona_settings_window_api_is_host_owned(self):
+    def test_persona_settings_window_api_proxies_to_host(self):
         controller = Mock()
         host = FullstackJarvisHost(controller, voice=Mock(), hands=Mock())
-        self.assertEqual(host.web_api.open_persona_settings.__func__.__qualname__.split(".")[0], "JarvisWebApi")
-        with patch("builtins.__import__"):
-            pass
-        self.assertIn("return self.host.open_persona_settings()", jarvis_desktop.JarvisWebApi.open_persona_settings.__code__.co_consts)
+        host.open_persona_settings = Mock(return_value={"ok": True})
+        self.assertEqual(host.web_api.open_persona_settings(), {"ok": True})
+        host.open_persona_settings.assert_called_once_with()
 
     def test_persona_settings_html_is_well_formed_enough_for_the_webview(self):
         html = jarvis_desktop.PERSONA_SETTINGS_HTML
