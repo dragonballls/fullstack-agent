@@ -96,6 +96,10 @@ class GodsEye:
     def locate_me(self) -> LocationSnapshot:
         return self.location_provider.current()
 
+    def family_locations(self) -> list[dict[str, object]]:
+        """Return only authorized family-provider locations."""
+        return self.provider_locations("family")
+
     def route(self, origin: GeoPoint, destination: Place) -> dict[str, object]:
         return {
             "provider": "openstreetmap",
@@ -114,6 +118,13 @@ class GodsEye:
         if query is not None and query.strip():
             payload["places"] = [place.as_dict() for place in self.search(query)]
         return payload
+
+    def family_context(self) -> dict[str, object]:
+        return {
+            "provider": "family",
+            "locations": self.family_locations(),
+            "surface": "gods-eye",
+        }
 
     def open_place(self, place: Place) -> dict[str, object]:
         return {
