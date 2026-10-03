@@ -203,6 +203,11 @@ class JarvisRuntime:
     def available_tools(self) -> tuple[str, ...]:
         return self.registry.names()
 
+    def gods_eye_provider_status(self) -> tuple[dict[str, object], ...]:
+        """Expose provider status from the same God’s Eye instance used by runtime actions."""
+        eye = self._tool("gods_eye")
+        return tuple(state.as_dict() for state in eye.provider_registry.snapshot())
+
     def _factory_from_spec(self, name: str) -> Callable[[], Any]:
         if name in self._factories:
             return self._factories[name]
