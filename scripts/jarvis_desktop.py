@@ -653,42 +653,6 @@ class JarvisWebApi:
         provider = detect_provider_from_key(api_key)
         return {"ok": True, "provider": provider, "detected": bool(provider)}
 
-    def open_persona_settings(self) -> dict[str, Any]:
-        try:
-            import webview
-            with self._floating_lock:
-                existing = getattr(self, "_personas_window", None)
-                if existing is not None:
-                    try:
-                        existing.restore()
-                        existing.show()
-                    except Exception:
-                        pass
-                    return {"ok": True}
-                self._personas_window = webview.create_window(
-                    "Jarvis Personalities",
-                    html=PERSONA_SETTINGS_HTML,
-                    js_api=self._web_api,
-                    width=760,
-                    height=900,
-                    resizable=True,
-                    frameless=False,
-                    easy_drag=True,
-                    on_top=False,
-                )
-                try:
-                    self._personas_window.events.closed += self._on_personas_closed
-                except Exception:
-                    pass
-            return {"ok": True}
-        except Exception as exc:
-            LOGGER.exception("persona settings window could not open")
-            raise RuntimeError("personality settings could not be opened") from exc
-
-    def _on_personas_closed(self, *_args: Any, **_kwargs: Any) -> None:
-        with self._floating_lock:
-            self._personas_window = None
-
     def open_omniroute_settings(self) -> dict[str, Any]:
         return self.host.open_omniroute_settings()
 
@@ -722,7 +686,7 @@ class JarvisWebApi:
                 return {"ok": False, "error": message[:500], "needs_confirmation": False}
 
 
-PERSONA_SETTINGS_HTML = r'''\n<!doctype html>
+PERSONA_SETTINGS_HTML = r'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Jarvis Personalities</title>
 <style>
@@ -761,13 +725,13 @@ function pick(i){const p=data[i];$("name").value=p.name;$("description").value=p
 $("save").onclick=async()=>{try{const r=await pywebview.api.persona_save($("name").value,$("description").value,$("rules").value.split(/\\n+/).map(x=>x.trim()).filter(Boolean),$("provider").value,$("voiceId").value,$("modelId").value,Number($("speed").value),$("voiceDescription").value);$("status").textContent=r.ok?"Saved "+r.persona.name:"Save failed";await refresh();}catch(e){$("status").textContent=String(e);}};
 $("activate").onclick=async()=>{try{const r=await pywebview.api.persona_switch($("name").value);$("status").textContent="Active: "+r.active;await refresh();}catch(e){$("status").textContent=String(e);}};
 $("delete").onclick=async()=>{try{const r=await pywebview.api.persona_delete($("name").value);$("status").textContent=r.ok?"Deleted":"Nothing deleted";await refresh();}catch(e){$("status").textContent=String(e);}};
-$("design").onclick=async()=>{try{const r=await pywebview.api.elevenlabs_design_voice($("designDescription").value);$("previews").innerHTML=(r.previews||[]).map((p,i)=>'<div class="card"><div>Preview '+(i+1)+'</div><audio controls style="width:100%" src="data:'+esc(p.media_type||"audio/mpeg")+';base64,'+p.audio_base_64+'></audio><div class="actions"><button onclick="useVoice('+i+')">USE THIS VOICE ID</button><button onclick="createVoice('+i+')">CREATE ELEVENLABS VOICE</button></div></div>').join("");window.previewData=r.previews||[];}catch(e){$("status").textContent=String(e);}};
+$("design").onclick=async()=>{try{const r=await pywebview.api.elevenlabs_design_voice($("designDescription").value);$("previews").innerHTML=(r.previews||[]).map((p,i)=>'<div class="card"><div>Preview '+(i+1)+'</div><audio controls style="width:100%" src="data:'+esc(p.media_type||"audio/mpeg")+';base64,'+p.audio_base_64+'"></audio><div class="actions"><button onclick="useVoice('+i+')">USE THIS VOICE ID</button><button onclick="createVoice('+i+')">CREATE ELEVENLABS VOICE</button></div></div>').join("");window.previewData=r.previews||[];}catch(e){$("status").textContent=String(e);}};
 window.useVoice=i=>{$("provider").value="elevenlabs";$("voiceId").value=window.previewData[i].generated_voice_id;$("voiceDescription").value=$("designDescription").value;$("status").textContent="Preview selected; save the personality to retain its generated voice id."};
 window.createVoice=async i=>{try{const r=await pywebview.api.elevenlabs_create_voice($("name").value||"Jarvis Persona Voice",$("designDescription").value,window.previewData[i].generated_voice_id);$("provider").value="elevenlabs";$("voiceId").value=r.voice_id||"";$("status").textContent="Created voice "+(r.name||r.voice_id)+"; save the personality.";}catch(e){$("status").textContent=String(e);}};
 $("startCall").onclick=async()=>{try{const chosen=[...document.querySelectorAll("[data-participant]:checked")].map(x=>data[Number(x.dataset.participant)].name);const topic=$("topic").value.trim();if(chosen.length<2)throw new Error("Select at least two personas.");await pywebview.api.persona_group_start(chosen,topic);const r=await pywebview.api.submit_text(topic,false);$("status").textContent=(r.ok?"Call active: ":"Call failed: ")+((r.turns||[]).map(x=>x.persona).join(", ")||r.error||"");}catch(e){$("status").textContent=String(e);}};
 $("stopCall").onclick=async()=>{try{const r=await pywebview.api.persona_group_stop();$("status").textContent="Call stopped";}catch(e){$("status").textContent=String(e);}};
 window.addEventListener("pywebviewready",refresh);setTimeout(refresh,500);
-</script></body></html>\n'''
+</script></body></html>'''
 
 TEXT_INPUT_SCRIPT = r'''
 (function () {
