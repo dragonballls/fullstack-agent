@@ -131,6 +131,32 @@ class OmniRouteSetupTests(unittest.TestCase):
                 provisioner._process_log_handle.close()
                 provisioner._process_log_handle = None
 
+    def test_probe_rejects_non_loopback_urls(self):
+        provisioner = OmniRouteProvisioner(base_url="http://example.com/v1")
+        with patch("quality_of_life.omniroute_setup.urllib.request.urlopen") as urlopen:
+            self.assertFalse(provisioner.probe_only())
+        urlopen.assert_not_called()
+
+    def test_probe_honors_expired_deadline_without_network_request(self):
+        provisioner = OmniRouteProvisioner()
+        with patch("quality_of_life.omniroute_setup.urllib.request.urlopen") as urlopen:
+            self.assertFalse(provisioner._probe(deadline=0.0))
+        urlopen.assert_not_called()
+
+    def test_ensure_running_passes_one_total_deadline_to_probe(self):
+        provisioner = OmniRouteProvisioner()
+        provisioner._resolved = ("omniroute",)
+
+        class Process:
+            def poll(self):
+                return 0
+
+        with patch.object(provisioner, "_probe", return_value=False) as probe:
+            with patch("quality_of_life.omniroute_setup.subprocess.Popen", return_value=Process()):
+                self.assertFalse(provisioner.ensure_running(wait_seconds=0.5))
+        self.assertTrue(probe.call_count >= 1)
+        self.assertIsNotNone(probe.call_args.kwargs.get("deadline"))
+
     def test_start_creates_missing_working_directory_before_popen(self):
         with TemporaryDirectory() as tmp:
             data_dir = Path(tmp) / "OmniRoute"
