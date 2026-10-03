@@ -153,6 +153,23 @@ class JarvisDesktopTests(unittest.TestCase):
         adapter = VoiceAdapter(controller)
         self.assertIsInstance(adapter.elevenlabs, jarvis_desktop.ElevenLabsMouth)
 
+    def test_persona_voice_api_routes_through_host_voice_adapter(self):
+        controller = Mock()
+        voice = SimpleNamespace(set_persona_speaker=Mock())
+        host = FullstackJarvisHost(controller, voice=voice, hands=Mock())
+        host.web_api.set_persona_voice("Nova")
+        voice.set_persona_speaker.assert_called_once_with("Nova")
+
+    def test_persona_switch_updates_active_voice(self):
+        controller = Mock()
+        voice = SimpleNamespace(set_persona_speaker=Mock())
+        host = FullstackJarvisHost(controller, voice=voice, hands=Mock())
+        result = host.web_api.persona_save("Nova", description="Analytical")
+        self.assertTrue(result["ok"])
+        switched = host.web_api.persona_switch("Nova")
+        self.assertEqual(switched["active"], "Nova")
+        voice.set_persona_speaker.assert_called_once_with("Nova")
+
     def test_voice_audio_drains_elevenlabs_packets(self):
         controller = Mock()
         host = FullstackJarvisHost(controller, voice=SimpleNamespace(elevenlabs=Mock()), hands=Mock())
